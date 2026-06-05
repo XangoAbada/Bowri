@@ -1,17 +1,24 @@
 import { create } from "zustand";
 import type { AIAction } from "../../shared/api/types";
 import type { NormalizedConceptFieldSuggestion } from "./conceptFieldSuggestion";
-import type { ConceptFieldKey, PromptPackage } from "./promptPackage";
+import type {
+  ConceptFieldKey,
+  NewProjectTitlePromptPackage,
+  PromptPackage
+} from "./promptPackage";
 
 export type AiProposalStatus = "running" | "success" | "error";
+export type AiProposalScope = "bookConcept" | "newProject";
+export const NEW_PROJECT_PROPOSAL_ID = "__new_project__";
 
 export type AiPromptSnapshot = {
+  scope?: AiProposalScope;
   projectId: string;
   bookId: string;
   field: ConceptFieldKey;
   action: AIAction;
   promptPackageId: string;
-  promptPackageJson: PromptPackage;
+  promptPackageJson: PromptPackage | NewProjectTitlePromptPackage;
   prompt: string;
 };
 

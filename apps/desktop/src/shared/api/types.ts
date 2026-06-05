@@ -22,6 +22,10 @@ export type Book = {
   styleGuide: string;
   pointOfView: string;
   targetWordCount: number | null;
+  coverImagePath: string;
+  coverPrompt: string;
+  coverNegativePrompt: string;
+  coverGeneratedAt: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -34,6 +38,7 @@ export type ProjectSummary = {
   updatedAt: string;
   activeBookId: string | null;
   workingTitle: string;
+  coverImagePath: string;
 };
 
 export type ProjectDetails = {
@@ -66,7 +71,8 @@ export type AIAction =
   | "suggest_genre"
   | "suggest_target_audience"
   | "suggest_tone"
-  | "generate_style_guide";
+  | "generate_style_guide"
+  | "generate_cover_image";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
@@ -109,9 +115,20 @@ export type RunCodexPromptRequest = {
   reasoningEffort?: ReasoningEffort;
 };
 
+export type GenerateNewProjectTitleRequest = {
+  action: Extract<AIAction, "generate_working_title">;
+  promptPackageId: string;
+  promptPackageJson: unknown;
+  prompt: string;
+  codexPath?: string;
+  timeoutSeconds?: number;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
+};
+
 export type AiRunResult = {
   id: string;
-  providerId: "codex-cli-bridge";
+  providerId: string;
   promptPackageId: string;
   action: string;
   status: "success" | "error" | "cancelled" | "timeout" | string;
@@ -119,4 +136,37 @@ export type AiRunResult = {
   stderr?: string | null;
   errorMessage?: string | null;
   durationMs: number;
+};
+
+export type GenerateBookCoverInput = {
+  projectId: string;
+  bookId: string;
+  promptPackageId: string;
+  promptPackageJson: unknown;
+  prompt: string;
+  coverPrompt: string;
+  coverNegativePrompt: string;
+  codexPath?: string;
+  timeoutSeconds?: number;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
+};
+
+export type BookCoverResult = {
+  book: Book;
+  aiRun: AiRunResult;
+  imagePath: string;
+  prompt: string;
+  negativePrompt: string;
+  generatedAt: string;
+};
+
+export type CoverGenerationProgressEvent = {
+  projectId: string;
+  bookId: string;
+  aiRunId: string;
+  phase: "queued" | "request" | "streaming" | "partial" | "final" | "saved" | "error" | string;
+  message: string;
+  partialImageDataUrl?: string | null;
+  progress?: number | null;
 };

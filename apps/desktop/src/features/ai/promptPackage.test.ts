@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buildConceptFieldPromptPackage,
+  buildNewProjectTitlePromptPackage,
+  renderNewProjectTitlePromptPackage,
   renderPromptPackage
 } from "./promptPackage";
+import {
+  buildBookCoverPromptPackage,
+  renderBookCoverPromptPackage
+} from "./coverPromptPackage";
 import type { Book, Project } from "../../shared/api/types";
 
 const project: Project = {
@@ -29,6 +35,10 @@ const book: Book = {
   styleGuide: "Krotkie zdania w scenach napiecia.",
   pointOfView: "",
   targetWordCount: null,
+  coverImagePath: "",
+  coverPrompt: "",
+  coverNegativePrompt: "",
+  coverGeneratedAt: null,
   status: "draft",
   createdAt: "2026-06-05T12:00:00Z",
   updatedAt: "2026-06-05T12:00:00Z"
@@ -52,5 +62,37 @@ describe("renderPromptPackage", () => {
     expect(prompt).toContain(book.genre);
     expect(prompt).toContain(book.targetAudience);
     expect(prompt).toContain(book.styleGuide);
+  });
+
+  it("renders a cover image prompt from current concept context", () => {
+    const promptPackage = buildBookCoverPromptPackage(project, book);
+    const prompt = renderBookCoverPromptPackage(
+      promptPackage,
+      "D:\\covers\\cover.png"
+    );
+
+    expect(promptPackage.action).toBe("generate_cover_image");
+    expect(promptPackage.coverPrompt).toContain(book.workingTitle);
+    expect(promptPackage.coverPrompt).toContain(book.premise);
+    expect(promptPackage.coverPrompt).toContain(book.genre);
+    expect(promptPackage.coverPrompt).toContain(book.targetAudience);
+    expect(promptPackage.coverPrompt).toContain(book.tone);
+    expect(promptPackage.coverPrompt).toContain(book.styleGuide);
+    expect(promptPackage.generationOptions.providerId).toBe("openai-images-api");
+    expect(promptPackage.generationOptions.model).toBe("gpt-image-2");
+    expect(prompt).toContain("OpenAI Images API");
+    expect(prompt).toContain("D:\\covers\\cover.png");
+    expect(prompt).toContain("book_cover_image");
+  });
+
+  it("renders a new-project title prompt without an existing project", () => {
+    const promptPackage = buildNewProjectTitlePromptPackage("Tajemnica archiwum");
+    const prompt = renderNewProjectTitlePromptPackage(promptPackage);
+
+    expect(promptPackage.action).toBe("generate_working_title");
+    expect(promptPackage.context.seedTitle).toBe("Tajemnica archiwum");
+    expect(prompt).toContain("Tajemnica archiwum");
+    expect(prompt).toContain("concept_field_suggestion");
+    expect(prompt).toContain("workingTitle");
   });
 });

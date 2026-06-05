@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   browserCreateProject,
+  browserGenerateBookCover,
   browserGetProject,
   browserListProjects,
   browserUpdateBookConcept
@@ -22,6 +23,7 @@ describe("browser preview commands", () => {
 
     expect(listed).toHaveLength(1);
     expect(listed[0].workingTitle).toBe("Projekt z podgladu");
+    expect(listed[0].coverImagePath).toBe("");
     expect(opened.book.id).toBe(created.book.id);
   });
 
@@ -40,5 +42,29 @@ describe("browser preview commands", () => {
 
     expect(updated.workingTitle).toBe("Nowy tytuł");
     expect(updated.premise).toBe("Premisa testowa");
+  });
+
+  it("stores browser-preview cover metadata in project summaries", async () => {
+    const created = await browserCreateProject({
+      name: "Projekt z okladka",
+      language: "pl"
+    });
+
+    await browserGenerateBookCover({
+      projectId: created.project.id,
+      bookId: created.book.id,
+      promptPackageId: "generate_cover_image:test",
+      promptPackageJson: {},
+      prompt: "cover prompt",
+      coverPrompt: "dark cover",
+      coverNegativePrompt: "watermark"
+    });
+
+    const listed = await browserListProjects();
+    const opened = await browserGetProject(created.project.id);
+
+    expect(listed[0].coverImagePath).toContain("data:image/svg+xml");
+    expect(opened.book.coverPrompt).toBe("dark cover");
+    expect(opened.book.coverNegativePrompt).toBe("watermark");
   });
 });

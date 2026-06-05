@@ -7,15 +7,20 @@ import {
   browserListProjects,
   browserRunCodexPrompt,
   browserUpdateBookConcept,
+  browserGenerateBookCover,
+  browserGenerateNewProjectTitle,
   isTauriRuntime
 } from "./browserDevCommands";
 import type {
   AiRunResult,
   Book,
+  BookCoverResult,
   BookConceptInput,
   CodexCliStatus,
   CodexModelCatalog,
   CreateProjectInput,
+  GenerateBookCoverInput,
+  GenerateNewProjectTitleRequest,
   ProjectDetails,
   ProjectSummary,
   RunCodexPromptRequest
@@ -80,4 +85,24 @@ export function runCodexPrompt(
   }
 
   return invoke("run_codex_prompt", { request });
+}
+
+export function generateNewProjectTitle(
+  request: GenerateNewProjectTitleRequest
+): Promise<AiRunResult> {
+  if (!isTauriRuntime()) {
+    return browserGenerateNewProjectTitle(request);
+  }
+
+  return invoke("generate_new_project_title", { request });
+}
+
+export function generateBookCover(
+  input: GenerateBookCoverInput
+): Promise<BookCoverResult> {
+  if (!isTauriRuntime()) {
+    return browserGenerateBookCover(input);
+  }
+
+  return invoke("generate_book_cover", { input });
 }

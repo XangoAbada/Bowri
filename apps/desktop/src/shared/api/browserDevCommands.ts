@@ -1,10 +1,13 @@
 import type {
   AiRunResult,
   Book,
+  BookCoverResult,
   BookConceptInput,
   CodexCliStatus,
   CodexModelCatalog,
   CreateProjectInput,
+  GenerateBookCoverInput,
+  GenerateNewProjectTitleRequest,
   Project,
   ProjectDetails,
   ProjectSummary,
@@ -66,6 +69,10 @@ export async function browserCreateProject(
     styleGuide: "",
     pointOfView: "",
     targetWordCount: null,
+    coverImagePath: "",
+    coverPrompt: "",
+    coverNegativePrompt: "",
+    coverGeneratedAt: null,
     status: "draft",
     createdAt: now,
     updatedAt: now
@@ -85,7 +92,8 @@ export async function browserListProjects(): Promise<ProjectSummary[]> {
       language: project.language,
       updatedAt: project.updatedAt,
       activeBookId: project.activeBookId,
-      workingTitle: book.workingTitle
+      workingTitle: book.workingTitle,
+      coverImagePath: book.coverImagePath ?? ""
     }))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
@@ -101,7 +109,7 @@ export async function browserGetProject(
     throw new Error("Project not found in browser preview storage.");
   }
 
-  return details;
+  return normalizeDetails(details);
 }
 
 export async function browserUpdateBookConcept(
@@ -181,6 +189,106 @@ export async function browserRunCodexPrompt(
   };
 }
 
+export async function browserGenerateNewProjectTitle(
+  request: GenerateNewProjectTitleRequest
+): Promise<AiRunResult> {
+  const seedTitle = extractSeedTitle(request.promptPackageJson);
+  const value = seedTitle
+    ? `Sekret ${seedTitle}`
+    : "Sekret Trzeciego Dnia";
+
+  return {
+    id: createId(),
+    providerId: "codex-cli-bridge",
+    promptPackageId: request.promptPackageId,
+    action: request.action,
+    status: "success",
+    rawOutput: JSON.stringify({
+      version: 1,
+      kind: "concept_field_suggestion",
+      field: "workingTitle",
+      summary: value,
+      value,
+      values: [],
+      rationale: "Browser preview generated a deterministic title.",
+      warnings: []
+    }),
+    durationMs: 0
+  };
+}
+
+function extractSeedTitle(promptPackageJson: unknown): string {
+  if (
+    promptPackageJson &&
+    typeof promptPackageJson === "object" &&
+    "context" in promptPackageJson
+  ) {
+    const context = (promptPackageJson as { context?: { seedTitle?: unknown } })
+      .context;
+    if (typeof context?.seedTitle === "string") {
+      return context.seedTitle.trim();
+    }
+  }
+
+  return "";
+}
+
+export async function browserGenerateBookCover(
+  input: GenerateBookCoverInput
+): Promise<BookCoverResult> {
+  const state = readState();
+  const details = state.projects.find(
+    ({ project, book }) => project.id === input.projectId && book.id === input.bookId
+  );
+
+  if (!details) {
+    throw new Error("Book not found in browser preview storage.");
+  }
+
+  const now = new Date().toISOString();
+  const imagePath = createCoverDataUrl(
+    details.book.workingTitle || details.project.name,
+    input.coverPrompt
+  );
+
+  details.book = {
+    ...details.book,
+    coverImagePath: imagePath,
+    coverPrompt: input.coverPrompt,
+    coverNegativePrompt: input.coverNegativePrompt,
+    coverGeneratedAt: now,
+    updatedAt: now
+  };
+  details.project = {
+    ...details.project,
+    updatedAt: now
+  };
+
+  writeState(state);
+
+  return {
+    book: details.book,
+    aiRun: {
+      id: createId(),
+      providerId: "openai-images-api",
+      promptPackageId: input.promptPackageId,
+      action: "generate_cover_image",
+      status: "success",
+      rawOutput: JSON.stringify({
+        version: 1,
+        kind: "book_cover_image",
+        imagePath,
+        warnings: ["Browser preview generated a local placeholder data URL."]
+      }),
+      durationMs: 0
+    },
+    imagePath,
+    prompt: input.coverPrompt,
+    negativePrompt: input.coverNegativePrompt,
+    generatedAt: now
+  };
+}
+
 function readState(): BrowserPreviewState {
   if (typeof window === "undefined") {
     return memoryState;
@@ -219,10 +327,38 @@ function definedOnly(input: BookConceptInput): BookConceptInput {
   ) as BookConceptInput;
 }
 
+function normalizeDetails(details: ProjectDetails): ProjectDetails {
+  return {
+    project: details.project,
+    book: {
+      ...details.book,
+      coverImagePath: details.book.coverImagePath ?? "",
+      coverPrompt: details.book.coverPrompt ?? "",
+      coverNegativePrompt: details.book.coverNegativePrompt ?? "",
+      coverGeneratedAt: details.book.coverGeneratedAt ?? null
+    }
+  };
+}
+
 function createId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
 
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function createCoverDataUrl(title: string, prompt: string): string {
+  const safeTitle = escapeSvg(title || "Untitled");
+  const safePrompt = escapeSvg(prompt.slice(0, 120));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#263c35"/><stop offset="0.55" stop-color="#a86f25"/><stop offset="1" stop-color="#f5f1e8"/></linearGradient></defs><rect width="800" height="1200" fill="url(#g)"/><rect x="54" y="54" width="692" height="1092" fill="none" stroke="#fffdf8" stroke-width="6" opacity=".75"/><circle cx="400" cy="420" r="170" fill="#fffdf8" opacity=".22"/><text x="400" y="850" text-anchor="middle" font-family="Georgia, serif" font-size="58" fill="#fffdf8" font-weight="700">${safeTitle}</text><text x="400" y="930" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="24" fill="#fffdf8" opacity=".78">${safePrompt}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeSvg(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

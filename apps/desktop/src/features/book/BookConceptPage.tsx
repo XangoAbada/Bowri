@@ -1,14 +1,25 @@
-import { Plus, Save, Sparkles, X } from "lucide-react";
+import { Image as ImageIcon, Loader2, Plus, Save, Sparkles, X } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import {
   checkCodexCli,
+  generateBookCover,
   getProject,
   runCodexPrompt,
   updateBookConcept
 } from "../../shared/api/commands";
-import type { BookConceptInput } from "../../shared/api/types";
+import { isTauriRuntime } from "../../shared/api/browserDevCommands";
+import type {
+  BookConceptInput,
+  CoverGenerationProgressEvent
+} from "../../shared/api/types";
+import { coverImageSource } from "../../shared/api/assets";
 import { parseConceptFieldSuggestion } from "../ai/conceptFieldSuggestion";
+import {
+  buildBookCoverPromptPackage,
+  renderBookCoverPromptPackage
+} from "../ai/coverPromptPackage";
 import {
   buildConceptFieldPromptPackage,
   conceptFieldConfigs,
@@ -106,6 +117,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   const activeProposal = useProposalStore((state) => state.activeProposal);
   const [form, setForm] = useState<ConceptForm>(emptyForm);
   const [saveMessage, setSaveMessage] = useState("");
+  const [coverMessage, setCoverMessage] = useState("");
+  const [coverProgressText, setCoverProgressText] = useState("");
+  const [coverStartedAt, setCoverStartedAt] = useState<number | null>(null);
+  const [streamedCoverPreview, setStreamedCoverPreview] = useState("");
   const [aiError, setAiError] = useState("");
 
   const projectQuery = useQuery({
@@ -151,6 +166,43 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       styleGuide: form.styleGuide
     };
   }, [form, projectQuery.data]);
+
+  useEffect(() => {
+    const activeBookId = projectQuery.data?.book.id;
+    if (!activeBookId || !isTauriRuntime()) {
+      return;
+    }
+
+    let cancelled = false;
+    const unlistenPromise = listen<CoverGenerationProgressEvent>(
+      "cover-generation-progress",
+      (event) => {
+        const payload = event.payload;
+        if (
+          payload.projectId !== projectId ||
+          payload.bookId !== activeBookId
+        ) {
+          return;
+        }
+
+        setCoverProgressText(payload.message);
+        if (payload.partialImageDataUrl) {
+          setStreamedCoverPreview(payload.partialImageDataUrl);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      unlistenPromise
+        .then((unlisten) => {
+          if (cancelled) {
+            unlisten();
+          }
+        })
+        .catch(() => undefined);
+    };
+  }, [projectId, projectQuery.data?.book.id]);
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -231,6 +283,75 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     }
   });
 
+  const generateCoverMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectQuery.data || !bookForPrompt) {
+        throw new GenerationError("Brak danych projektu.");
+      }
+
+      const promptPackage = buildBookCoverPromptPackage(
+        projectQuery.data.project,
+        bookForPrompt
+      );
+      const prompt = renderBookCoverPromptPackage(promptPackage);
+
+      return generateBookCover({
+        projectId,
+        bookId: projectQuery.data.book.id,
+        promptPackageId: promptPackage.id,
+        promptPackageJson: promptPackage,
+        prompt,
+        coverPrompt: promptPackage.coverPrompt,
+        coverNegativePrompt: promptPackage.negativePrompt,
+        timeoutSeconds
+      });
+    },
+    onSuccess: async (result) => {
+      setAiError("");
+      setCoverMessage("Utworzono okladke.");
+      setCoverProgressText("Okladka zapisana.");
+      setCoverStartedAt(null);
+      setStreamedCoverPreview(coverImageSource(result.book.coverImagePath));
+      await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      setCoverProgressText("Generowanie okladki zatrzymane.");
+      setCoverStartedAt(null);
+      setAiError(message);
+    }
+  });
+
+  useEffect(() => {
+    if (!generateCoverMutation.isPending || coverStartedAt === null) {
+      return;
+    }
+
+    const startedAt = coverStartedAt;
+
+    function updateProgressText() {
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      if (elapsedSeconds < 2) {
+        setCoverProgressText("Przygotowuje prompt okladki...");
+        return;
+      }
+      if (elapsedSeconds < 8) {
+        setCoverProgressText("Lacze z OpenAI Images API...");
+        return;
+      }
+      if (elapsedSeconds < 45) {
+        setCoverProgressText(`Czekam na podglad okładki (${elapsedSeconds}s)...`);
+        return;
+      }
+      setCoverProgressText(`Dopracowuje finalny obraz (${elapsedSeconds}s)...`);
+    }
+
+    updateProgressText();
+    const intervalId = window.setInterval(updateProgressText, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [coverStartedAt, generateCoverMutation.isPending]);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setSaveMessage("");
@@ -249,13 +370,25 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     generateFieldMutation.mutate(field);
   }
 
+  function generateCover() {
+    setAiError("");
+    setCoverMessage("");
+    setStreamedCoverPreview("");
+    setCoverProgressText("Przygotowuje prompt okladki...");
+    setCoverStartedAt(Date.now());
+    generateCoverMutation.mutate();
+  }
+
   const codexUnavailable = codexStatusQuery.data?.available === false;
   const activeField =
     activeProposal?.projectId === projectId && activeProposal.status === "running"
       ? activeProposal.field
       : null;
+  const coverSrc =
+    streamedCoverPreview || coverImageSource(projectQuery.data?.book.coverImagePath);
 
   return (
+    <div className="concept-page-grid">
     <section className="content-panel concept-panel">
       <div className="section-title-row">
         <div>
@@ -379,8 +512,83 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
         </p>
       ) : null}
 
-      {aiError ? <p className="warning-text">{aiError}</p> : null}
+      {aiError && !generateCoverMutation.isError ? (
+        <p className="warning-text">{aiError}</p>
+      ) : null}
     </section>
+
+      <aside className="content-panel cover-panel">
+        <div className="section-title-row">
+          <div>
+            <p className="eyebrow">Okladka</p>
+            <h2>Robocza okladka</h2>
+          </div>
+          <ImageIcon size={20} aria-hidden="true" />
+        </div>
+
+        <div className={coverSrc ? "cover-preview has-image" : "cover-preview"}>
+          {coverSrc ? (
+            <img src={coverSrc} alt="Okladka robocza" />
+          ) : (
+            <div className="cover-placeholder">
+              <ImageIcon size={30} aria-hidden="true" />
+              <span>Brak okladki</span>
+            </div>
+          )}
+        </div>
+
+        {projectQuery.data?.book.coverGeneratedAt ? (
+          <p className="muted-text">
+            Wygenerowano: {projectQuery.data.book.coverGeneratedAt}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={generateCover}
+          disabled={
+            generateCoverMutation.isPending ||
+            !projectQuery.data
+          }
+          title="Utworz okladke na podstawie danych z widoku koncepcji"
+        >
+          {generateCoverMutation.isPending ? (
+            <Loader2 size={16} className="spin-icon" />
+          ) : (
+            <Sparkles size={16} />
+          )}
+          {generateCoverMutation.isPending ? "Tworze" : "Utworz okladke"}
+        </button>
+
+        {coverProgressText ? (
+          <div
+            className={
+              generateCoverMutation.isPending
+                ? "cover-progress active"
+                : "cover-progress"
+            }
+            role={generateCoverMutation.isPending ? "status" : undefined}
+            aria-live="polite"
+          >
+            <span>{coverProgressText}</span>
+            {generateCoverMutation.isPending ? (
+              <div className="cover-progress-track" aria-hidden="true">
+                <span />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {coverMessage ? <p className="success-text">{coverMessage}</p> : null}
+        {generateCoverMutation.isError ? (
+          <p className="warning-text">Nie udalo sie utworzyc okladki.</p>
+        ) : null}
+        {generateCoverMutation.isError && aiError ? (
+          <p className="warning-text">{aiError}</p>
+        ) : null}
+      </aside>
+    </div>
   );
 }
 

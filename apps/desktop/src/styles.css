@@ -153,9 +153,29 @@ a:focus-visible {
 .dashboard {
   display: grid;
   gap: 28px;
-  width: min(1180px, calc(100vw - 48px));
+  width: min(1480px, calc(100vw - 48px));
   margin: 0 auto;
   padding: 34px 0;
+}
+
+.dashboard-with-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  align-items: start;
+}
+
+.dashboard-main-column,
+.dashboard-side-panel {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+}
+
+.dashboard-side-panel {
+  position: sticky;
+  top: 18px;
+  align-content: start;
+  max-height: calc(100vh - 36px);
+  overflow: auto;
 }
 
 .dashboard-header {
@@ -207,8 +227,13 @@ a:focus-visible {
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 18px;
+}
+
+.project-card-shell {
+  position: relative;
+  min-width: 0;
 }
 
 .project-card {
@@ -225,6 +250,15 @@ a:focus-visible {
     box-shadow 150ms ease;
 }
 
+.project-card.book-card {
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  aspect-ratio: 2 / 3;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
 .project-card:hover {
   transform: translateY(-2px);
   border-color: var(--green);
@@ -239,6 +273,48 @@ a:focus-visible {
   border-radius: 8px;
   background: var(--green-soft);
   color: var(--green);
+}
+
+.project-cover-art {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  background:
+    linear-gradient(145deg, rgba(46, 103, 86, 0.16), rgba(168, 111, 37, 0.2)),
+    #f8f1e4;
+}
+
+.project-cover-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.project-cover-art .project-card-icon {
+  width: 58px;
+  height: 58px;
+}
+
+.project-card-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  background: rgba(255, 253, 248, 0.94);
+}
+
+.project-card-copy strong,
+.project-card-copy small,
+.project-card-copy time {
+  overflow-wrap: anywhere;
+}
+
+.project-card-ai-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  box-shadow: 0 8px 18px rgba(37, 35, 31, 0.16);
 }
 
 .project-card small,
@@ -420,12 +496,91 @@ a:focus-visible {
 }
 
 .concept-panel {
-  max-width: 900px;
+  max-width: none;
+}
+
+.concept-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 18px;
+  align-items: start;
 }
 
 .concept-form {
   display: grid;
   gap: 16px;
+}
+
+.cover-panel {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  align-self: start;
+}
+
+.cover-preview {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(48, 78, 122, 0.12), rgba(168, 111, 37, 0.16)),
+    #fffefb;
+}
+
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-placeholder {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cover-progress {
+  display: grid;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.cover-progress-track {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.cover-progress-track span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: var(--gold);
+  animation: progress-slide 1.35s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-105%);
+  }
+
+  100% {
+    transform: translateX(245%);
+  }
 }
 
 .field-label {
@@ -468,6 +623,10 @@ a:focus-visible {
   width: 100%;
 }
 
+.new-project-title-control {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
 .inline-control > svg {
   color: var(--ink-soft);
 }
@@ -479,6 +638,7 @@ a:focus-visible {
 }
 
 .concept-choice-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   align-items: start;
 }
 
@@ -534,6 +694,12 @@ a:focus-visible {
   background: #fff4df;
   color: #68420e;
   font-size: 12px;
+}
+
+.ai-inline-button {
+  border-color: #c59145;
+  background: #fff4df;
+  color: #68420e;
 }
 
 .icon-button.strong {
@@ -788,6 +954,21 @@ a:focus-visible {
     grid-template-columns: 190px minmax(0, 1fr);
   }
 
+  .dashboard-with-panel,
+  .concept-page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-side-panel,
+  .cover-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .cover-panel {
+    max-width: 420px;
+  }
+
   .context-panel {
     position: static;
     grid-column: 2;
@@ -801,9 +982,20 @@ a:focus-visible {
   }
 }
 
+@media (max-width: 1520px) {
+  .concept-page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cover-panel {
+    position: static;
+    max-width: 460px;
+  }
+}
+
 @media (max-width: 760px) {
   .dashboard {
-    width: min(100% - 28px, 1180px);
+    width: min(100% - 28px, 1480px);
   }
 
   .dashboard-header,

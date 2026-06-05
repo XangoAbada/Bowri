@@ -1,6 +1,7 @@
 import { Check, FileJson, Loader2, RotateCcw, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  generateNewProjectTitle,
   runCodexPrompt,
   updateBookConcept
 } from "../../shared/api/commands";
@@ -12,9 +13,13 @@ import { ActiveAiProposal, useProposalStore } from "./proposalStore";
 
 type AiProposalPanelProps = {
   projectId: string;
+  onAcceptValue?: (value: string) => void | Promise<void>;
 };
 
-export function AiProposalPanel({ projectId }: AiProposalPanelProps) {
+export function AiProposalPanel({
+  projectId,
+  onAcceptValue
+}: AiProposalPanelProps) {
   const queryClient = useQueryClient();
   const proposal = useProposalStore((state) => state.activeProposal);
   const setEditableValue = useProposalStore((state) => state.setEditableValue);
@@ -38,15 +43,24 @@ export function AiProposalPanel({ projectId }: AiProposalPanelProps) {
         return null;
       }
 
-      return updateBookConcept(
-        visibleProposal.bookId,
-        proposalInputFromValue(visibleProposal)
-      );
+      const value = visibleProposal.editableValue.trim();
+      if (visibleProposal.scope === "newProject") {
+        if (!onAcceptValue) {
+          throw new Error("Brak obslugi akceptacji propozycji nowego projektu.");
+        }
+
+        await onAcceptValue(value);
+        return null;
+      }
+
+      return updateBookConcept(visibleProposal.bookId, proposalInputFromValue(value, visibleProposal));
     },
     onSuccess: async () => {
       clearProposal();
-      await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      if (visibleProposal?.scope !== "newProject") {
+        await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      }
     }
   });
 
@@ -57,6 +71,7 @@ export function AiProposalPanel({ projectId }: AiProposalPanelProps) {
       }
 
       const snapshot = {
+        scope: visibleProposal.scope,
         projectId: visibleProposal.projectId,
         bookId: visibleProposal.bookId,
         field: visibleProposal.field,
@@ -68,17 +83,29 @@ export function AiProposalPanel({ projectId }: AiProposalPanelProps) {
 
       startProposal(snapshot);
 
-      const result = await runCodexPrompt({
-        projectId: snapshot.projectId,
-        action: snapshot.action,
-        promptPackageId: snapshot.promptPackageId,
-        promptPackageJson: snapshot.promptPackageJson,
-        prompt: snapshot.prompt,
-        codexPath,
-        timeoutSeconds,
-        model,
-        reasoningEffort
-      });
+      const result =
+        snapshot.scope === "newProject"
+          ? await generateNewProjectTitle({
+              action: "generate_working_title",
+              promptPackageId: snapshot.promptPackageId,
+              promptPackageJson: snapshot.promptPackageJson,
+              prompt: snapshot.prompt,
+              codexPath,
+              timeoutSeconds,
+              model,
+              reasoningEffort
+            })
+          : await runCodexPrompt({
+              projectId: snapshot.projectId,
+              action: snapshot.action,
+              promptPackageId: snapshot.promptPackageId,
+              promptPackageJson: snapshot.promptPackageJson,
+              prompt: snapshot.prompt,
+              codexPath,
+              timeoutSeconds,
+              model,
+              reasoningEffort
+            });
 
       if (result.status !== "success" || !result.rawOutput) {
         throw new RetryError(
@@ -247,9 +274,10 @@ export function AiProposalPanel({ projectId }: AiProposalPanelProps) {
   );
 }
 
-function proposalInputFromValue(proposal: ActiveAiProposal): BookConceptInput {
-  const value = proposal.editableValue.trim();
-
+function proposalInputFromValue(
+  value: string,
+  proposal: ActiveAiProposal
+): BookConceptInput {
   switch (proposal.field) {
     case "workingTitle":
       return { workingTitle: value };

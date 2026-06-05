@@ -37,6 +37,24 @@ export type PromptPackage = {
   };
 };
 
+export type NewProjectTitlePromptPackage = {
+  id: string;
+  action: Extract<AIAction, "generate_working_title">;
+  locale: "pl" | "en";
+  userInstruction: string;
+  context: {
+    seedTitle: string;
+  };
+  outputContract: {
+    kind: "concept_field_suggestion";
+    format: "json";
+    schema: unknown;
+  };
+  generationOptions: {
+    providerId: AIProviderId;
+  };
+};
+
 export type ConceptFieldConfig = {
   key: ConceptFieldKey;
   label: string;
@@ -184,6 +202,70 @@ ${config.currentWork}
 
 # Output Contract
 Zwróć JSON:
+${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
+`;
+}
+
+export function buildNewProjectTitlePromptPackage(
+  seedTitle: string,
+  locale: "pl" | "en" = "pl"
+): NewProjectTitlePromptPackage {
+  const field: ConceptFieldKey = "workingTitle";
+
+  return {
+    id: createPromptId("generate_working_title"),
+    action: "generate_working_title",
+    locale,
+    userInstruction:
+      "Wygeneruj jedna mocna propozycje tytulu roboczego dla nowego projektu ksiazki.",
+    context: {
+      seedTitle
+    },
+    outputContract: {
+      kind: "concept_field_suggestion",
+      format: "json",
+      schema: {
+        version: 1,
+        kind: "concept_field_suggestion",
+        field,
+        summary: "string",
+        value: "string",
+        values: "[]",
+        rationale: "string",
+        warnings: ["string"]
+      }
+    },
+    generationOptions: {
+      providerId: "codex-cli-bridge"
+    }
+  };
+}
+
+export function renderNewProjectTitlePromptPackage(
+  promptPackage: NewProjectTitlePromptPackage
+): string {
+  return `# Role
+Jestes asystentem pisarskim pracujacym wewnatrz StoryForge2.
+
+# Task
+${promptPackage.userInstruction}
+
+# Hard Rules
+- Pisz po polsku, chyba ze projekt ma inny jezyk.
+- Zwroc jedna propozycje, ktora moze od razu stac sie nazwa nowego projektu.
+- Jesli autor wpisal szkic tytulu, potraktuj go jako inspiracje, a nie polecenie przepisania.
+- Nie dodawaj komentarzy poza wymaganym JSON.
+- Odpowiedz wylacznie poprawnym JSON bez trailing commas.
+
+# New Project Seed
+- Wpis autora: ${emptyFallback(promptPackage.context.seedTitle)}
+
+# Current Work
+Docelowe pole: workingTitle (Tytul roboczy).
+Autor jest na dashboardzie i chce szybko nazwac nowy projekt ksiazki przed jego utworzeniem.
+
+# Output Contract
+Zwroc JSON:
 ${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
 `;
 }

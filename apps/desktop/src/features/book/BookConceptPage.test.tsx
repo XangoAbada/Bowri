@@ -8,6 +8,7 @@ import { BookConceptPage } from "./BookConceptPage";
 import type { AiRunResult, ProjectDetails } from "../../shared/api/types";
 import {
   checkCodexCli,
+  generateBookCover,
   getProject,
   runCodexPrompt,
   updateBookConcept
@@ -15,6 +16,7 @@ import {
 
 vi.mock("../../shared/api/commands", () => ({
   checkCodexCli: vi.fn(),
+  generateBookCover: vi.fn(),
   getProject: vi.fn(),
   runCodexPrompt: vi.fn(),
   updateBookConcept: vi.fn()
@@ -44,6 +46,10 @@ const projectDetails: ProjectDetails = {
     styleGuide: "",
     pointOfView: "",
     targetWordCount: null,
+    coverImagePath: "",
+    coverPrompt: "",
+    coverNegativePrompt: "",
+    coverGeneratedAt: null,
     status: "draft",
     createdAt: "2026-06-05T12:00:00Z",
     updatedAt: "2026-06-05T12:00:00Z"
@@ -85,6 +91,28 @@ describe("BookConceptPage AI flow", () => {
       authLikelyReady: null
     });
     vi.mocked(runCodexPrompt).mockResolvedValue(successfulRun());
+    vi.mocked(generateBookCover).mockResolvedValue({
+      book: {
+        ...projectDetails.book,
+        coverImagePath: "data:image/png;base64,test",
+        coverPrompt: "cover prompt",
+        coverNegativePrompt: "negative",
+        coverGeneratedAt: "2026-06-05T12:05:00Z"
+      },
+      aiRun: {
+        id: "cover-run-1",
+        providerId: "openai-images-api",
+        promptPackageId: "generate_cover_image:test",
+        action: "generate_cover_image",
+        status: "success",
+        rawOutput: "{}",
+        durationMs: 12
+      },
+      imagePath: "data:image/png;base64,test",
+      prompt: "cover prompt",
+      negativePrompt: "negative",
+      generatedAt: "2026-06-05T12:05:00Z"
+    });
     vi.mocked(updateBookConcept).mockResolvedValue({
       ...projectDetails.book,
       workingTitle: "Siostra z mgly"
@@ -158,6 +186,30 @@ describe("BookConceptPage AI flow", () => {
         "book-1",
         expect.objectContaining({
           genre: "kryminał, fantasy, noir"
+        })
+      )
+    );
+  });
+
+  it("generates a cover from current concept form values", async () => {
+    renderWithQueryClient();
+
+    const coverButton = await screen.findByRole("button", {
+      name: /Utworz okladke/i
+    });
+    await waitFor(() => expect(coverButton).not.toBeDisabled());
+
+    fireEvent.change(screen.getByLabelText("Premise"), {
+      target: { value: "Nowa bohaterka znajduje mape ukryta w druku." }
+    });
+    fireEvent.click(coverButton);
+
+    await waitFor(() =>
+      expect(generateBookCover).toHaveBeenCalledWith(
+        expect.objectContaining({
+          coverPrompt: expect.stringContaining(
+            "Nowa bohaterka znajduje mape ukryta w druku."
+          )
         })
       )
     );
