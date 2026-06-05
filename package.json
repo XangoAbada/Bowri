@@ -1,0 +1,14 @@
+{
+  "name": "storyforge2",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "desktop": "npm run dev -w @storyforge2/desktop",
+    "desktop:build": "npm run build -w @storyforge2/desktop",
+    "tauri": "cd apps/desktop && ..\\..\\node_modules\\.bin\\tauri.cmd",
+    "test": "npm run test -w @storyforge2/desktop"
+  }
+}
