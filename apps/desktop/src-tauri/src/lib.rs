@@ -34,7 +34,7 @@ pub enum AppError {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Process(String),
-    #[error("Codex CLI timed out after {0} seconds")]
+    #[error("Codex CLI przekroczył limit czasu po {0} sekundach")]
     Timeout(u64),
 }
 
@@ -133,6 +133,14 @@ pub struct CodexCliStatus {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexModelCatalog {
+    pub models: Vec<Value>,
+    pub fallback: bool,
+    pub error_message: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunCodexPromptRequest {
@@ -143,6 +151,8 @@ pub struct RunCodexPromptRequest {
     pub prompt: String,
     pub codex_path: Option<String>,
     pub timeout_seconds: Option<u64>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -185,7 +195,7 @@ pub async fn create_project_in_pool(
 ) -> Result<ProjectDetails, AppError> {
     let trimmed_name = input.name.trim();
     if trimmed_name.is_empty() {
-        return Err(AppError::Process("Project name cannot be empty".into()));
+        return Err(AppError::Process("Nazwa projektu nie może być pusta".into()));
     }
 
     let project_id = Uuid::new_v4().to_string();
@@ -259,7 +269,7 @@ pub async fn get_project_details(
     let book_id = project
         .active_book_id
         .clone()
-        .ok_or_else(|| AppError::Process("Project does not have an active book".into()))?;
+        .ok_or_else(|| AppError::Process("Projekt nie ma aktywnej książki".into()))?;
 
     let book = sqlx::query_as::<_, Book>("SELECT * FROM books WHERE id = ?")
         .bind(book_id)
@@ -394,7 +404,7 @@ async fn check_codex_cli(codex_path: Option<String>) -> Result<CodexCliStatus, S
                 path: Some(command_spec.display_path),
                 version: if version.is_empty() { None } else { Some(version) },
                 auth_likely_ready: None,
-                message: Some("Codex CLI is available. Login is verified by the first codex exec run.".into()),
+                message: Some("Codex CLI jest dostępny. Logowanie zostanie zweryfikowane przy pierwszym uruchomieniu codex exec.".into()),
             })
         }
         Ok(output) => {
@@ -405,7 +415,7 @@ async fn check_codex_cli(codex_path: Option<String>) -> Result<CodexCliStatus, S
                 version: None,
                 auth_likely_ready: None,
                 message: Some(if stderr.is_empty() {
-                    "Codex CLI returned a non-zero status for --version.".into()
+                    "Codex CLI zwrócił niezerowy status dla --version.".into()
                 } else {
                     stderr
                 }),
@@ -416,15 +426,59 @@ async fn check_codex_cli(codex_path: Option<String>) -> Result<CodexCliStatus, S
             path: Some(command_spec.display_path),
             version: None,
             auth_likely_ready: None,
-            message: Some("Codex CLI was not found in PATH or at the configured path.".into()),
+            message: Some("Nie znaleziono Codex CLI w PATH ani pod skonfigurowaną ścieżką.".into()),
         }),
         Err(error) => Ok(CodexCliStatus {
             available: false,
             path: Some(command_spec.display_path),
             version: None,
             auth_likely_ready: None,
-            message: Some(format!("Could not run Codex CLI: {error}")),
+            message: Some(format!("Nie udało się uruchomić Codex CLI: {error}")),
         }),
+    }
+}
+
+#[tauri::command]
+async fn list_codex_models(codex_path: Option<String>) -> Result<CodexModelCatalog, String> {
+    let path = codex_path.unwrap_or_else(|| "codex".to_string());
+    let command_spec = resolve_codex_command(&path).await;
+    let mut command = Command::new(&command_spec.program);
+    command
+        .args(&command_spec.prefix_args)
+        .arg("debug")
+        .arg("models")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    match command.output().await {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let parsed: Value = serde_json::from_str(&stdout)
+                .map_err(AppError::from)
+                .map_err(command_error)?;
+            let models = parsed
+                .get("models")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+
+            Ok(CodexModelCatalog {
+                models,
+                fallback: false,
+                error_message: None,
+            })
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            Ok(fallback_model_catalog(if stderr.is_empty() {
+                "Codex CLI zwrócił niezerowy status dla debug models.".into()
+            } else {
+                stderr
+            }))
+        }
+        Err(error) => Ok(fallback_model_catalog(format!(
+            "Nie udało się odczytać katalogu modeli Codex: {error}"
+        ))),
     }
 }
 
@@ -481,7 +535,7 @@ pub async fn run_codex_prompt_in_pool(
             "timeout".to_string(),
             None,
             None,
-            Some(format!("Codex CLI timed out after {seconds} seconds")),
+            Some(format!("Codex CLI przekroczył limit czasu po {seconds} sekundach")),
         ),
         Err(error) => (
             "error".to_string(),
@@ -527,7 +581,7 @@ async fn execute_codex(
     let app_data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|error| AppError::Process(format!("Could not resolve app data dir: {error}")))?;
+        .map_err(|error| AppError::Process(format!("Nie udało się ustalić katalogu danych aplikacji: {error}")))?;
     let workspace = app_data_dir
         .join("codex-workspaces")
         .join(&request.project_id);
@@ -551,7 +605,24 @@ async fn execute_codex(
     let mut command = Command::new(command_spec.program);
     command
         .args(command_spec.prefix_args)
-        .arg("exec")
+        .arg("exec");
+
+    if let Some(model) = request.model.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        command.arg("--model").arg(model);
+    }
+
+    if let Some(reasoning_effort) = request
+        .reasoning_effort
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        command
+            .arg("-c")
+            .arg(format!("model_reasoning_effort=\"{reasoning_effort}\""));
+    }
+
+    command
         .arg("--ephemeral")
         .arg("--sandbox")
         .arg("read-only")
@@ -579,6 +650,8 @@ async fn execute_codex(
         workspace.join("last-run.json"),
         serde_json::json!({
             "action": request.action,
+            "model": request.model,
+            "reasoningEffort": request.reasoning_effort,
             "status": output.status.code(),
             "stderr": stderr,
             "completedAt": Utc::now().to_rfc3339()
@@ -592,7 +665,7 @@ async fn execute_codex(
         Ok((stdout, stderr))
     } else {
         Err(AppError::Process(if stderr.trim().is_empty() {
-            "Codex CLI returned a non-zero status.".into()
+            "Codex CLI zwrócił niezerowy status.".into()
         } else {
             stderr
         }))
@@ -727,6 +800,25 @@ fn command_candidate_priority(path: &Path) -> u16 {
     priority
 }
 
+fn fallback_model_catalog(error_message: String) -> CodexModelCatalog {
+    CodexModelCatalog {
+        models: vec![serde_json::json!({
+            "slug": "gpt-5.5",
+            "display_name": "GPT-5.5",
+            "description": "Model fallback używany, gdy katalog modeli Codex CLI jest niedostępny.",
+            "default_reasoning_level": "medium",
+            "supported_reasoning_levels": [
+                { "effort": "low", "description": "Fast responses with lighter reasoning" },
+                { "effort": "medium", "description": "Balances speed and reasoning depth" },
+                { "effort": "high", "description": "Greater reasoning depth" },
+                { "effort": "xhigh", "description": "Extra high reasoning depth" }
+            ]
+        })],
+        fallback: true,
+        error_message: Some(error_message),
+    }
+}
+
 fn has_path_separator(path: &str) -> bool {
     path.contains('\\') || path.contains('/') || path.contains(':')
 }
@@ -738,7 +830,7 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir().map_err(|error| {
                 Box::<dyn std::error::Error>::from(std::io::Error::new(
                     std::io::ErrorKind::Other,
-                    format!("Could not resolve app data dir: {error}"),
+                    format!("Nie udało się ustalić katalogu danych aplikacji: {error}"),
                 ))
             })?;
             let pool = tauri::async_runtime::block_on(init_database(app_data_dir)).map_err(
@@ -758,6 +850,7 @@ pub fn run() {
             get_project,
             update_book_concept,
             check_codex_cli,
+            list_codex_models,
             run_codex_prompt
         ])
         .run(tauri::generate_context!())

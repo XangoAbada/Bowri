@@ -54,13 +54,13 @@ export function DashboardPage() {
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Roboczy tytul ksiazki"
+                placeholder="Roboczy tytuł książki"
               />
               <button
                 type="submit"
                 className="icon-button strong"
-                aria-label="Utworz projekt"
-                title="Utworz projekt"
+                aria-label="Utwórz projekt"
+                title="Utwórz projekt"
                 disabled={createMutation.isPending || name.trim().length === 0}
               >
                 <Plus size={17} />
@@ -68,7 +68,7 @@ export function DashboardPage() {
             </div>
           </label>
           {createMutation.isError ? (
-            <p className="warning-text">Nie udalo sie utworzyc projektu.</p>
+            <p className="warning-text">Nie udało się utworzyć projektu.</p>
           ) : null}
         </form>
       </section>
@@ -82,7 +82,7 @@ export function DashboardPage() {
           <FolderOpen size={20} aria-hidden="true" />
         </div>
 
-        {projectsQuery.isLoading ? <p className="muted-text">Laduje projekty...</p> : null}
+        {projectsQuery.isLoading ? <p className="muted-text">Ładuję projekty...</p> : null}
 
         {projectsQuery.isError ? (
           <div className="empty-state">
@@ -97,7 +97,7 @@ export function DashboardPage() {
         {projectsQuery.data?.length === 0 ? (
           <div className="empty-state">
             <h3>Jeszcze nie ma projektow</h3>
-            <p>Utworz pierwszy projekt, a StoryForge2 zalozy ksiazke i baze.</p>
+          <p>Utwórz pierwszy projekt, a StoryForge2 założy książkę i bazę.</p>
           </div>
         ) : null}
 
@@ -113,7 +113,7 @@ export function DashboardPage() {
                 <BookOpen size={18} />
               </span>
               <strong>{project.name}</strong>
-              <small>{project.workingTitle || "Bez tytulu roboczego"}</small>
+              <small>{project.workingTitle || "Bez tytułu roboczego"}</small>
               <time>{formatLocalDateTime(project.updatedAt)}</time>
             </Link>
           ))}

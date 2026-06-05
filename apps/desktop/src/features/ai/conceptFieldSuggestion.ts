@@ -1,0 +1,70 @@
+import { z } from "zod";
+import type { ConceptFieldKey } from "./promptPackage";
+import { extractJsonCandidate } from "./titleSuggestions";
+
+const conceptFieldKeySchema = z.enum([
+  "workingTitle",
+  "premise",
+  "genre",
+  "targetAudience",
+  "tone",
+  "styleGuide"
+]);
+
+export const conceptFieldSuggestionResponseSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal("concept_field_suggestion"),
+  field: conceptFieldKeySchema,
+  summary: z.string().trim().optional().default(""),
+  value: z.string().trim().optional().nullable(),
+  values: z.array(z.string().trim().min(1)).optional().default([]),
+  rationale: z.string().trim().optional().default(""),
+  warnings: z.array(z.string()).optional().default([])
+});
+
+export type ConceptFieldSuggestionResponse = z.infer<
+  typeof conceptFieldSuggestionResponseSchema
+>;
+
+export type NormalizedConceptFieldSuggestion =
+  ConceptFieldSuggestionResponse & {
+    textValue: string;
+  };
+
+export function parseConceptFieldSuggestion(
+  rawOutput: string,
+  expectedField?: ConceptFieldKey
+): NormalizedConceptFieldSuggestion {
+  const candidate = extractJsonCandidate(rawOutput);
+  if (!candidate) {
+    throw new Error("Nie znaleziono obiektu JSON w odpowiedzi Codex CLI.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(candidate);
+  } catch (error) {
+    throw new Error(`Niepoprawny JSON w odpowiedzi pola: ${String(error)}`);
+  }
+
+  const response = conceptFieldSuggestionResponseSchema.parse(parsed);
+  if (expectedField && response.field !== expectedField) {
+    throw new Error(
+      `Odpowiedź dotyczy pola ${response.field}, oczekiwano ${expectedField}.`
+    );
+  }
+
+  const textValue =
+    response.values.length > 0
+      ? response.values.join(", ")
+      : response.value?.trim() ?? "";
+
+  if (!textValue) {
+    throw new Error("Odpowiedź AI nie zawiera propozycji wartości.");
+  }
+
+  return {
+    ...response,
+    textValue
+  };
+}

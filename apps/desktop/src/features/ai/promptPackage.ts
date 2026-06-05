@@ -1,6 +1,13 @@
-import type { Book, Project } from "../../shared/api/types";
+import type { AIAction, Book, Project } from "../../shared/api/types";
 
-export type AIAction = "generate_titles";
+export type ConceptFieldKey =
+  | "workingTitle"
+  | "premise"
+  | "genre"
+  | "targetAudience"
+  | "tone"
+  | "styleGuide";
+
 export type AIProviderId = "codex-cli-bridge";
 
 export type PromptPackage = {
@@ -10,6 +17,7 @@ export type PromptPackage = {
   locale: "pl" | "en";
   userInstruction: string;
   context: {
+    targetField: ConceptFieldKey;
     book: {
       workingTitle: string;
       premise: string;
@@ -20,28 +28,102 @@ export type PromptPackage = {
     };
   };
   outputContract: {
-    kind: "title_suggestions";
+    kind: "concept_field_suggestion";
     format: "json";
     schema: unknown;
   };
   generationOptions: {
-    count: number;
     providerId: AIProviderId;
   };
 };
 
-export function buildGenerateTitlesPromptPackage(
+export type ConceptFieldConfig = {
+  key: ConceptFieldKey;
+  label: string;
+  action: AIAction;
+  userInstruction: string;
+  currentWork: string;
+  acceptsValues: boolean;
+};
+
+export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = {
+  workingTitle: {
+    key: "workingTitle",
+    label: "Tytuł roboczy",
+    action: "generate_working_title",
+    userInstruction:
+      "Wygeneruj jedną mocną propozycję tytułu roboczego dla tej książki.",
+    currentWork:
+      "Autor chce tytuł roboczy, który od razu niesie gatunek, ton i obietnicę historii.",
+    acceptsValues: false
+  },
+  premise: {
+    key: "premise",
+    label: "Premise",
+    action: "generate_premise",
+    userInstruction:
+      "Wygeneruj jedną klarowną premise w 1-2 zdaniach dla tej książki.",
+    currentWork:
+      "Autor chce premise z bohaterem, konfliktem, stawką i obietnicą historii.",
+    acceptsValues: false
+  },
+  genre: {
+    key: "genre",
+    label: "Gatunek",
+    action: "suggest_genre",
+    userInstruction:
+      "Zaproponuj najtrafniejszy zestaw gatunków lub podgatunków dla tej książki.",
+    currentWork:
+      "Autor chce kilka etykiet gatunkowych, które pomogą późniejszym promptom trzymać konwencje.",
+    acceptsValues: true
+  },
+  targetAudience: {
+    key: "targetAudience",
+    label: "Odbiorcy",
+    action: "suggest_target_audience",
+    userInstruction:
+      "Zaproponuj docelowych odbiorców tej książki jako krótkie etykiety.",
+    currentWork:
+      "Autor chce etykiety czytelników, które pomogą dopasować język, poziom mroku i tempo.",
+    acceptsValues: true
+  },
+  tone: {
+    key: "tone",
+    label: "Ton",
+    action: "suggest_tone",
+    userInstruction:
+      "Zaproponuj zestaw tonów narracyjnych pasujących do tej książki.",
+    currentWork:
+      "Autor chce etykiety tonu, które będą sterować nastrojem i stylem późniejszych generacji.",
+    acceptsValues: true
+  },
+  styleGuide: {
+    key: "styleGuide",
+    label: "Style guide",
+    action: "generate_style_guide",
+    userInstruction:
+      "Wygeneruj praktyczny style guide dla tej książki: język, rytm, tempo, zakazy i preferencje.",
+    currentWork:
+      "Autor chce użyteczne notatki stylu do wielokrotnego użycia w promptach scen i redakcji.",
+    acceptsValues: false
+  }
+};
+
+export function buildConceptFieldPromptPackage(
   project: Project,
   book: Book,
-  count = 20
+  field: ConceptFieldKey
 ): PromptPackage {
+  const config = conceptFieldConfigs[field];
+
   return {
-    id: createPromptId("generate_titles"),
+    id: createPromptId(config.action),
     projectId: project.id,
-    action: "generate_titles",
+    action: config.action,
     locale: project.language === "en" ? "en" : "pl",
-    userInstruction: `Wygeneruj ${count} propozycji tytulow dla tej ksiazki.`,
+    userInstruction: config.userInstruction,
     context: {
+      targetField: field,
       book: {
         workingTitle: book.workingTitle,
         premise: book.premise,
@@ -52,48 +134,44 @@ export function buildGenerateTitlesPromptPackage(
       }
     },
     outputContract: {
-      kind: "title_suggestions",
+      kind: "concept_field_suggestion",
       format: "json",
       schema: {
         version: 1,
-        kind: "title_suggestions",
+        kind: "concept_field_suggestion",
+        field,
         summary: "string",
-        items: [
-          {
-            title: "string",
-            subtitle: "string | null",
-            rationale: "string",
-            tone: "string",
-            risk: "string"
-          }
-        ],
+        value: config.acceptsValues ? "string | null" : "string",
+        values: config.acceptsValues ? ["string"] : "[]",
+        rationale: "string",
         warnings: ["string"]
       }
     },
     generationOptions: {
-      count,
       providerId: "codex-cli-bridge"
     }
   };
 }
 
 export function renderPromptPackage(promptPackage: PromptPackage): string {
-  const { book } = promptPackage.context;
+  const { book, targetField } = promptPackage.context;
+  const config = conceptFieldConfigs[targetField];
 
   return `# Role
-Jestes asystentem pisarskim pracujacym wewnatrz StoryForge2.
+Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
 
 # Task
 ${promptPackage.userInstruction}
 
 # Hard Rules
-- Pisz po polsku, chyba ze projekt ma inny jezyk.
-- Nie zapisuj ani nie zmieniaj kanonu; zwroc tylko propozycje.
+- Pisz po polsku, chyba że projekt ma inny język.
+- Nie zapisuj ani nie zmieniaj kanonu; zwróć tylko propozycje.
+- Uwzględnij wszystkie pola z Book Context, nawet jeśli docelowe pole jest puste.
 - Nie dodawaj komentarzy poza wymaganym JSON.
-- Odpowiedz wylacznie poprawnym JSON bez trailing commas.
+- Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
 
 # Book Context
-- Roboczy tytul: ${emptyFallback(book.workingTitle)}
+- Roboczy tytuł: ${emptyFallback(book.workingTitle)}
 - Premise: ${emptyFallback(book.premise)}
 - Gatunek: ${emptyFallback(book.genre)}
 - Ton: ${emptyFallback(book.tone)}
@@ -101,10 +179,11 @@ ${promptPackage.userInstruction}
 - Style guide: ${emptyFallback(book.styleGuide)}
 
 # Current Work
-Autor prosi o warianty tytulow. Liczba propozycji: ${promptPackage.generationOptions.count}.
+Docelowe pole: ${targetField} (${config.label}).
+${config.currentWork}
 
 # Output Contract
-Zwroc JSON:
+Zwróć JSON:
 ${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
 `;
 }

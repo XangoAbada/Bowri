@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   browserCheckCodexCli,
+  browserListCodexModels,
   browserCreateProject,
   browserGetProject,
   browserListProjects,
@@ -13,6 +14,7 @@ import type {
   Book,
   BookConceptInput,
   CodexCliStatus,
+  CodexModelCatalog,
   CreateProjectInput,
   ProjectDetails,
   ProjectSummary,
@@ -60,6 +62,14 @@ export function checkCodexCli(codexPath?: string): Promise<CodexCliStatus> {
   }
 
   return invoke("check_codex_cli", { codexPath: codexPath || undefined });
+}
+
+export function listCodexModels(codexPath?: string): Promise<CodexModelCatalog> {
+  if (!isTauriRuntime()) {
+    return browserListCodexModels(codexPath);
+  }
+
+  return invoke("list_codex_models", { codexPath: codexPath || undefined });
 }
 
 export function runCodexPrompt(

@@ -35,10 +35,10 @@ describe("browser preview commands", () => {
       premise: "Premisa testowa"
     });
     const updated = await browserUpdateBookConcept(created.book.id, {
-      workingTitle: "Nowy tytul"
+      workingTitle: "Nowy tytuł"
     });
 
-    expect(updated.workingTitle).toBe("Nowy tytul");
+    expect(updated.workingTitle).toBe("Nowy tytuł");
     expect(updated.premise).toBe("Premisa testowa");
   });
 });

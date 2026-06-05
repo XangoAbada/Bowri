@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildGenerateTitlesPromptPackage, renderPromptPackage } from "./promptPackage";
+import {
+  buildConceptFieldPromptPackage,
+  renderPromptPackage
+} from "./promptPackage";
 import type { Book, Project } from "../../shared/api/types";
 
 const project: Project = {
@@ -32,15 +35,22 @@ const book: Book = {
 };
 
 describe("renderPromptPackage", () => {
-  it("renders the generate_titles contract and relevant context", () => {
-    const promptPackage = buildGenerateTitlesPromptPackage(project, book, 20);
+  it("renders a concept field contract and relevant context", () => {
+    const promptPackage = buildConceptFieldPromptPackage(
+      project,
+      book,
+      "premise"
+    );
     const prompt = renderPromptPackage(promptPackage);
 
-    expect(promptPackage.action).toBe("generate_titles");
+    expect(promptPackage.action).toBe("generate_premise");
     expect(prompt).toContain("# Role");
     expect(prompt).toContain("# Output Contract");
-    expect(prompt).toContain("title_suggestions");
+    expect(prompt).toContain("concept_field_suggestion");
+    expect(prompt).toContain("Docelowe pole: premise");
     expect(prompt).toContain(book.premise);
+    expect(prompt).toContain(book.genre);
+    expect(prompt).toContain(book.targetAudience);
     expect(prompt).toContain(book.styleGuide);
   });
 });

@@ -2,9 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AiProposalPanel } from "../ai/AiProposalPanel";
+import { useCodexSettingsStore } from "../ai/codexSettingsStore";
 import { useProposalStore } from "../ai/proposalStore";
 import { BookConceptPage } from "./BookConceptPage";
-import type { ProjectDetails } from "../../shared/api/types";
+import type { AiRunResult, ProjectDetails } from "../../shared/api/types";
 import {
   checkCodexCli,
   getProject,
@@ -33,13 +34,13 @@ const projectDetails: ProjectDetails = {
     id: "book-1",
     projectId: "project-1",
     title: "",
-    workingTitle: "Stary tytul",
+    workingTitle: "Stary tytuł",
     premise: "Bohaterka szuka zaginionej siostry.",
     logline: "",
-    genre: "kryminal",
+    genre: "kryminał",
     subgenre: "",
     targetAudience: "adult",
-    tone: "napiety",
+    tone: "napięty",
     styleGuide: "",
     pointOfView: "",
     targetWordCount: null,
@@ -49,18 +50,14 @@ const projectDetails: ProjectDetails = {
   }
 };
 
-const titleOutput = JSON.stringify({
+const conceptFieldOutput = JSON.stringify({
   version: 1,
-  kind: "title_suggestions",
-  summary: "Testowe tytuly",
-  items: [
-    {
-      title: "Siostra z mgly",
-      rationale: "Podkresla tajemnice.",
-      tone: "napiety",
-      risk: ""
-    }
-  ],
+  kind: "concept_field_suggestion",
+  field: "workingTitle",
+  summary: "Testowy tytuł",
+  value: "Siostra z mgly",
+  values: [],
+  rationale: "Podkresla tajemnice.",
   warnings: []
 });
 
@@ -79,6 +76,7 @@ function renderWithQueryClient() {
 
 describe("BookConceptPage AI flow", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(getProject).mockResolvedValue(projectDetails);
     vi.mocked(checkCodexCli).mockResolvedValue({
       available: true,
@@ -86,33 +84,51 @@ describe("BookConceptPage AI flow", () => {
       version: "codex 1.0.0",
       authLikelyReady: null
     });
-    vi.mocked(runCodexPrompt).mockResolvedValue({
-      id: "run-1",
-      providerId: "codex-cli-bridge",
-      promptPackageId: "generate_titles:test",
-      action: "generate_titles",
-      status: "success",
-      rawOutput: titleOutput,
-      durationMs: 12
-    });
+    vi.mocked(runCodexPrompt).mockResolvedValue(successfulRun());
     vi.mocked(updateBookConcept).mockResolvedValue({
       ...projectDetails.book,
       workingTitle: "Siostra z mgly"
     });
-    useProposalStore.setState({ titleProposal: null });
+    useProposalStore.setState({ activeProposal: null });
+    useCodexSettingsStore.setState({
+      codexPath: "codex",
+      model: "gpt-5.5",
+      reasoningEffort: "medium",
+      timeoutSeconds: 180
+    });
   });
 
-  it("shows title proposals and saves only after acceptance", async () => {
+  it("shows a field proposal immediately and saves only after acceptance", async () => {
+    let resolveRun: (result: AiRunResult) => void = () => undefined;
+    vi.mocked(runCodexPrompt).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRun = resolve;
+      })
+    );
+
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
-    const generateButton = screen.getByRole("button", { name: /Generuj tytuly/i });
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    const generateButton = screen.getByRole("button", {
+      name: /Generuj Tytuł roboczy z AI/i
+    });
 
     await waitFor(() => expect(generateButton).not.toBeDisabled());
     fireEvent.click(generateButton);
 
-    expect(await screen.findByText("Siostra z mgly")).toBeInTheDocument();
+    expect(await screen.findByText(/Zadanie jest w kolejce panelu/i)).toBeInTheDocument();
     expect(updateBookConcept).not.toHaveBeenCalled();
+
+    resolveRun(successfulRun());
+
+    expect(await screen.findByDisplayValue("Siostra z mgly")).toBeInTheDocument();
+    expect(runCodexPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "generate_working_title",
+        model: "gpt-5.5",
+        reasoningEffort: "medium"
+      })
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
 
@@ -122,4 +138,40 @@ describe("BookConceptPage AI flow", () => {
       })
     );
   });
+
+  it("saves multi-choice fields with a custom option as comma-separated text", async () => {
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "fantasy" }));
+    fireEvent.change(screen.getByLabelText("Własna opcja Gatunek"), {
+      target: { value: "noir" }
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Dodaj własną opcję Gatunek/i })
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Zapisz/i }));
+
+    await waitFor(() =>
+      expect(updateBookConcept).toHaveBeenCalledWith(
+        "book-1",
+        expect.objectContaining({
+          genre: "kryminał, fantasy, noir"
+        })
+      )
+    );
+  });
 });
+
+function successfulRun(): AiRunResult {
+  return {
+    id: "run-1",
+    providerId: "codex-cli-bridge",
+    promptPackageId: "generate_working_title:test",
+    action: "generate_working_title",
+    status: "success",
+    rawOutput: conceptFieldOutput,
+    durationMs: 12
+  };
+}

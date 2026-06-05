@@ -41,7 +41,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -83,7 +84,8 @@ h3 {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -97,6 +99,11 @@ input {
   padding: 0 11px;
 }
 
+select {
+  height: 38px;
+  padding: 0 34px 0 11px;
+}
+
 textarea {
   min-height: 116px;
   resize: vertical;
@@ -106,6 +113,7 @@ textarea {
 
 input:focus,
 textarea:focus,
+select:focus,
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--blue);
@@ -249,7 +257,7 @@ a:focus-visible {
 
 .project-shell {
   display: grid;
-  grid-template-columns: 218px minmax(0, 1fr) 340px;
+  grid-template-columns: 218px minmax(0, 1fr) var(--context-panel-width, 340px);
   min-height: 100vh;
 }
 
@@ -356,6 +364,36 @@ a:focus-visible {
   background: rgba(241, 234, 219, 0.82);
 }
 
+.context-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 4;
+  width: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.context-resize-handle::after {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 2px;
+  height: 58px;
+  border-radius: 999px;
+  background: rgba(168, 111, 37, 0.36);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.context-resize-handle:hover::after,
+.context-resize-handle:focus-visible::after {
+  background: var(--gold);
+}
+
 .context-section {
   display: grid;
   gap: 13px;
@@ -398,6 +436,26 @@ a:focus-visible {
   font-weight: 800;
 }
 
+.field-shell {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field-label-text {
+  min-width: 0;
+}
+
 .field-label.narrow {
   max-width: 240px;
 }
@@ -418,6 +476,10 @@ a:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.concept-choice-grid {
+  align-items: start;
 }
 
 .primary-button,
@@ -462,6 +524,18 @@ a:focus-visible {
   color: var(--ink);
 }
 
+.ai-field-button {
+  width: auto;
+  min-width: 58px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-color: #c59145;
+  background: #fff4df;
+  color: #68420e;
+  font-size: 12px;
+}
+
 .icon-button.strong {
   border-color: var(--green);
   background: var(--green);
@@ -500,6 +574,135 @@ a:focus-visible {
   border-color: #ecc1b7;
   background: var(--red-soft);
   color: var(--red);
+}
+
+.choice-field {
+  display: grid;
+  gap: 8px;
+}
+
+.choice-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 74px;
+  align-content: start;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffefb;
+}
+
+.choice-chip {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.choice-chip:hover {
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.choice-chip.selected {
+  border-color: #9ac2ad;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.choice-chip.custom {
+  border-style: dashed;
+}
+
+.choice-custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 7px;
+}
+
+.provider-panel {
+  display: block;
+}
+
+.provider-summary-row {
+  position: relative;
+  display: block;
+  list-style: none;
+  cursor: pointer;
+}
+
+.provider-summary-row::-webkit-details-marker {
+  display: none;
+}
+
+.provider-summary-row .section-title-row {
+  padding-right: 20px;
+}
+
+.provider-subtitle {
+  font-size: 12px;
+}
+
+.provider-chevron {
+  position: absolute;
+  top: 5px;
+  right: 0;
+  color: var(--ink-soft);
+  transition: transform 140ms ease;
+}
+
+.provider-panel[open] .provider-chevron {
+  transform: rotate(180deg);
+}
+
+.provider-body {
+  display: grid;
+  gap: 13px;
+  padding-top: 13px;
+}
+
+.reasoning-control {
+  display: grid;
+  gap: 6px;
+}
+
+.reasoning-control input {
+  padding: 0;
+}
+
+.reasoning-labels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.reasoning-labels span {
+  overflow-wrap: anywhere;
+}
+
+.reasoning-labels .active {
+  color: var(--green);
+}
+
+.spin-icon {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .proposal-panel {
@@ -591,6 +794,10 @@ a:focus-visible {
     height: auto;
     border-top: 1px solid var(--line);
     border-left: 0;
+  }
+
+  .context-resize-handle {
+    display: none;
   }
 }
 

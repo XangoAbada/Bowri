@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { BookOpen, Boxes, Brain, FileText, Map, PenLine, Settings, Users } from "lucide-react";
-import { ReactNode } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getProject } from "../shared/api/commands";
 import { AiProposalPanel } from "../features/ai/AiProposalPanel";
 import { CodexStatusPanel } from "../features/ai/CodexStatusPanel";
+import { useCodexSettingsStore } from "../features/ai/codexSettingsStore";
 
 type ProjectShellProps = {
   projectId: string;
@@ -15,10 +16,10 @@ type ProjectShellProps = {
 const disabledSections = [
   { label: "Plan", icon: Map },
   { label: "Postacie", icon: Users },
-  { label: "Swiat", icon: Boxes },
-  { label: "Rozdzialy", icon: FileText },
+  { label: "Świat", icon: Boxes },
+  { label: "Rozdziały", icon: FileText },
   { label: "Edytor", icon: PenLine },
-  { label: "Ciaglosc", icon: Brain }
+  { label: "Ciągłość", icon: Brain }
 ];
 
 export function ProjectShell({
@@ -26,6 +27,12 @@ export function ProjectShell({
   activeSection,
   children
 }: ProjectShellProps) {
+  const contextPanelWidth = useCodexSettingsStore(
+    (state) => state.contextPanelWidth
+  );
+  const setContextPanelWidth = useCodexSettingsStore(
+    (state) => state.setContextPanelWidth
+  );
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
@@ -37,8 +44,34 @@ export function ProjectShell({
     projectQuery.data?.project.name ||
     "Projekt";
 
+  function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = contextPanelWidth;
+
+    function handlePointerMove(moveEvent: PointerEvent) {
+      const nextWidth = clamp(startWidth + startX - moveEvent.clientX, 280, 560);
+      setContextPanelWidth(nextWidth);
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
   return (
-    <div className="project-shell">
+    <div
+      className="project-shell"
+      style={
+        {
+          "--context-panel-width": `${contextPanelWidth}px`
+        } as CSSProperties
+      }
+    >
       <aside className="sidebar">
         <Link className="brand-link" to="/">
           <span>SF2</span>
@@ -80,7 +113,7 @@ export function ProjectShell({
             <h1>{title}</h1>
           </div>
           {projectQuery.isError ? (
-            <span className="status-pill muted">blad danych</span>
+            <span className="status-pill muted">błąd danych</span>
           ) : (
             <span className="status-pill">lokalny SQLite</span>
           )}
@@ -90,9 +123,20 @@ export function ProjectShell({
       </div>
 
       <aside className="context-panel">
+        <button
+          type="button"
+          className="context-resize-handle"
+          onPointerDown={handleResizeStart}
+          title="Przeciągnij, aby zmienić szerokość panelu AI"
+          aria-label="Zmień szerokość panelu AI"
+        />
         <CodexStatusPanel compact />
         <AiProposalPanel projectId={projectId} />
       </aside>
     </div>
   );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

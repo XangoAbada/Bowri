@@ -60,6 +60,16 @@ export type BookConceptInput = {
   targetWordCount?: number | null;
 };
 
+export type AIAction =
+  | "generate_working_title"
+  | "generate_premise"
+  | "suggest_genre"
+  | "suggest_target_audience"
+  | "suggest_tone"
+  | "generate_style_guide";
+
+export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
+
 export type CodexCliStatus = {
   available: boolean;
   path?: string;
@@ -68,14 +78,35 @@ export type CodexCliStatus = {
   message?: string;
 };
 
+export type CodexModelReasoningLevel = {
+  effort: ReasoningEffort | string;
+  description?: string;
+};
+
+export type CodexModel = {
+  slug: string;
+  displayName: string;
+  description?: string;
+  defaultReasoningLevel?: ReasoningEffort | string;
+  supportedReasoningLevels?: CodexModelReasoningLevel[];
+};
+
+export type CodexModelCatalog = {
+  models: CodexModel[];
+  fallback: boolean;
+  errorMessage?: string | null;
+};
+
 export type RunCodexPromptRequest = {
   projectId: string;
-  action: "generate_titles";
+  action: AIAction;
   promptPackageId: string;
   promptPackageJson: unknown;
   prompt: string;
   codexPath?: string;
   timeoutSeconds?: number;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
 };
 
 export type AiRunResult = {

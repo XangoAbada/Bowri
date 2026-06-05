@@ -3,6 +3,7 @@ import type {
   Book,
   BookConceptInput,
   CodexCliStatus,
+  CodexModelCatalog,
   CreateProjectInput,
   Project,
   ProjectDetails,
@@ -137,7 +138,30 @@ export async function browserCheckCodexCli(
     path: codexPath || "codex",
     authLikelyReady: null,
     message:
-      "Podglad Vite dziala bez backendu Tauri. Uruchom aplikacje desktopowa, aby sprawdzic Codex CLI."
+      "Podgląd Vite działa bez backendu Tauri. Uruchom aplikację desktopową, aby sprawdzić Codex CLI."
+  };
+}
+
+export async function browserListCodexModels(
+  _codexPath?: string
+): Promise<CodexModelCatalog> {
+  return {
+    fallback: true,
+    models: [
+      {
+        slug: "gpt-5.5",
+        displayName: "GPT-5.5",
+        defaultReasoningLevel: "medium",
+        supportedReasoningLevels: [
+          { effort: "low", description: "Szybciej, mniej planowania" },
+          { effort: "medium", description: "Dobry balans" },
+          { effort: "high", description: "Glebsze rozumowanie" },
+          { effort: "xhigh", description: "Najglebsze rozumowanie" }
+        ]
+      }
+    ],
+    errorMessage:
+      "Podgląd Vite nie może odczytać katalogu modeli Codex CLI bez backendu Tauri."
   };
 }
 
@@ -152,7 +176,7 @@ export async function browserRunCodexPrompt(
     status: "error",
     rawOutput: null,
     errorMessage:
-      "Podglad Vite nie moze uruchomic codex exec. Uzyj aplikacji Tauri desktop.",
+      "Podgląd Vite nie może uruchomić codex exec. Użyj aplikacji Tauri desktop.",
     durationMs: 0
   };
 }

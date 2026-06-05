@@ -31,7 +31,7 @@ export function parseTitleSuggestions(rawOutput: string): TitleSuggestionsRespon
   try {
     parsed = JSON.parse(candidate);
   } catch (error) {
-    throw new Error(`Niepoprawny JSON w odpowiedzi tytulow: ${String(error)}`);
+    throw new Error(`Niepoprawny JSON w odpowiedzi tytułów: ${String(error)}`);
   }
 
   return titleSuggestionsResponseSchema.parse(parsed);

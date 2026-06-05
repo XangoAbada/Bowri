@@ -7,15 +7,15 @@ const validPayload = {
   summary: "Dwie propozycje",
   items: [
     {
-      title: "Miasto z popiolu",
+      title: "Miasto z popiołu",
       subtitle: null,
       rationale: "Pasuje do mrocznego tonu",
       tone: "mroczny",
-      risk: "Moze brzmiec klasycznie"
+      risk: "Może brzmieć klasycznie"
     },
     {
       title: "Ostatni atrament",
-      rationale: "Laczy pisanie i stawke historii"
+      rationale: "Łączy pisanie i stawkę historii"
     }
   ],
   warnings: []
@@ -26,7 +26,7 @@ describe("parseTitleSuggestions", () => {
     const parsed = parseTitleSuggestions(JSON.stringify(validPayload));
 
     expect(parsed.items).toHaveLength(2);
-    expect(parsed.items[0].title).toBe("Miasto z popiolu");
+    expect(parsed.items[0].title).toBe("Miasto z popiołu");
   });
 
   it("extracts JSON from a fenced code block", () => {
