@@ -3,11 +3,23 @@ import type { ConceptFieldKey } from "./promptPackage";
 import { extractJsonCandidate } from "./titleSuggestions";
 
 const conceptFieldKeySchema = z.enum([
+  "title",
   "workingTitle",
   "premise",
+  "expandedPremise",
+  "logline",
+  "centralConflict",
+  "stakes",
   "genre",
+  "subgenre",
   "targetAudience",
   "tone",
+  "pointOfView",
+  "targetWordCount",
+  "themesJson",
+  "unwantedThemes",
+  "alternativeTitlesJson",
+  "titleChoiceNote",
   "styleGuide"
 ]);
 

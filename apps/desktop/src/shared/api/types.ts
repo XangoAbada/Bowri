@@ -14,7 +14,10 @@ export type Book = {
   title: string;
   workingTitle: string;
   premise: string;
+  expandedPremise: string;
   logline: string;
+  centralConflict: string;
+  stakes: string;
   genre: string;
   subgenre: string;
   targetAudience: string;
@@ -22,6 +25,10 @@ export type Book = {
   styleGuide: string;
   pointOfView: string;
   targetWordCount: number | null;
+  themesJson: string;
+  unwantedThemes: string;
+  alternativeTitlesJson: string;
+  titleChoiceNote: string;
   coverImagePath: string;
   coverPrompt: string;
   coverNegativePrompt: string;
@@ -55,7 +62,10 @@ export type BookConceptInput = {
   title?: string;
   workingTitle?: string;
   premise?: string;
+  expandedPremise?: string;
   logline?: string;
+  centralConflict?: string;
+  stakes?: string;
   genre?: string;
   subgenre?: string;
   targetAudience?: string;
@@ -63,14 +73,31 @@ export type BookConceptInput = {
   styleGuide?: string;
   pointOfView?: string;
   targetWordCount?: number | null;
+  themesJson?: string;
+  unwantedThemes?: string;
+  alternativeTitlesJson?: string;
+  titleChoiceNote?: string;
 };
 
 export type AIAction =
   | "generate_working_title"
+  | "generate_title"
   | "generate_premise"
+  | "expand_premise"
+  | "generate_logline"
+  | "generate_expanded_premise"
+  | "generate_central_conflict"
+  | "generate_stakes"
   | "suggest_genre"
+  | "suggest_subgenre"
   | "suggest_target_audience"
   | "suggest_tone"
+  | "suggest_point_of_view"
+  | "suggest_target_word_count"
+  | "suggest_themes"
+  | "suggest_unwanted_themes"
+  | "generate_alternative_titles"
+  | "generate_title_choice_note"
   | "generate_style_guide"
   | "generate_cover_image";
 

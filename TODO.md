@@ -107,16 +107,17 @@ Zrodla:
 [06_prompt_architecture.md](docs/blueprint/06_prompt_architecture.md),
 [09_faza_2_koncepcja_ksiazki.md](docs/blueprint/09_faza_2_koncepcja_ksiazki.md)
 
-- [ ] Rozbudowac ekran koncepcji o tytul, premise, logline, gatunek,
+- [x] Rozbudowac ekran koncepcji o tytul, premise, logline, gatunek,
       podgatunek, odbiorcow, ton, punkt widzenia, style guide i target word
       count.
-- [ ] Dodac zapis i walidacje wszystkich pol koncepcji.
-- [ ] Dodac liste alternatywnych tytulow i notatke wyboru.
-- [ ] Dodac AI action `expand_premise` z kontraktem `premise_development`.
-- [ ] Dodac AI action `generate_style_guide`.
-- [ ] Umozliwic czesciowa akceptacje pol z propozycji AI.
+- [x] Dodac zapis i walidacje wszystkich pol koncepcji.
+- [x] Dodac liste alternatywnych tytulow i notatke wyboru.
+- [x] Zapewnic, ze kazde pole koncepcji ma wlasny przycisk generacji AI.
+- [x] Dodac AI action `expand_premise` z kontraktem `premise_development`.
+- [x] Dodac AI action `generate_style_guide`.
+- [x] Umozliwic czesciowa akceptacje pol z propozycji AI.
 - [ ] Upewnic sie, ze style guide trafia do pozniejszych promptow.
-- [ ] Dodac testy walidacji premisy, importu `premise_development` i promptu
+- [x] Dodac testy walidacji premisy, importu `premise_development` i promptu
       koncepcji.
 
 ### Faza 3: Plan powiesci

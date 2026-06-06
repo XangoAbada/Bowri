@@ -36,16 +36,23 @@ const projectDetails: ProjectDetails = {
     id: "book-1",
     projectId: "project-1",
     title: "",
-    workingTitle: "Stary tytuł",
+    workingTitle: "Stary tytul",
     premise: "Bohaterka szuka zaginionej siostry.",
+    expandedPremise: "",
     logline: "",
-    genre: "kryminał",
+    centralConflict: "",
+    stakes: "",
+    genre: "kryminal",
     subgenre: "",
     targetAudience: "adult",
-    tone: "napięty",
+    tone: "napiety",
     styleGuide: "",
     pointOfView: "",
     targetWordCount: null,
+    themesJson: "[]",
+    unwantedThemes: "",
+    alternativeTitlesJson: "[]",
+    titleChoiceNote: "",
     coverImagePath: "",
     coverPrompt: "",
     coverNegativePrompt: "",
@@ -60,11 +67,25 @@ const conceptFieldOutput = JSON.stringify({
   version: 1,
   kind: "concept_field_suggestion",
   field: "workingTitle",
-  summary: "Testowy tytuł",
+  summary: "Testowy tytul",
   value: "Siostra z mgly",
   values: [],
   rationale: "Podkresla tajemnice.",
   warnings: []
+});
+
+const premiseDevelopmentOutput = JSON.stringify({
+  version: 1,
+  kind: "premise_development",
+  summary: "Archiwistka odkrywa, ze pamiec miasta jest falszowana.",
+  logline: "Archiwistka musi zatrzymac druk falszywych wspomnien.",
+  expandedPremise:
+    "W miescie, gdzie gazety zmieniaja wspomnienia, archiwistka szuka zaginionej siostry i odkrywa mechanizm kontroli.",
+  centralConflict: "Prawda kontra spokoj zbudowany na klamstwie.",
+  stakes: "Jesli bohaterka przegra, miasto zapomni wlasna historie.",
+  themes: ["pamiec", "tozsamosc"],
+  risks: ["Pilnowac, aby magia druku miala koszt."],
+  questionsForAuthor: ["Kto pierwszy zyskuje na falszowaniu pamieci?"]
 });
 
 function renderWithQueryClient() {
@@ -136,9 +157,9 @@ describe("BookConceptPage AI flow", () => {
 
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
     const generateButton = screen.getByRole("button", {
-      name: /Generuj Tytuł roboczy z AI/i
+      name: /Generuj Tytul roboczy z AI/i
     });
 
     await waitFor(() => expect(generateButton).not.toBeDisabled());
@@ -167,17 +188,29 @@ describe("BookConceptPage AI flow", () => {
     );
   });
 
-  it("saves multi-choice fields with a custom option as comma-separated text", async () => {
+  it("saves all phase 2 concept fields", async () => {
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText("Tytul finalny"), {
+      target: { value: "Finalny tytul" }
+    });
+    fireEvent.change(screen.getByLabelText("Logline"), {
+      target: { value: "Jedno zdanie sprzedajace historie." }
+    });
+    fireEvent.change(screen.getByLabelText("Docelowa liczba slow"), {
+      target: { value: "85000" }
+    });
+    fireEvent.change(screen.getByLabelText("Alternatywne tytuly"), {
+      target: { value: "Tytul A, Tytul B" }
+    });
     fireEvent.click(screen.getByRole("button", { name: "fantasy" }));
-    fireEvent.change(screen.getByLabelText("Własna opcja Gatunek"), {
+    fireEvent.change(screen.getByLabelText("Wlasna opcja Gatunek"), {
       target: { value: "noir" }
     });
     fireEvent.click(
-      screen.getByRole("button", { name: /Dodaj własną opcję Gatunek/i })
+      screen.getByRole("button", { name: /Dodaj wlasna opcje Gatunek/i })
     );
     fireEvent.click(screen.getByRole("button", { name: /Zapisz/i }));
 
@@ -185,9 +218,79 @@ describe("BookConceptPage AI flow", () => {
       expect(updateBookConcept).toHaveBeenCalledWith(
         "book-1",
         expect.objectContaining({
-          genre: "kryminał, fantasy, noir"
+          title: "Finalny tytul",
+          logline: "Jedno zdanie sprzedajace historie.",
+          targetWordCount: 85000,
+          alternativeTitlesJson: JSON.stringify(["Tytul A", "Tytul B"]),
+          genre: "kryminal, fantasy, noir"
         })
       )
+    );
+  });
+
+  it("renders an AI button for every phase 2 concept field", async () => {
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
+
+    for (const label of [
+      "Tytul finalny",
+      "Tytul roboczy",
+      "Alternatywne tytuly",
+      "Notatka wyboru tytulu",
+      "Premise",
+      "Logline",
+      "Konflikt centralny",
+      "Rozszerzona premisa",
+      "Stawki",
+      "Gatunek",
+      "Podgatunek",
+      "Odbiorcy",
+      "Ton",
+      "Punkt widzenia",
+      "Docelowa liczba slow",
+      "Tematy",
+      "Granice i tematy niechciane",
+      "Style guide"
+    ]) {
+      expect(
+        screen.getByRole("button", { name: `Generuj ${label} z AI` })
+      ).toBeInTheDocument();
+    }
+  });
+
+  it("accepts only selected fields from premise development", async () => {
+    vi.mocked(runCodexPrompt).mockResolvedValue({
+      id: "run-premise",
+      providerId: "codex-cli-bridge",
+      promptPackageId: "expand_premise:test",
+      action: "expand_premise",
+      status: "success",
+      rawOutput: premiseDevelopmentOutput,
+      durationMs: 12
+    });
+
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /Generuj Premise z AI/i })
+    );
+
+    expect(
+      await screen.findByDisplayValue("Archiwistka musi zatrzymac druk falszywych wspomnien.")
+    ).toBeInTheDocument();
+    fireEvent.click(getCheckboxByLabel("Rozszerzona premisa"));
+    fireEvent.click(getCheckboxByLabel("Stawki"));
+    fireEvent.click(getCheckboxByLabel("Tematy"));
+    fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
+
+    await waitFor(() =>
+      expect(updateBookConcept).toHaveBeenCalledWith("book-1", {
+        premise: "Archiwistka odkrywa, ze pamiec miasta jest falszowana.",
+        logline: "Archiwistka musi zatrzymac druk falszywych wspomnien.",
+        centralConflict: "Prawda kontra spokoj zbudowany na klamstwie."
+      })
     );
   });
 
@@ -229,4 +332,19 @@ function successfulRun(): AiRunResult {
     rawOutput: conceptFieldOutput,
     durationMs: 12
   };
+}
+
+function getCheckboxByLabel(label: string): HTMLInputElement {
+  const checkbox = screen
+    .getAllByLabelText(label)
+    .find(
+      (element): element is HTMLInputElement =>
+        element instanceof HTMLInputElement && element.type === "checkbox"
+    );
+
+  if (!checkbox) {
+    throw new Error(`Checkbox not found for ${label}`);
+  }
+
+  return checkbox;
 }

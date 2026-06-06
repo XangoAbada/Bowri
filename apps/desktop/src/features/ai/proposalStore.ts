@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AIAction } from "../../shared/api/types";
 import type { NormalizedConceptFieldSuggestion } from "./conceptFieldSuggestion";
+import type { NormalizedPremiseDevelopment } from "./premiseDevelopment";
 import type {
   ConceptFieldKey,
   NewProjectTitlePromptPackage,
@@ -10,6 +11,9 @@ import type {
 export type AiProposalStatus = "running" | "success" | "error";
 export type AiProposalScope = "bookConcept" | "newProject";
 export const NEW_PROJECT_PROPOSAL_ID = "__new_project__";
+export type ParsedAiProposal =
+  | NormalizedConceptFieldSuggestion
+  | NormalizedPremiseDevelopment;
 
 export type AiPromptSnapshot = {
   scope?: AiProposalScope;
@@ -26,8 +30,10 @@ export type ActiveAiProposal = AiPromptSnapshot & {
   status: AiProposalStatus;
   aiRunId?: string;
   rawOutput: string;
-  parsed?: NormalizedConceptFieldSuggestion;
+  parsed?: ParsedAiProposal;
   editableValue: string;
+  editableFields: Partial<Record<ConceptFieldKey, string>>;
+  selectedFields: Partial<Record<ConceptFieldKey, boolean>>;
   errorMessage: string;
   durationMs?: number;
   updatedAt: string;
@@ -40,10 +46,13 @@ type ProposalState = {
     result: Pick<
       ActiveAiProposal,
       "aiRunId" | "rawOutput" | "parsed" | "editableValue" | "durationMs"
-    >
+    > &
+      Partial<Pick<ActiveAiProposal, "editableFields" | "selectedFields">>
   ) => void;
   failProposal: (errorMessage: string, rawOutput?: string) => void;
   setEditableValue: (value: string) => void;
+  setEditableField: (field: ConceptFieldKey, value: string) => void;
+  toggleSelectedField: (field: ConceptFieldKey) => void;
   clearProposal: () => void;
 };
 
@@ -56,6 +65,8 @@ export const useProposalStore = create<ProposalState>((set) => ({
         status: "running",
         rawOutput: "",
         editableValue: "",
+        editableFields: {},
+        selectedFields: {},
         errorMessage: "",
         updatedAt: new Date().toISOString()
       }
@@ -95,6 +106,34 @@ export const useProposalStore = create<ProposalState>((set) => ({
             activeProposal: {
               ...state.activeProposal,
               editableValue
+            }
+          }
+        : state
+    ),
+  setEditableField: (field, value) =>
+    set((state) =>
+      state.activeProposal
+        ? {
+            activeProposal: {
+              ...state.activeProposal,
+              editableFields: {
+                ...state.activeProposal.editableFields,
+                [field]: value
+              }
+            }
+          }
+        : state
+    ),
+  toggleSelectedField: (field) =>
+    set((state) =>
+      state.activeProposal
+        ? {
+            activeProposal: {
+              ...state.activeProposal,
+              selectedFields: {
+                ...state.activeProposal.selectedFields,
+                [field]: !state.activeProposal.selectedFields[field]
+              }
             }
           }
         : state

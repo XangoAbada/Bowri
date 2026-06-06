@@ -8,8 +8,14 @@ import {
 import type { BookConceptInput } from "../../shared/api/types";
 import { parseConceptFieldSuggestion } from "./conceptFieldSuggestion";
 import { useCodexSettingsStore } from "./codexSettingsStore";
-import { conceptFieldConfigs } from "./promptPackage";
-import { ActiveAiProposal, useProposalStore } from "./proposalStore";
+import { parsePremiseDevelopment } from "./premiseDevelopment";
+import {
+  conceptFieldConfigs,
+  ConceptFieldKey,
+  listConceptFields,
+  longConceptFields
+} from "./promptPackage";
+import { ActiveAiProposal, ParsedAiProposal, useProposalStore } from "./proposalStore";
 
 type AiProposalPanelProps = {
   projectId: string;
@@ -23,6 +29,8 @@ export function AiProposalPanel({
   const queryClient = useQueryClient();
   const proposal = useProposalStore((state) => state.activeProposal);
   const setEditableValue = useProposalStore((state) => state.setEditableValue);
+  const setEditableField = useProposalStore((state) => state.setEditableField);
+  const toggleSelectedField = useProposalStore((state) => state.toggleSelectedField);
   const clearProposal = useProposalStore((state) => state.clearProposal);
   const startProposal = useProposalStore((state) => state.startProposal);
   const finishProposal = useProposalStore((state) => state.finishProposal);
@@ -43,8 +51,8 @@ export function AiProposalPanel({
         return null;
       }
 
-      const value = visibleProposal.editableValue.trim();
       if (visibleProposal.scope === "newProject") {
+        const value = visibleProposal.editableValue.trim();
         if (!onAcceptValue) {
           throw new Error("Brak obslugi akceptacji propozycji nowego projektu.");
         }
@@ -53,7 +61,19 @@ export function AiProposalPanel({
         return null;
       }
 
-      return updateBookConcept(visibleProposal.bookId, proposalInputFromValue(value, visibleProposal));
+      if (isPremiseDevelopment(visibleProposal.parsed)) {
+        const input = proposalInputFromFields(
+          visibleProposal.editableFields,
+          visibleProposal.selectedFields
+        );
+        return updateBookConcept(visibleProposal.bookId, input);
+      }
+
+      const value = visibleProposal.editableValue.trim();
+      return updateBookConcept(
+        visibleProposal.bookId,
+        proposalInputFromValue(value, visibleProposal)
+      );
     },
     onSuccess: async () => {
       clearProposal();
@@ -109,14 +129,15 @@ export function AiProposalPanel({
 
       if (result.status !== "success" || !result.rawOutput) {
         throw new RetryError(
-          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
+          result.errorMessage || "Codex CLI nie zwrocil wyniku.",
           result.rawOutput ?? ""
         );
       }
 
-      const parsed = parseConceptFieldSuggestion(
+      const parsed = parseProposalResult(
         result.rawOutput,
-        snapshot.field
+        snapshot.field,
+        snapshot.action
       );
       return { parsed, result };
     },
@@ -130,6 +151,8 @@ export function AiProposalPanel({
         rawOutput: payload.result.rawOutput ?? "",
         parsed: payload.parsed,
         editableValue: payload.parsed.textValue,
+        editableFields: editableFieldsFromParsed(payload.parsed),
+        selectedFields: selectedFieldsFromParsed(payload.parsed),
         durationMs: payload.result.durationMs
       });
     },
@@ -151,7 +174,7 @@ export function AiProposalPanel({
           <FileJson size={18} aria-hidden="true" />
         </div>
         <p className="muted-text">
-          Wyniki AI pojawią się tutaj od razu po kliknięciu przycisku pola.
+          Wyniki AI pojawia sie tutaj od razu po kliknieciu przycisku pola.
         </p>
       </section>
     );
@@ -160,10 +183,15 @@ export function AiProposalPanel({
   const config = conceptFieldConfigs[visibleProposal.field];
   const running = visibleProposal.status === "running";
   const success = visibleProposal.status === "success";
+  const premiseProposal = isPremiseDevelopment(visibleProposal.parsed)
+    ? visibleProposal.parsed
+    : null;
+  const structured = premiseProposal !== null;
   const proposalRows =
-    visibleProposal.field === "premise" || visibleProposal.field === "styleGuide"
-      ? 8
-      : 3;
+    longConceptFields.includes(visibleProposal.field) || structured ? 8 : 3;
+  const canAccept = structured
+    ? hasSelectedEditableField(visibleProposal)
+    : visibleProposal.editableValue.trim().length > 0;
 
   return (
     <section className="context-section compact proposal-panel">
@@ -182,7 +210,7 @@ export function AiProposalPanel({
           }
         >
           {running ? <Loader2 size={14} className="spin-icon" /> : null}
-          {running ? "Generuje" : success ? "Gotowe" : "Błąd"}
+          {running ? "Generuje" : success ? "Gotowe" : "Blad"}
         </span>
       </div>
 
@@ -192,24 +220,57 @@ export function AiProposalPanel({
 
       {running ? (
         <p className="muted-text">
-          Zadanie jest w kolejce panelu. Wynik pojawi się tutaj i nie zapisze się
-          bez akceptacji.
+          Zadanie jest w kolejce panelu. Wynik pojawi sie tutaj i nie zapisze
+          sie bez akceptacji.
         </p>
       ) : null}
 
-      {success ? (
+      {success && premiseProposal ? (
+        <div className="proposal-field-list">
+          {premiseProposal.fieldValues.map((item) => {
+            const selected = visibleProposal.selectedFields[item.field] !== false;
+            const rows = longConceptFields.includes(item.field) ? 5 : 3;
+            return (
+              <div className="proposal-field-item" key={item.field}>
+                <label className="proposal-field-toggle">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => toggleSelectedField(item.field)}
+                  />
+                  <span>{item.label}</span>
+                </label>
+                <textarea
+                  aria-label={`Edytuj ${item.label}`}
+                  value={visibleProposal.editableFields[item.field] ?? item.value}
+                  onChange={(event) =>
+                    setEditableField(item.field, event.target.value)
+                  }
+                  rows={rows}
+                  disabled={!selected}
+                  title={`Mozesz poprawic propozycje dla pola ${item.label} przed zapisem.`}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {success && !structured ? (
         <label className="field-label">
           Propozycja do akceptacji
           <textarea
             value={visibleProposal.editableValue}
             onChange={(event) => setEditableValue(event.target.value)}
             rows={proposalRows}
-            title={`Możesz poprawić propozycję dla pola ${config.label} przed zapisem.`}
+            title={`Mozesz poprawic propozycje dla pola ${config.label} przed zapisem.`}
           />
         </label>
       ) : null}
 
-      {visibleProposal.parsed?.rationale ? (
+      {visibleProposal.parsed &&
+      "rationale" in visibleProposal.parsed &&
+      visibleProposal.parsed.rationale ? (
         <p className="muted-text">{visibleProposal.parsed.rationale}</p>
       ) : null}
 
@@ -225,6 +286,17 @@ export function AiProposalPanel({
         </div>
       ) : null}
 
+      {premiseProposal && premiseProposal.questionsForAuthor.length > 0 ? (
+        <details className="raw-output">
+          <summary>Pytania dla autora</summary>
+          <ul>
+            {premiseProposal.questionsForAuthor.map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
       {visibleProposal.rawOutput ? (
         <details className="raw-output">
           <summary>Surowy wynik</summary>
@@ -237,11 +309,7 @@ export function AiProposalPanel({
           type="button"
           className="primary-button"
           onClick={() => acceptMutation.mutate()}
-          disabled={
-            acceptMutation.isPending ||
-            running ||
-            !visibleProposal.editableValue.trim()
-          }
+          disabled={acceptMutation.isPending || running || !canAccept}
         >
           <Check size={16} />
           Akceptuj
@@ -253,7 +321,7 @@ export function AiProposalPanel({
           disabled={acceptMutation.isPending || retryMutation.isPending}
         >
           <X size={16} />
-          Odrzuć
+          Odrzuc
         </button>
         <button
           type="button"
@@ -263,35 +331,162 @@ export function AiProposalPanel({
           title="Ponownie uruchom ten sam prompt z zapisanym snapshotem kontekstu."
         >
           <RotateCcw size={16} />
-          Ponów
+          Ponow
         </button>
       </div>
 
       {acceptMutation.isError ? (
-        <p className="warning-text">Nie udało się zapisać propozycji.</p>
+        <p className="warning-text">Nie udalo sie zapisac propozycji.</p>
       ) : null}
     </section>
   );
 }
 
-function proposalInputFromValue(
+export function parseProposalResult(
+  rawOutput: string,
+  expectedField: ConceptFieldKey,
+  action: string
+): ParsedAiProposal {
+  if (action === "expand_premise") {
+    return parsePremiseDevelopment(rawOutput);
+  }
+
+  return parseConceptFieldSuggestion(rawOutput, expectedField);
+}
+
+export function editableFieldsFromParsed(
+  parsed: ParsedAiProposal
+): Partial<Record<ConceptFieldKey, string>> {
+  if (!isPremiseDevelopment(parsed)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    parsed.fieldValues.map((item) => [item.field, item.value])
+  ) as Partial<Record<ConceptFieldKey, string>>;
+}
+
+export function selectedFieldsFromParsed(
+  parsed: ParsedAiProposal
+): Partial<Record<ConceptFieldKey, boolean>> {
+  if (!isPremiseDevelopment(parsed)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    parsed.fieldValues.map((item) => [item.field, true])
+  ) as Partial<Record<ConceptFieldKey, boolean>>;
+}
+
+export function proposalInputFromValue(
   value: string,
-  proposal: ActiveAiProposal
+  proposal: Pick<ActiveAiProposal, "field">
 ): BookConceptInput {
-  switch (proposal.field) {
+  return proposalInputForField(proposal.field, value);
+}
+
+export function proposalInputFromFields(
+  editableFields: Partial<Record<ConceptFieldKey, string>>,
+  selectedFields: Partial<Record<ConceptFieldKey, boolean>>
+): BookConceptInput {
+  const input: BookConceptInput = {};
+
+  for (const [field, selected] of Object.entries(selectedFields)) {
+    if (!selected) {
+      continue;
+    }
+
+    Object.assign(
+      input,
+      proposalInputForField(
+        field as ConceptFieldKey,
+        editableFields[field as ConceptFieldKey] ?? ""
+      )
+    );
+  }
+
+  if (Object.keys(input).length === 0) {
+    throw new Error("Wybierz co najmniej jedno pole do zapisania.");
+  }
+
+  return input;
+}
+
+function proposalInputForField(
+  field: ConceptFieldKey,
+  value: string
+): BookConceptInput {
+  switch (field) {
+    case "title":
+      return { title: value };
     case "workingTitle":
       return { workingTitle: value };
     case "premise":
       return { premise: value };
+    case "expandedPremise":
+      return { expandedPremise: value };
+    case "logline":
+      return { logline: value };
+    case "centralConflict":
+      return { centralConflict: value };
+    case "stakes":
+      return { stakes: value };
     case "genre":
       return { genre: value };
+    case "subgenre":
+      return { subgenre: value };
     case "targetAudience":
       return { targetAudience: value };
     case "tone":
       return { tone: value };
+    case "pointOfView":
+      return { pointOfView: value };
+    case "targetWordCount":
+      return { targetWordCount: parseTargetWordCount(value) };
+    case "themesJson":
+      return { themesJson: serializeListValue(value) };
+    case "unwantedThemes":
+      return { unwantedThemes: value };
+    case "alternativeTitlesJson":
+      return { alternativeTitlesJson: serializeListValue(value) };
+    case "titleChoiceNote":
+      return { titleChoiceNote: value };
     case "styleGuide":
       return { styleGuide: value };
   }
+}
+
+function isPremiseDevelopment(
+  parsed: ParsedAiProposal | undefined
+): parsed is Extract<ParsedAiProposal, { kind: "premise_development" }> {
+  return parsed?.kind === "premise_development";
+}
+
+function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {
+  return Object.entries(proposal.selectedFields).some(([field, selected]) => {
+    const value = proposal.editableFields[field as ConceptFieldKey] ?? "";
+    return selected && value.trim().length > 0;
+  });
+}
+
+function parseTargetWordCount(value: string): number | null {
+  const normalized = value.replace(/\s+/g, "");
+  const match = normalized.match(/\d+/);
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function serializeListValue(value: string): string {
+  const items = value
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return JSON.stringify([...new Set(items)]);
 }
 
 class RetryError extends Error {

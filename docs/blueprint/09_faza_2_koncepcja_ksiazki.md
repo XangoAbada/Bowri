@@ -20,6 +20,11 @@ Sekcje:
 
 Kazda sekcja ma akcje AI.
 
+Zasada UI: kazde pole ekranu koncepcji ma wlasny przycisk generacji AI.
+Przycisk moze uzywac dedykowanej akcji albo wspolnego kontraktu bazowego,
+ale UX musi byc per-field i nie moze wymagac generowania calej sekcji, jesli
+autor chce uzupelnic tylko jedno pole.
+
 ## Pola
 
 ### Tytul
@@ -120,6 +125,7 @@ Output JSON:
 
 - Mozna wypelnic i zapisac wszystkie pola koncepcji.
 - AI moze generowac tytuly, premise i style guide.
+- Kazde pole koncepcji ma wlasny przycisk generacji AI.
 - Wyniki strukturalne importuja sie polami, nie jako jeden blob.
 - Uzytkownik moze zaakceptowac tylko czesc propozycji.
 - Style guide jest uzywany w pozniejszym promptcie sceny.
@@ -131,4 +137,3 @@ Output JSON:
 - zapis alternatywnych tytulow;
 - prompt zawiera ton, gatunek i odbiorcow;
 - brak Codex CLI blokuje przycisk AI i pokazuje konfiguracje.
-

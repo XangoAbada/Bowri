@@ -27,14 +27,21 @@ const book: Book = {
   title: "",
   workingTitle: "Cienie Drukarni",
   premise: "Zecerka odkrywa, ze drukowane sny zmieniaja wspomnienia miasta.",
-  logline: "",
+  expandedPremise: "Drukarnia przechowuje sny miasta.",
+  logline: "Zecerka musi zatrzymac druk wspomnien.",
+  centralConflict: "Prawda kontra wygodna pamiec miasta.",
+  stakes: "Miasto moze utracic wspolna tozsamosc.",
   genre: "fantasy",
-  subgenre: "",
+  subgenre: "urban fantasy",
   targetAudience: "adult",
   tone: "mroczny, liryczny",
   styleGuide: "Krotkie zdania w scenach napiecia.",
-  pointOfView: "",
-  targetWordCount: null,
+  pointOfView: "trzecia osoba ograniczona",
+  targetWordCount: 85000,
+  themesJson: JSON.stringify(["pamiec", "tozsamosc"]),
+  unwantedThemes: "Bez gore.",
+  alternativeTitlesJson: JSON.stringify(["Ostatni atrament"]),
+  titleChoiceNote: "Tytul podkresla druk i pamiec.",
   coverImagePath: "",
   coverPrompt: "",
   coverNegativePrompt: "",
@@ -45,7 +52,7 @@ const book: Book = {
 };
 
 describe("renderPromptPackage", () => {
-  it("renders a concept field contract and relevant context", () => {
+  it("renders premise development contract and full concept context", () => {
     const promptPackage = buildConceptFieldPromptPackage(
       project,
       book,
@@ -53,15 +60,51 @@ describe("renderPromptPackage", () => {
     );
     const prompt = renderPromptPackage(promptPackage);
 
-    expect(promptPackage.action).toBe("generate_premise");
+    expect(promptPackage.action).toBe("expand_premise");
     expect(prompt).toContain("# Role");
     expect(prompt).toContain("# Output Contract");
-    expect(prompt).toContain("concept_field_suggestion");
+    expect(prompt).toContain("premise_development");
     expect(prompt).toContain("Docelowe pole: premise");
     expect(prompt).toContain(book.premise);
+    expect(prompt).toContain(book.expandedPremise);
+    expect(prompt).toContain(book.logline);
+    expect(prompt).toContain(book.centralConflict);
     expect(prompt).toContain(book.genre);
+    expect(prompt).toContain(book.subgenre);
     expect(prompt).toContain(book.targetAudience);
     expect(prompt).toContain(book.styleGuide);
+    expect(prompt).toContain("pamiec, tozsamosc");
+  });
+
+  it("renders a per-field prompt for every phase 2 concept field", () => {
+    const fields = [
+      "title",
+      "workingTitle",
+      "premise",
+      "expandedPremise",
+      "logline",
+      "centralConflict",
+      "stakes",
+      "genre",
+      "subgenre",
+      "targetAudience",
+      "tone",
+      "pointOfView",
+      "targetWordCount",
+      "themesJson",
+      "unwantedThemes",
+      "alternativeTitlesJson",
+      "titleChoiceNote",
+      "styleGuide"
+    ] as const;
+
+    for (const field of fields) {
+      const promptPackage = buildConceptFieldPromptPackage(project, book, field);
+      const prompt = renderPromptPackage(promptPackage);
+
+      expect(prompt).toContain(`Docelowe pole: ${field}`);
+      expect(promptPackage.outputContract.format).toBe("json");
+    }
   });
 
   it("renders a cover image prompt from current concept context", () => {
@@ -83,7 +126,7 @@ describe("renderPromptPackage", () => {
     expect(prompt).toContain("$imagegen");
     expect(prompt).toContain("Codex CLI image generation");
     expect(prompt).toContain("generated_images");
-    expect(prompt).toContain('Include the book title as readable cover typography');
+    expect(prompt).toContain("Include the book title as readable cover typography");
     expect(prompt).toContain(`"${book.workingTitle}"`);
     expect(prompt).not.toContain("no visible text");
     expect(prompt).toContain("D:\\covers\\cover.png");

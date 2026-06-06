@@ -517,6 +517,24 @@ a:focus-visible {
   gap: 16px;
 }
 
+.concept-form-section {
+  display: grid;
+  gap: 14px;
+  padding-top: 2px;
+}
+
+.concept-form-section + .concept-form-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.concept-form-section h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
 .cover-panel {
   position: sticky;
   top: 18px;
@@ -882,6 +900,31 @@ a:focus-visible {
 
 .proposal-panel {
   gap: 14px;
+}
+
+.proposal-field-list {
+  display: grid;
+  gap: 12px;
+}
+
+.proposal-field-item {
+  display: grid;
+  gap: 8px;
+}
+
+.proposal-field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.proposal-field-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
 }
 
 .proposal-list {
