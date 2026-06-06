@@ -41,10 +41,15 @@ type ConceptForm = {
   title: string;
   workingTitle: string;
   premise: string;
+  protagonistSummary: string;
+  protagonistGoal: string;
   expandedPremise: string;
   logline: string;
   centralConflict: string;
+  antagonistForce: string;
   stakes: string;
+  settingSketch: string;
+  endingDirection: string;
   genre: string;
   subgenre: string;
   targetAudience: string;
@@ -54,8 +59,21 @@ type ConceptForm = {
   themesJson: string;
   unwantedThemes: string;
   alternativeTitlesJson: string;
-  titleChoiceNote: string;
   styleGuide: string;
+};
+
+type ConceptStageKey =
+  | "idea"
+  | "storyEngine"
+  | "readerForm"
+  | "rules"
+  | "cover";
+
+type ConceptStage = {
+  key: ConceptStageKey;
+  title: string;
+  summary: string;
+  fields: (keyof ConceptForm)[];
 };
 
 type ChoiceOption = {
@@ -67,10 +85,15 @@ const emptyForm: ConceptForm = {
   title: "",
   workingTitle: "",
   premise: "",
+  protagonistSummary: "",
+  protagonistGoal: "",
   expandedPremise: "",
   logline: "",
   centralConflict: "",
+  antagonistForce: "",
   stakes: "",
+  settingSketch: "",
+  endingDirection: "",
   genre: "",
   subgenre: "",
   targetAudience: "",
@@ -80,30 +103,86 @@ const emptyForm: ConceptForm = {
   themesJson: "",
   unwantedThemes: "",
   alternativeTitlesJson: "",
-  titleChoiceNote: "",
   styleGuide: ""
 };
 
 const fieldHints: Record<ConceptFieldKey, string> = {
-  title: "Tytuł finalny jest kandydatem do okładki i eksportu.",
-  workingTitle: "Tytuł roboczy pomaga szybko rozpoznać projekt.",
-  premise: "Premise to 1-2 zdania o bohaterze, konflikcie i stawce.",
-  expandedPremise: "Rozszerzona premisa trzyma rdzeń historii w jednym akapicie.",
-  logline: "Logline pokazuje bohatera, cel, przeszkodę i stawkę w jednym zdaniu.",
-  centralConflict: "Konflikt centralny opisuje główne tarcie napędzające fabułę.",
-  stakes: "Stawki mówią, co zostanie utracone, jeśli bohater przegra.",
-  genre: "Gatunek ustawia konwencje i oczekiwania czytelnika.",
-  subgenre: "Podgatunek doprecyzowuje obietnicę bez blokowania hybryd.",
-  targetAudience: "Odbiorcy sterują językiem, tempem i poziomem mroku.",
-  tone: "Ton pilnuje nastroju scen i propozycji.",
-  pointOfView: "Punkt widzenia pomaga utrzymać spójną narrację scen.",
-  targetWordCount: "Docelowa liczba słów pomaga planować rozdziały i tempo.",
-  themesJson: "Tematy zapisuj jako krótkie etykiety oddzielone przecinkami.",
-  unwantedThemes: "Granice i tematy niechciane ograniczają późniejsze prompty.",
-  alternativeTitlesJson: "Alternatywne tytuły zapisuj jako listę oddzieloną przecinkami.",
-  titleChoiceNote: "Notatka wyboru tytułu przechowuje powód decyzji autora.",
-  styleGuide: "Style guide zbiera preferencje języka, rytmu i zakazy."
+  title: "Kandydat na tytuł do okładki, eksportu i prezentacji projektu.",
+  workingTitle: "Robocza nazwa projektu, która pomaga rozpoznać książkę zanim powstanie finalny tytuł.",
+  premise: "Krótka obietnica historii: kto, czego chce, co mu przeszkadza i dlaczego to ważne.",
+  protagonistSummary: "Najważniejsza postać prowadząca historię; kim jest na starcie i dlaczego to ona niesie książkę.",
+  protagonistGoal: "Konkretne zewnętrzne dążenie, które popycha fabułę do przodu.",
+  expandedPremise: "Jeden akapit łączący rdzeń pomysłu, konflikt i przewidywany kierunek książki.",
+  logline: "Jedno zwarte zdanie komunikujące bohatera, cel, przeszkodę i stawkę.",
+  centralConflict: "Główne napięcie, które napędza decyzje bohatera i strukturę fabuły.",
+  antagonistForce: "Antagonista, system, problem, tajemnica albo wewnętrzna blokada stojąca na drodze bohatera.",
+  stakes: "To, co bohater, relacje albo świat tracą, jeśli cel nie zostanie osiągnięty.",
+  settingSketch: "Miejsce, czas i podstawowe warunki świata, które realnie wpływają na konflikt.",
+  endingDirection: "Robocza odpowiedź, dokąd historia ma emocjonalnie lub fabularnie dojść.",
+  genre: "Główna konwencja, która ustawia oczekiwania czytelnika.",
+  subgenre: "Doprecyzowanie obietnicy gatunkowej lub mieszanki konwencji.",
+  targetAudience: "Grupa czytelników, pod którą dopasowujemy język, tempo, poziom mroku i złożoność.",
+  tone: "Dominujący nastrój narracji i scen.",
+  pointOfView: "Perspektywa i tryb narracji, które będą prowadzić sceny.",
+  targetWordCount: "Orientacyjna długość książki używana później do planowania rozdziałów i tempa.",
+  themesJson: "Główne idee, które mają wracać w postaciach, konflikcie i scenach.",
+  unwantedThemes: "Treści, których AI i autor mają unikać w dalszej pracy.",
+  alternativeTitlesJson: "Lista wariantów do porównania przed wyborem finalnym.",
+  styleGuide: "Praktyczne zasady języka, rytmu, dialogu, opisów, humoru, mroku i zakazów stylistycznych."
 };
+
+const conceptStages: ConceptStage[] = [
+  {
+    key: "idea",
+    title: "Pomysł",
+    summary: "Rdzeń projektu, główna postać i świat, w którym konflikt ma sens.",
+    fields: [
+      "workingTitle",
+      "premise",
+      "protagonistSummary",
+      "protagonistGoal",
+      "settingSketch"
+    ]
+  },
+  {
+    key: "storyEngine",
+    title: "Silnik historii",
+    summary: "Napięcie, przeszkoda, stawki i roboczy kierunek finału.",
+    fields: [
+      "logline",
+      "centralConflict",
+      "antagonistForce",
+      "stakes",
+      "endingDirection",
+      "expandedPremise"
+    ]
+  },
+  {
+    key: "readerForm",
+    title: "Czytelnik i forma",
+    summary: "Konwencja, odbiorca, ton, perspektywa i skala książki.",
+    fields: [
+      "genre",
+      "subgenre",
+      "targetAudience",
+      "tone",
+      "pointOfView",
+      "targetWordCount"
+    ]
+  },
+  {
+    key: "rules",
+    title: "Motywy i zasady",
+    summary: "Tematy, granice i styl, które utrzymają późniejsze generacje w ryzach.",
+    fields: ["themesJson", "unwantedThemes", "styleGuide"]
+  },
+  {
+    key: "cover",
+    title: "Okładka",
+    summary: "Finalny tytuł, warianty tytułu i opcjonalna robocza okładka.",
+    fields: ["title", "alternativeTitlesJson"]
+  }
+];
 
 const genreOptions: ChoiceOption[] = [
   { value: "fantasy", hint: "Magia, reguły świata, obietnica niezwykłości." },
@@ -176,6 +255,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   const failProposal = useProposalStore((state) => state.failProposal);
   const activeProposal = useProposalStore((state) => state.activeProposal);
   const [form, setForm] = useState<ConceptForm>(emptyForm);
+  const [activeStage, setActiveStage] = useState<ConceptStageKey>("idea");
   const [saveMessage, setSaveMessage] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [coverMessage, setCoverMessage] = useState("");
@@ -206,10 +286,15 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       title: book.title,
       workingTitle: book.workingTitle,
       premise: book.premise,
+      protagonistSummary: book.protagonistSummary ?? "",
+      protagonistGoal: book.protagonistGoal ?? "",
       expandedPremise: book.expandedPremise ?? "",
       logline: book.logline,
       centralConflict: book.centralConflict ?? "",
+      antagonistForce: book.antagonistForce ?? "",
       stakes: book.stakes ?? "",
+      settingSketch: book.settingSketch ?? "",
+      endingDirection: book.endingDirection ?? "",
       genre: book.genre,
       subgenre: book.subgenre,
       targetAudience: book.targetAudience,
@@ -219,7 +304,6 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       themesJson: listTextFromJson(book.themesJson ?? "[]"),
       unwantedThemes: book.unwantedThemes ?? "",
       alternativeTitlesJson: listTextFromJson(book.alternativeTitlesJson ?? "[]"),
-      titleChoiceNote: book.titleChoiceNote ?? "",
       styleGuide: book.styleGuide
     });
   }, [projectQuery.data?.book.id, projectQuery.data?.book.updatedAt]);
@@ -234,10 +318,15 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       title: form.title,
       workingTitle: form.workingTitle,
       premise: form.premise,
+      protagonistSummary: form.protagonistSummary,
+      protagonistGoal: form.protagonistGoal,
       expandedPremise: form.expandedPremise,
       logline: form.logline,
       centralConflict: form.centralConflict,
+      antagonistForce: form.antagonistForce,
       stakes: form.stakes,
+      settingSketch: form.settingSketch,
+      endingDirection: form.endingDirection,
       genre: form.genre,
       subgenre: form.subgenre,
       targetAudience: form.targetAudience,
@@ -247,7 +336,6 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       themesJson: serializeListValue(form.themesJson),
       unwantedThemes: form.unwantedThemes,
       alternativeTitlesJson: serializeListValue(form.alternativeTitlesJson),
-      titleChoiceNote: form.titleChoiceNote,
       styleGuide: form.styleGuide
     };
   }, [form, projectQuery.data]);
@@ -491,26 +579,299 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       : null;
   const coverSrc =
     streamedCoverPreview || coverImageSource(projectQuery.data?.book.coverImagePath);
+  const activeStageConfig =
+    conceptStages.find((stage) => stage.key === activeStage) ?? conceptStages[0];
 
   return (
-    <div className="concept-page-grid">
-      <section className="content-panel concept-panel">
-        <div className="section-title-row">
-          <div>
-            <p className="eyebrow">Faza 2</p>
-            <h2>Koncepcja książki</h2>
-          </div>
+    <section className="content-panel concept-panel">
+      <div className="section-title-row">
+        <div>
+          <p className="eyebrow">Faza 2</p>
+          <h2>Koncepcja książki</h2>
+        </div>
+      </div>
+
+      {projectQuery.isError ? (
+        <div className="empty-state">
+          <h3>Nie można wczytać projektu</h3>
+          <p>Sprawdź, czy aplikacja działa w Tauri i baza jest dostępna.</p>
+        </div>
+      ) : null}
+
+      <form className="concept-form" onSubmit={handleSubmit}>
+        <div className="concept-stage-tabs" role="tablist" aria-label="Etapy koncepcji">
+          {conceptStages.map((stage) => {
+            const completion = stageCompletion(stage, form);
+            const selected = stage.key === activeStageConfig.key;
+            return (
+              <button
+                key={stage.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                className={selected ? "concept-stage-tab active" : "concept-stage-tab"}
+                onClick={() => setActiveStage(stage.key)}
+              >
+                <span>{stage.title}</span>
+                <strong>
+                  {completion.complete}/{completion.total}
+                </strong>
+              </button>
+            );
+          })}
         </div>
 
-        {projectQuery.isError ? (
-          <div className="empty-state">
-            <h3>Nie można wczytać projektu</h3>
-            <p>Sprawdź, czy aplikacja działa w Tauri i baza jest dostępna.</p>
+        <div className="concept-stage-heading">
+          <div>
+            <p className="eyebrow">Etap</p>
+            <h3>{activeStageConfig.title}</h3>
           </div>
-        ) : null}
+          <p>{activeStageConfig.summary}</p>
+        </div>
 
-        <form className="concept-form" onSubmit={handleSubmit}>
-          <FormSection title="Tytuły">
+        <div role="tabpanel" className="concept-stage-panel">
+          {activeStage === "idea" ? (
+            <FormSection title="Pomysł">
+              <TextField
+                label="Tytuł roboczy"
+                field="workingTitle"
+                value={form.workingTitle}
+                placeholder="Nazwa projektu na czas pracy"
+                disabled={aiDisabled}
+                loading={activeField === "workingTitle"}
+                onGenerate={generateField}
+                onChange={(value) => updateField("workingTitle", value)}
+              />
+              <TextField
+                label="Premise"
+                field="premise"
+                value={form.premise}
+                placeholder="Kto, czego chce, co mu przeszkadza i dlaczego to ważne"
+                rows={4}
+                disabled={aiDisabled}
+                loading={activeField === "premise"}
+                onGenerate={generateField}
+                onChange={(value) => updateField("premise", value)}
+              />
+              <div className="form-grid">
+                <TextField
+                  label="Bohater / bohaterka"
+                  field="protagonistSummary"
+                  value={form.protagonistSummary}
+                  placeholder="Kim jest postać prowadząca historię"
+                  rows={4}
+                  disabled={aiDisabled}
+                  loading={activeField === "protagonistSummary"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("protagonistSummary", value)}
+                />
+                <TextField
+                  label="Cel bohatera"
+                  field="protagonistGoal"
+                  value={form.protagonistGoal}
+                  placeholder="Konkretne dążenie napędzające fabułę"
+                  rows={4}
+                  disabled={aiDisabled}
+                  loading={activeField === "protagonistGoal"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("protagonistGoal", value)}
+                />
+              </div>
+              <TextField
+                label="Setting"
+                field="settingSketch"
+                value={form.settingSketch}
+                placeholder="Miejsce, czas i warunki świata wpływające na konflikt"
+                rows={4}
+                disabled={aiDisabled}
+                loading={activeField === "settingSketch"}
+                onGenerate={generateField}
+                onChange={(value) => updateField("settingSketch", value)}
+              />
+            </FormSection>
+          ) : null}
+
+          {activeStage === "storyEngine" ? (
+            <FormSection title="Silnik historii">
+              <div className="form-grid">
+                <TextField
+                  label="Logline"
+                  field="logline"
+                  value={form.logline}
+                  placeholder="Bohater, cel, przeszkoda, stawka"
+                  rows={3}
+                  disabled={aiDisabled}
+                  loading={activeField === "logline"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("logline", value)}
+                />
+                <TextField
+                  label="Konflikt centralny"
+                  field="centralConflict"
+                  value={form.centralConflict}
+                  placeholder="Główne tarcie fabularne"
+                  rows={3}
+                  disabled={aiDisabled}
+                  loading={activeField === "centralConflict"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("centralConflict", value)}
+                />
+              </div>
+              <div className="form-grid">
+                <TextField
+                  label="Siła przeciwna"
+                  field="antagonistForce"
+                  value={form.antagonistForce}
+                  placeholder="Antagonista, system, tajemnica albo blokada"
+                  rows={4}
+                  disabled={aiDisabled}
+                  loading={activeField === "antagonistForce"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("antagonistForce", value)}
+                />
+                <TextField
+                  label="Stawki"
+                  field="stakes"
+                  value={form.stakes}
+                  placeholder="Co zostanie utracone, jeśli bohater przegra"
+                  rows={4}
+                  disabled={aiDisabled}
+                  loading={activeField === "stakes"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("stakes", value)}
+                />
+                <TextField
+                  label="Kierunek zakończenia"
+                  field="endingDirection"
+                  value={form.endingDirection}
+                  placeholder="Roboczy finał fabularny lub emocjonalny"
+                  rows={4}
+                  disabled={aiDisabled}
+                  loading={activeField === "endingDirection"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("endingDirection", value)}
+                />
+              </div>
+              <TextField
+                label="Rozszerzona premisa"
+                field="expandedPremise"
+                value={form.expandedPremise}
+                placeholder="Akapit rozwijający założenie książki"
+                rows={5}
+                disabled={aiDisabled}
+                loading={activeField === "expandedPremise"}
+                onGenerate={generateField}
+                onChange={(value) => updateField("expandedPremise", value)}
+              />
+            </FormSection>
+          ) : null}
+
+          {activeStage === "readerForm" ? (
+            <FormSection title="Czytelnik i forma">
+              <div className="form-grid concept-choice-grid">
+                <MultiChoiceField
+                  label="Gatunek"
+                  field="genre"
+                  value={form.genre}
+                  options={genreOptions}
+                  onChange={(value) => updateField("genre", value)}
+                  onGenerate={generateField}
+                  disabled={aiDisabled}
+                  loading={activeField === "genre"}
+                />
+                <MultiChoiceField
+                  label="Podgatunek"
+                  field="subgenre"
+                  value={form.subgenre}
+                  options={subgenreOptions}
+                  onChange={(value) => updateField("subgenre", value)}
+                  onGenerate={generateField}
+                  disabled={aiDisabled}
+                  loading={activeField === "subgenre"}
+                />
+                <MultiChoiceField
+                  label="Odbiorcy"
+                  field="targetAudience"
+                  value={form.targetAudience}
+                  options={audienceOptions}
+                  onChange={(value) => updateField("targetAudience", value)}
+                  onGenerate={generateField}
+                  disabled={aiDisabled}
+                  loading={activeField === "targetAudience"}
+                />
+                <MultiChoiceField
+                  label="Ton"
+                  field="tone"
+                  value={form.tone}
+                  options={toneOptions}
+                  onChange={(value) => updateField("tone", value)}
+                  onGenerate={generateField}
+                  disabled={aiDisabled}
+                  loading={activeField === "tone"}
+                />
+                <MultiChoiceField
+                  label="Punkt widzenia"
+                  field="pointOfView"
+                  value={form.pointOfView}
+                  options={pointOfViewOptions}
+                  onChange={(value) => updateField("pointOfView", value)}
+                  onGenerate={generateField}
+                  disabled={aiDisabled}
+                  loading={activeField === "pointOfView"}
+                />
+                <TextField
+                  label="Docelowa liczba słów"
+                  field="targetWordCount"
+                  value={form.targetWordCount}
+                  placeholder="np. 85000"
+                  disabled={aiDisabled}
+                  loading={activeField === "targetWordCount"}
+                  onGenerate={generateField}
+                  onChange={(value) => updateField("targetWordCount", value)}
+                />
+              </div>
+            </FormSection>
+          ) : null}
+
+          {activeStage === "rules" ? (
+            <FormSection title="Motywy i zasady">
+              <MultiChoiceField
+                label="Tematy"
+                field="themesJson"
+                value={form.themesJson}
+                options={themeOptions}
+                onChange={(value) => updateField("themesJson", value)}
+                onGenerate={generateField}
+                disabled={aiDisabled}
+                loading={activeField === "themesJson"}
+              />
+              <TextField
+                label="Granice i tematy niechciane"
+                field="unwantedThemes"
+                value={form.unwantedThemes}
+                placeholder="Czego unikać w późniejszych promptach"
+                rows={4}
+                disabled={aiDisabled}
+                loading={activeField === "unwantedThemes"}
+                onGenerate={generateField}
+                onChange={(value) => updateField("unwantedThemes", value)}
+              />
+              <TextField
+                label="Style guide"
+                field="styleGuide"
+                value={form.styleGuide}
+                placeholder="Notatki o języku, rytmie, zakazach i preferencjach"
+                rows={5}
+                disabled={aiDisabled}
+                loading={activeField === "styleGuide"}
+                onGenerate={generateField}
+                onChange={(value) => updateField("styleGuide", value)}
+              />
+            </FormSection>
+          ) : null}
+
+          {activeStage === "cover" ? (
+            <FormSection title="Tytuł i okładka">
             <div className="form-grid">
               <TextField
                 label="Tytuł finalny"
@@ -521,16 +882,6 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 loading={activeField === "title"}
                 onGenerate={generateField}
                 onChange={(value) => updateField("title", value)}
-              />
-              <TextField
-                label="Tytuł roboczy"
-                field="workingTitle"
-                value={form.workingTitle}
-                placeholder="Tytuł roboczy"
-                disabled={aiDisabled}
-                loading={activeField === "workingTitle"}
-                onGenerate={generateField}
-                onChange={(value) => updateField("workingTitle", value)}
               />
             </div>
             <TextField
@@ -544,179 +895,87 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               onGenerate={generateField}
               onChange={(value) => updateField("alternativeTitlesJson", value)}
             />
-            <TextField
-              label="Notatka wyboru tytułu"
-              field="titleChoiceNote"
-              value={form.titleChoiceNote}
-              placeholder="Dlaczego ten tytuł wygrywa"
-              rows={3}
-              disabled={aiDisabled}
-              loading={activeField === "titleChoiceNote"}
-              onGenerate={generateField}
-              onChange={(value) => updateField("titleChoiceNote", value)}
-            />
-          </FormSection>
+              <div className="cover-stage-layout">
+                <div className={coverSrc ? "cover-preview has-image" : "cover-preview"}>
+                  {coverSrc ? (
+                    <img src={coverSrc} alt="Okładka robocza" />
+                  ) : (
+                    <div className="cover-placeholder">
+                      <ImageIcon size={30} aria-hidden="true" />
+                      <span>Brak okładki</span>
+                    </div>
+                  )}
+                </div>
 
-          <FormSection title="Rdzeń historii">
-            <TextField
-              label="Premise"
-              field="premise"
-              value={form.premise}
-              placeholder="Jedno lub dwa zdania o obietnicy historii"
-              rows={4}
-              disabled={aiDisabled}
-              loading={activeField === "premise"}
-              onGenerate={generateField}
-              onChange={(value) => updateField("premise", value)}
-            />
-            <div className="form-grid">
-              <TextField
-                label="Logline"
-                field="logline"
-                value={form.logline}
-                placeholder="Bohater, cel, przeszkoda, stawka"
-                rows={3}
-                disabled={aiDisabled}
-                loading={activeField === "logline"}
-                onGenerate={generateField}
-                onChange={(value) => updateField("logline", value)}
-              />
-              <TextField
-                label="Konflikt centralny"
-                field="centralConflict"
-                value={form.centralConflict}
-                placeholder="Główne tarcie fabularne"
-                rows={3}
-                disabled={aiDisabled}
-                loading={activeField === "centralConflict"}
-                onGenerate={generateField}
-                onChange={(value) => updateField("centralConflict", value)}
-              />
-            </div>
-            <TextField
-              label="Rozszerzona premisa"
-              field="expandedPremise"
-              value={form.expandedPremise}
-              placeholder="Akapit rozwijający założenie książki"
-              rows={5}
-              disabled={aiDisabled}
-              loading={activeField === "expandedPremise"}
-              onGenerate={generateField}
-              onChange={(value) => updateField("expandedPremise", value)}
-            />
-            <TextField
-              label="Stawki"
-              field="stakes"
-              value={form.stakes}
-              placeholder="Co bohater traci, jeśli przegra"
-              rows={4}
-              disabled={aiDisabled}
-              loading={activeField === "stakes"}
-              onGenerate={generateField}
-              onChange={(value) => updateField("stakes", value)}
-            />
-          </FormSection>
+                <div className="cover-stage-controls">
+                  <div>
+                    <p className="eyebrow">Opcjonalnie</p>
+                    <h4>Okładka robocza</h4>
+                    <p className="field-description">
+                      Generuje obraz na podstawie aktualnej koncepcji, tytułu,
+                      gatunku, tonu, settingu i stylu. Ten krok nie jest wymagany
+                      do zapisania koncepcji.
+                    </p>
+                  </div>
 
-          <FormSection title="Obietnica czytelnicza">
-            <div className="form-grid concept-choice-grid">
-              <MultiChoiceField
-                label="Gatunek"
-                field="genre"
-                value={form.genre}
-                options={genreOptions}
-                onChange={(value) => updateField("genre", value)}
-                onGenerate={generateField}
-                disabled={aiDisabled}
-                loading={activeField === "genre"}
-              />
-              <MultiChoiceField
-                label="Podgatunek"
-                field="subgenre"
-                value={form.subgenre}
-                options={subgenreOptions}
-                onChange={(value) => updateField("subgenre", value)}
-                onGenerate={generateField}
-                disabled={aiDisabled}
-                loading={activeField === "subgenre"}
-              />
-              <MultiChoiceField
-                label="Odbiorcy"
-                field="targetAudience"
-                value={form.targetAudience}
-                options={audienceOptions}
-                onChange={(value) => updateField("targetAudience", value)}
-                onGenerate={generateField}
-                disabled={aiDisabled}
-                loading={activeField === "targetAudience"}
-              />
-              <MultiChoiceField
-                label="Ton"
-                field="tone"
-                value={form.tone}
-                options={toneOptions}
-                onChange={(value) => updateField("tone", value)}
-                onGenerate={generateField}
-                disabled={aiDisabled}
-                loading={activeField === "tone"}
-              />
-              <MultiChoiceField
-                label="Punkt widzenia"
-                field="pointOfView"
-                value={form.pointOfView}
-                options={pointOfViewOptions}
-                onChange={(value) => updateField("pointOfView", value)}
-                onGenerate={generateField}
-                disabled={aiDisabled}
-                loading={activeField === "pointOfView"}
-              />
-              <TextField
-                label="Docelowa liczba słów"
-                field="targetWordCount"
-                value={form.targetWordCount}
-                placeholder="np. 85000"
-                disabled={aiDisabled}
-                loading={activeField === "targetWordCount"}
-                onGenerate={generateField}
-                onChange={(value) => updateField("targetWordCount", value)}
-              />
-            </div>
-          </FormSection>
+                  {projectQuery.data?.book.coverGeneratedAt ? (
+                    <p className="muted-text">
+                      Wygenerowano: {projectQuery.data.book.coverGeneratedAt}
+                    </p>
+                  ) : null}
 
-          <FormSection title="Styl i granice">
-            <MultiChoiceField
-              label="Tematy"
-              field="themesJson"
-              value={form.themesJson}
-              options={themeOptions}
-              onChange={(value) => updateField("themesJson", value)}
-              onGenerate={generateField}
-              disabled={aiDisabled}
-              loading={activeField === "themesJson"}
-            />
-            <TextField
-              label="Granice i tematy niechciane"
-              field="unwantedThemes"
-              value={form.unwantedThemes}
-              placeholder="Czego unikać w późniejszych promptach"
-              rows={4}
-              disabled={aiDisabled}
-              loading={activeField === "unwantedThemes"}
-              onGenerate={generateField}
-              onChange={(value) => updateField("unwantedThemes", value)}
-            />
-            <TextField
-              label="Style guide"
-              field="styleGuide"
-              value={form.styleGuide}
-              placeholder="Notatki o języku, rytmie, zakazach i preferencjach"
-              rows={5}
-              disabled={aiDisabled}
-              loading={activeField === "styleGuide"}
-              onGenerate={generateField}
-              onChange={(value) => updateField("styleGuide", value)}
-            />
-          </FormSection>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={generateCover}
+                    disabled={
+                      generateCoverMutation.isPending ||
+                      !projectQuery.data ||
+                      codexUnavailable
+                    }
+                    title="Utwórz okładkę na podstawie danych z widoku koncepcji"
+                  >
+                    {generateCoverMutation.isPending ? (
+                      <Loader2 size={16} className="spin-icon" />
+                    ) : (
+                      <Sparkles size={16} />
+                    )}
+                    {generateCoverMutation.isPending ? "Tworzę" : "Utwórz okładkę"}
+                  </button>
 
+                  {coverProgressText ? (
+                    <div
+                      className={
+                        generateCoverMutation.isPending
+                          ? "cover-progress active"
+                          : "cover-progress"
+                      }
+                      role={generateCoverMutation.isPending ? "status" : undefined}
+                      aria-live="polite"
+                    >
+                      <span>{coverProgressText}</span>
+                      {generateCoverMutation.isPending ? (
+                        <div className="cover-progress-track" aria-hidden="true">
+                          <span />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {coverMessage ? <p className="success-text">{coverMessage}</p> : null}
+                  {generateCoverMutation.isError ? (
+                    <p className="warning-text">Nie udało się utworzyć okładki.</p>
+                  ) : null}
+                  {generateCoverMutation.isError && aiError ? (
+                    <p className="warning-text">{aiError}</p>
+                  ) : null}
+                </div>
+              </div>
+            </FormSection>
+          ) : null}
+        </div>
+
+        <div className="concept-save-row">
           <div className="button-row">
             <button
               type="submit"
@@ -734,93 +993,20 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               <span className="warning-text">Nie udało się zapisać koncepcji.</span>
             ) : null}
           </div>
-        </form>
-
-        {codexUnavailable ? (
-          <p className="warning-text">
-            Codex CLI nie jest gotowy. Skonfiguruj go w prawym panelu albo
-            ekranie AI.
-          </p>
-        ) : null}
-
-        {aiError && !generateCoverMutation.isError ? (
-          <p className="warning-text">{aiError}</p>
-        ) : null}
-      </section>
-
-      <aside className="content-panel cover-panel">
-        <div className="section-title-row">
-          <div>
-            <p className="eyebrow">Okładka</p>
-            <h2>Robocza okładka</h2>
-          </div>
-          <ImageIcon size={20} aria-hidden="true" />
         </div>
+      </form>
 
-        <div className={coverSrc ? "cover-preview has-image" : "cover-preview"}>
-          {coverSrc ? (
-            <img src={coverSrc} alt="Okładka robocza" />
-          ) : (
-            <div className="cover-placeholder">
-              <ImageIcon size={30} aria-hidden="true" />
-              <span>Brak okładki</span>
-            </div>
-          )}
-        </div>
+      {codexUnavailable ? (
+        <p className="warning-text">
+          Codex CLI nie jest gotowy. Skonfiguruj go w prawym panelu albo
+          ekranie AI.
+        </p>
+      ) : null}
 
-        {projectQuery.data?.book.coverGeneratedAt ? (
-          <p className="muted-text">
-            Wygenerowano: {projectQuery.data.book.coverGeneratedAt}
-          </p>
-        ) : null}
-
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={generateCover}
-          disabled={
-            generateCoverMutation.isPending ||
-            !projectQuery.data ||
-            codexUnavailable
-          }
-          title="Utwórz okładkę na podstawie danych z widoku koncepcji"
-        >
-          {generateCoverMutation.isPending ? (
-            <Loader2 size={16} className="spin-icon" />
-          ) : (
-            <Sparkles size={16} />
-          )}
-          {generateCoverMutation.isPending ? "Tworzę" : "Utwórz okładkę"}
-        </button>
-
-        {coverProgressText ? (
-          <div
-            className={
-              generateCoverMutation.isPending
-                ? "cover-progress active"
-                : "cover-progress"
-            }
-            role={generateCoverMutation.isPending ? "status" : undefined}
-            aria-live="polite"
-          >
-            <span>{coverProgressText}</span>
-            {generateCoverMutation.isPending ? (
-              <div className="cover-progress-track" aria-hidden="true">
-                <span />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {coverMessage ? <p className="success-text">{coverMessage}</p> : null}
-        {generateCoverMutation.isError ? (
-          <p className="warning-text">Nie udało się utworzyć okładki.</p>
-        ) : null}
-        {generateCoverMutation.isError && aiError ? (
-          <p className="warning-text">{aiError}</p>
-        ) : null}
-      </aside>
-    </div>
+      {aiError && !generateCoverMutation.isError ? (
+        <p className="warning-text">{aiError}</p>
+      ) : null}
+    </section>
   );
 }
 
@@ -877,6 +1063,7 @@ function TextField({
           placeholder={placeholder}
           title={fieldHints[field]}
           aria-label={label}
+          aria-describedby={`${field}-description`}
           rows={rows}
         />
       ) : (
@@ -886,6 +1073,7 @@ function TextField({
           placeholder={placeholder}
           title={fieldHints[field]}
           aria-label={label}
+          aria-describedby={`${field}-description`}
         />
       )}
     </FieldFrame>
@@ -920,6 +1108,9 @@ function FieldFrame({
           onGenerate={onGenerate}
         />
       </div>
+      <p className="field-description" id={`${field}-description`}>
+        {fieldHints[field]}
+      </p>
       {children}
     </div>
   );
@@ -1087,10 +1278,15 @@ function conceptInputFromForm(form: ConceptForm): BookConceptInput {
     title: form.title,
     workingTitle: form.workingTitle,
     premise: form.premise,
+    protagonistSummary: form.protagonistSummary,
+    protagonistGoal: form.protagonistGoal,
     expandedPremise: form.expandedPremise,
     logline: form.logline,
     centralConflict: form.centralConflict,
+    antagonistForce: form.antagonistForce,
     stakes: form.stakes,
+    settingSketch: form.settingSketch,
+    endingDirection: form.endingDirection,
     genre: form.genre,
     subgenre: form.subgenre,
     targetAudience: form.targetAudience,
@@ -1100,9 +1296,20 @@ function conceptInputFromForm(form: ConceptForm): BookConceptInput {
     themesJson: serializeListValue(form.themesJson),
     unwantedThemes: form.unwantedThemes,
     alternativeTitlesJson: serializeListValue(form.alternativeTitlesJson),
-    titleChoiceNote: form.titleChoiceNote,
     styleGuide: form.styleGuide
   };
+}
+
+function stageCompletion(
+  stage: ConceptStage,
+  form: ConceptForm
+): { complete: number; total: number } {
+  const complete = stage.fields.filter((field) => {
+    const value = form[field];
+    return typeof value === "string" && value.trim().length > 0;
+  }).length;
+
+  return { complete, total: stage.fields.length };
 }
 
 function validateConceptForm(form: ConceptForm): string {

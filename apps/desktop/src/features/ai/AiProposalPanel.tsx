@@ -423,14 +423,24 @@ function proposalInputForField(
       return { workingTitle: value };
     case "premise":
       return { premise: value };
+    case "protagonistSummary":
+      return { protagonistSummary: value };
+    case "protagonistGoal":
+      return { protagonistGoal: value };
     case "expandedPremise":
       return { expandedPremise: value };
     case "logline":
       return { logline: value };
     case "centralConflict":
       return { centralConflict: value };
+    case "antagonistForce":
+      return { antagonistForce: value };
     case "stakes":
       return { stakes: value };
+    case "settingSketch":
+      return { settingSketch: value };
+    case "endingDirection":
+      return { endingDirection: value };
     case "genre":
       return { genre: value };
     case "subgenre":
@@ -449,8 +459,6 @@ function proposalInputForField(
       return { unwantedThemes: value };
     case "alternativeTitlesJson":
       return { alternativeTitlesJson: serializeListValue(value) };
-    case "titleChoiceNote":
-      return { titleChoiceNote: value };
     case "styleGuide":
       return { styleGuide: value };
   }

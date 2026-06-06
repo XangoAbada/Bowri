@@ -38,10 +38,15 @@ const projectDetails: ProjectDetails = {
     title: "",
     workingTitle: "Stary tytuł",
     premise: "Bohaterka szuka zaginionej siostry.",
+    protagonistSummary: "",
+    protagonistGoal: "",
     expandedPremise: "",
     logline: "",
     centralConflict: "",
+    antagonistForce: "",
     stakes: "",
+    settingSketch: "",
+    endingDirection: "",
     genre: "kryminal",
     subgenre: "",
     targetAudience: "adult",
@@ -52,7 +57,6 @@ const projectDetails: ProjectDetails = {
     themesJson: "[]",
     unwantedThemes: "",
     alternativeTitlesJson: "[]",
-    titleChoiceNote: "",
     coverImagePath: "",
     coverPrompt: "",
     coverNegativePrompt: "",
@@ -193,17 +197,30 @@ describe("BookConceptPage AI flow", () => {
 
     expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Tytuł finalny"), {
-      target: { value: "Finalny tytuł" }
+    fireEvent.change(screen.getByLabelText("Bohater / bohaterka"), {
+      target: { value: "Archiwistka z drukarni pamięci." }
     });
+    fireEvent.change(screen.getByLabelText("Cel bohatera"), {
+      target: { value: "Odnaleźć siostrę przed korektą miejskich wspomnień." }
+    });
+    fireEvent.change(screen.getByLabelText("Setting"), {
+      target: { value: "Miasto drukarni i nocnych archiwów." }
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Silnik historii/i }));
     fireEvent.change(screen.getByLabelText("Logline"), {
       target: { value: "Jedno zdanie sprzedające historię." }
     });
+    fireEvent.change(screen.getByLabelText("Siła przeciwna"), {
+      target: { value: "Cech drukarzy fałszujących pamięć miasta." }
+    });
+    fireEvent.change(screen.getByLabelText("Kierunek zakończenia"), {
+      target: { value: "Prawda wychodzi na jaw, ale bohaterka płaci wspomnieniem." }
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Czytelnik i forma/i }));
     fireEvent.change(screen.getByLabelText("Docelowa liczba słów"), {
       target: { value: "85000" }
-    });
-    fireEvent.change(screen.getByLabelText("Alternatywne tytuły"), {
-      target: { value: "Tytuł A, Tytuł B" }
     });
     fireEvent.click(screen.getByRole("button", { name: "fantasy" }));
     fireEvent.change(screen.getByLabelText("Własna opcja Gatunek"), {
@@ -212,6 +229,14 @@ describe("BookConceptPage AI flow", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Dodaj własną opcję Gatunek/i })
     );
+
+    fireEvent.click(screen.getByRole("tab", { name: /Okładka/i }));
+    fireEvent.change(screen.getByLabelText("Tytuł finalny"), {
+      target: { value: "Finalny tytuł" }
+    });
+    fireEvent.change(screen.getByLabelText("Alternatywne tytuły"), {
+      target: { value: "Tytuł A, Tytuł B" }
+    });
     fireEvent.click(screen.getByRole("button", { name: /Zapisz/i }));
 
     await waitFor(() =>
@@ -219,6 +244,11 @@ describe("BookConceptPage AI flow", () => {
         "book-1",
         expect.objectContaining({
           title: "Finalny tytuł",
+          protagonistSummary: "Archiwistka z drukarni pamięci.",
+          protagonistGoal: "Odnaleźć siostrę przed korektą miejskich wspomnień.",
+          antagonistForce: "Cech drukarzy fałszujących pamięć miasta.",
+          settingSketch: "Miasto drukarni i nocnych archiwów.",
+          endingDirection: "Prawda wychodzi na jaw, ale bohaterka płaci wspomnieniem.",
           logline: "Jedno zdanie sprzedające historię.",
           targetWordCount: 85000,
           alternativeTitlesJson: JSON.stringify(["Tytuł A", "Tytuł B"]),
@@ -233,29 +263,57 @@ describe("BookConceptPage AI flow", () => {
 
     expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
 
-    for (const label of [
-      "Tytuł finalny",
-      "Tytuł roboczy",
-      "Alternatywne tytuły",
-      "Notatka wyboru tytułu",
-      "Premise",
-      "Logline",
-      "Konflikt centralny",
-      "Rozszerzona premisa",
-      "Stawki",
-      "Gatunek",
-      "Podgatunek",
-      "Odbiorcy",
-      "Ton",
-      "Punkt widzenia",
-      "Docelowa liczba słów",
-      "Tematy",
-      "Granice i tematy niechciane",
-      "Style guide"
-    ]) {
-      expect(
-        screen.getByRole("button", { name: `Generuj ${label} z AI` })
-      ).toBeInTheDocument();
+    const stageLabels = [
+      {
+        tab: /Pomysł/i,
+        labels: [
+          "Tytuł roboczy",
+          "Premise",
+          "Bohater / bohaterka",
+          "Cel bohatera",
+          "Setting"
+        ]
+      },
+      {
+        tab: /Silnik historii/i,
+        labels: [
+          "Logline",
+          "Konflikt centralny",
+          "Siła przeciwna",
+          "Stawki",
+          "Kierunek zakończenia",
+          "Rozszerzona premisa"
+        ]
+      },
+      {
+        tab: /Czytelnik i forma/i,
+        labels: [
+          "Gatunek",
+          "Podgatunek",
+          "Odbiorcy",
+          "Ton",
+          "Punkt widzenia",
+          "Docelowa liczba słów"
+        ]
+      },
+      {
+        tab: /Motywy i zasady/i,
+        labels: ["Tematy", "Granice i tematy niechciane", "Style guide"]
+      },
+      {
+        tab: /Okładka/i,
+        labels: ["Tytuł finalny", "Alternatywne tytuły"]
+      }
+    ];
+
+    for (const stage of stageLabels) {
+      fireEvent.click(screen.getByRole("tab", { name: stage.tab }));
+      for (const label of stage.labels) {
+        expect(
+          screen.getByRole("button", { name: `Generuj ${label} z AI` })
+        ).toBeInTheDocument();
+        expect(screen.getByText(fieldDescriptionForLabel(label))).toBeInTheDocument();
+      }
     }
   });
 
@@ -297,14 +355,17 @@ describe("BookConceptPage AI flow", () => {
   it("generates a cover from current concept form values", async () => {
     renderWithQueryClient();
 
-    const coverButton = await screen.findByRole("button", {
-      name: /Utwórz okładkę/i
-    });
-    await waitFor(() => expect(coverButton).not.toBeDisabled());
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Premise"), {
       target: { value: "Nowa bohaterka znajduje mapę ukrytą w druku." }
     });
+    fireEvent.click(screen.getByRole("tab", { name: /Okładka/i }));
+
+    const coverButton = await screen.findByRole("button", {
+      name: /Utwórz okładkę/i
+    });
+    await waitFor(() => expect(coverButton).not.toBeDisabled());
     fireEvent.click(coverButton);
 
     await waitFor(() =>
@@ -347,4 +408,33 @@ function getCheckboxByLabel(label: string): HTMLInputElement {
   }
 
   return checkbox;
+}
+
+function fieldDescriptionForLabel(label: string): RegExp {
+  const descriptions: Record<string, RegExp> = {
+    "Tytuł roboczy": /Robocza nazwa projektu/i,
+    Premise: /Krótka obietnica historii/i,
+    "Bohater / bohaterka": /Najważniejsza postać/i,
+    "Cel bohatera": /Konkretne zewnętrzne dążenie/i,
+    Setting: /Miejsce, czas i podstawowe warunki świata/i,
+    Logline: /Jedno zwarte zdanie/i,
+    "Konflikt centralny": /Główne napięcie/i,
+    "Siła przeciwna": /Antagonista, system, problem/i,
+    Stawki: /co bohater, relacje albo świat tracą/i,
+    "Kierunek zakończenia": /dokąd historia ma emocjonalnie/i,
+    "Rozszerzona premisa": /Jeden akapit łączący/i,
+    Gatunek: /Główna konwencja/i,
+    Podgatunek: /Doprecyzowanie obietnicy gatunkowej/i,
+    Odbiorcy: /Grupa czytelników/i,
+    Ton: /Dominujący nastrój/i,
+    "Punkt widzenia": /Perspektywa i tryb narracji/i,
+    "Docelowa liczba słów": /Orientacyjna długość książki/i,
+    Tematy: /Główne idee/i,
+    "Granice i tematy niechciane": /Treści, których AI i autor/i,
+    "Style guide": /Praktyczne zasady języka/i,
+    "Tytuł finalny": /Kandydat na tytuł/i,
+    "Alternatywne tytuły": /Lista wariantów/i
+  };
+
+  return descriptions[label];
 }

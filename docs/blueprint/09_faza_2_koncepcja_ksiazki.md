@@ -4,19 +4,13 @@ Cel fazy: pomoc autorowi zamienic pomysl w spójny fundament ksiazki.
 
 ## Ekran Koncepcji
 
-Sekcje:
+Etapy:
 
-- Tytul;
-- Premisa;
-- Logline;
-- Gatunek i podgatunek;
-- Odbiorcy;
-- Ton;
-- Styl;
-- Punkt widzenia;
-- Dlugosc docelowa;
-- Tematy;
-- Granice i tematy niechciane.
+- Pomysl;
+- Silnik historii;
+- Czytelnik i forma;
+- Motywy i zasady;
+- Okladka.
 
 Kazda sekcja ma akcje AI.
 
@@ -34,9 +28,9 @@ zachowywać poprawne polskie znaki.
 
 ### Tytul
 
-- roboczy tytul;
+- finalny tytul;
 - lista alternatyw;
-- notatka, dlaczego wybrany.
+- robocza okladka jako opcjonalny ostatni krok.
 
 Akcje AI:
 
@@ -47,8 +41,14 @@ Akcje AI:
 ### Premisa
 
 - jedno zdanie;
+- bohater / bohaterka;
+- cel bohatera;
 - rozszerzona premisa;
-- konflikt centralny.
+- konflikt centralny;
+- sila przeciwna;
+- stawki;
+- setting;
+- kierunek zakonczenia.
 
 Akcje AI:
 
@@ -107,10 +107,15 @@ Output JSON:
   "version": 1,
   "kind": "premise_development",
   "summary": "",
+  "protagonistSummary": "",
+  "protagonistGoal": "",
   "logline": "",
   "expandedPremise": "",
   "centralConflict": "",
+  "antagonistForce": "",
   "stakes": "",
+  "settingSketch": "",
+  "endingDirection": "",
   "themes": [],
   "risks": [],
   "questionsForAuthor": []

@@ -11,6 +11,9 @@ export type CoverPromptPackage = {
       title: string;
       workingTitle: string;
       premise: string;
+      protagonistSummary: string;
+      antagonistForce: string;
+      settingSketch: string;
       genre: string;
       targetAudience: string;
       tone: string;
@@ -52,6 +55,9 @@ export function buildBookCoverPromptPackage(
         title: book.title,
         workingTitle: book.workingTitle,
         premise: book.premise,
+        protagonistSummary: book.protagonistSummary,
+        antagonistForce: book.antagonistForce,
+        settingSketch: book.settingSketch,
         genre: book.genre,
         targetAudience: book.targetAudience,
         tone: book.tone,
@@ -125,6 +131,9 @@ export function renderCoverVisualPrompt(book: Book): string {
     "Asset type: working book cover",
     `Primary request: a polished editorial cover for the book title "${coverTitle}"`,
     `Scene/backdrop: visual metaphor for this premise: ${emptyFallback(book.premise)}`,
+    `Main character cue: ${emptyFallback(book.protagonistSummary)}`,
+    `Opposing force or threat cue: ${emptyFallback(book.antagonistForce)}`,
+    `Setting cues: ${emptyFallback(book.settingSketch)}`,
     `Style/medium: sophisticated illustrated book-cover art, strong silhouette, tactile print texture`,
     `Composition/framing: portrait 2:3, central focal image, generous safe margins, clear title area`,
     `Typography/title: include readable title text exactly as "${coverTitle}", prominent and professionally typeset`,

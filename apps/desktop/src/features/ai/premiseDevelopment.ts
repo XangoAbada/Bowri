@@ -7,10 +7,15 @@ export type PremiseDevelopmentField = {
   field: Extract<
     ConceptFieldKey,
     | "premise"
+    | "protagonistSummary"
+    | "protagonistGoal"
     | "expandedPremise"
     | "logline"
     | "centralConflict"
+    | "antagonistForce"
     | "stakes"
+    | "settingSketch"
+    | "endingDirection"
     | "themesJson"
   >;
   label: string;
@@ -21,10 +26,15 @@ const premiseDevelopmentResponseSchema = z.object({
   version: z.literal(1),
   kind: z.literal("premise_development"),
   summary: z.string().trim().min(1),
+  protagonistSummary: z.string().trim().optional().default(""),
+  protagonistGoal: z.string().trim().optional().default(""),
   logline: z.string().trim().min(1),
   expandedPremise: z.string().trim().min(1),
   centralConflict: z.string().trim().min(1),
+  antagonistForce: z.string().trim().optional().default(""),
   stakes: z.string().trim().min(1),
+  settingSketch: z.string().trim().optional().default(""),
+  endingDirection: z.string().trim().optional().default(""),
   themes: z.array(z.string().trim().min(1)).default([]),
   risks: z.array(z.string().trim().min(1)).default([]),
   questionsForAuthor: z.array(z.string().trim().min(1)).default([])
@@ -68,6 +78,16 @@ export function parsePremiseDevelopment(
       value: response.logline
     },
     {
+      field: "protagonistSummary",
+      label: conceptFieldConfigs.protagonistSummary.label,
+      value: response.protagonistSummary
+    },
+    {
+      field: "protagonistGoal",
+      label: conceptFieldConfigs.protagonistGoal.label,
+      value: response.protagonistGoal
+    },
+    {
       field: "expandedPremise",
       label: conceptFieldConfigs.expandedPremise.label,
       value: response.expandedPremise
@@ -78,9 +98,24 @@ export function parsePremiseDevelopment(
       value: response.centralConflict
     },
     {
+      field: "antagonistForce",
+      label: conceptFieldConfigs.antagonistForce.label,
+      value: response.antagonistForce
+    },
+    {
       field: "stakes",
       label: conceptFieldConfigs.stakes.label,
       value: response.stakes
+    },
+    {
+      field: "settingSketch",
+      label: conceptFieldConfigs.settingSketch.label,
+      value: response.settingSketch
+    },
+    {
+      field: "endingDirection",
+      label: conceptFieldConfigs.endingDirection.label,
+      value: response.endingDirection
     },
     {
       field: "themesJson",

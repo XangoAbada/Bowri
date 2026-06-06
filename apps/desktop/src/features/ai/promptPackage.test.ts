@@ -27,10 +27,15 @@ const book: Book = {
   title: "",
   workingTitle: "Cienie Drukarni",
   premise: "Zecerka odkrywa, że drukowane sny zmieniają wspomnienia miasta.",
+  protagonistSummary: "Zecerka, która pilnuje miejskiego archiwum snów.",
+  protagonistGoal: "Zatrzymać druk fałszywych wspomnień przed świętem miasta.",
   expandedPremise: "Drukarnia przechowuje sny miasta.",
   logline: "Zecerka musi zatrzymać druk wspomnień.",
   centralConflict: "Prawda kontra wygodna pamięć miasta.",
+  antagonistForce: "Cech drukarzy zarabiający na kontrolowaniu pamięci.",
   stakes: "Miasto może utracić wspólną tożsamość.",
+  settingSketch: "Deszczowe miasto drukarni, kanałów i nocnych gazet.",
+  endingDirection: "Bohaterka ujawnia prawdę, ale traci własne najważniejsze wspomnienie.",
   genre: "fantasy",
   subgenre: "urban fantasy",
   targetAudience: "adult",
@@ -41,7 +46,6 @@ const book: Book = {
   themesJson: JSON.stringify(["pamięć", "tożsamość"]),
   unwantedThemes: "Bez gore.",
   alternativeTitlesJson: JSON.stringify(["Ostatni atrament"]),
-  titleChoiceNote: "Tytuł podkreśla druk i pamięć.",
   coverImagePath: "",
   coverPrompt: "",
   coverNegativePrompt: "",
@@ -66,9 +70,14 @@ describe("renderPromptPackage", () => {
     expect(prompt).toContain("premise_development");
     expect(prompt).toContain("Docelowe pole: premise");
     expect(prompt).toContain(book.premise);
+    expect(prompt).toContain(book.protagonistSummary);
+    expect(prompt).toContain(book.protagonistGoal);
     expect(prompt).toContain(book.expandedPremise);
     expect(prompt).toContain(book.logline);
     expect(prompt).toContain(book.centralConflict);
+    expect(prompt).toContain(book.antagonistForce);
+    expect(prompt).toContain(book.settingSketch);
+    expect(prompt).toContain(book.endingDirection);
     expect(prompt).toContain(book.genre);
     expect(prompt).toContain(book.subgenre);
     expect(prompt).toContain(book.targetAudience);
@@ -81,10 +90,15 @@ describe("renderPromptPackage", () => {
       "title",
       "workingTitle",
       "premise",
+      "protagonistSummary",
+      "protagonistGoal",
       "expandedPremise",
       "logline",
       "centralConflict",
+      "antagonistForce",
       "stakes",
+      "settingSketch",
+      "endingDirection",
       "genre",
       "subgenre",
       "targetAudience",
@@ -94,7 +108,6 @@ describe("renderPromptPackage", () => {
       "themesJson",
       "unwantedThemes",
       "alternativeTitlesJson",
-      "titleChoiceNote",
       "styleGuide"
     ] as const;
 
@@ -117,6 +130,9 @@ describe("renderPromptPackage", () => {
     expect(promptPackage.action).toBe("generate_cover_image");
     expect(promptPackage.coverPrompt).toContain(book.workingTitle);
     expect(promptPackage.coverPrompt).toContain(book.premise);
+    expect(promptPackage.coverPrompt).toContain(book.protagonistSummary);
+    expect(promptPackage.coverPrompt).toContain(book.antagonistForce);
+    expect(promptPackage.coverPrompt).toContain(book.settingSketch);
     expect(promptPackage.coverPrompt).toContain(book.genre);
     expect(promptPackage.coverPrompt).toContain(book.targetAudience);
     expect(promptPackage.coverPrompt).toContain(book.tone);

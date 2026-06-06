@@ -72,10 +72,15 @@ pub struct Book {
     pub title: String,
     pub working_title: String,
     pub premise: String,
+    pub protagonist_summary: String,
+    pub protagonist_goal: String,
     pub expanded_premise: String,
     pub logline: String,
     pub central_conflict: String,
+    pub antagonist_force: String,
     pub stakes: String,
+    pub setting_sketch: String,
+    pub ending_direction: String,
     pub genre: String,
     pub subgenre: String,
     pub target_audience: String,
@@ -86,7 +91,6 @@ pub struct Book {
     pub themes_json: String,
     pub unwanted_themes: String,
     pub alternative_titles_json: String,
-    pub title_choice_note: String,
     pub cover_image_path: String,
     pub cover_prompt: String,
     pub cover_negative_prompt: String,
@@ -128,10 +132,15 @@ pub struct BookConceptInput {
     pub title: Option<String>,
     pub working_title: Option<String>,
     pub premise: Option<String>,
+    pub protagonist_summary: Option<String>,
+    pub protagonist_goal: Option<String>,
     pub expanded_premise: Option<String>,
     pub logline: Option<String>,
     pub central_conflict: Option<String>,
+    pub antagonist_force: Option<String>,
     pub stakes: Option<String>,
+    pub setting_sketch: Option<String>,
+    pub ending_direction: Option<String>,
     pub genre: Option<String>,
     pub subgenre: Option<String>,
     pub target_audience: Option<String>,
@@ -142,7 +151,6 @@ pub struct BookConceptInput {
     pub themes_json: Option<String>,
     pub unwanted_themes: Option<String>,
     pub alternative_titles_json: Option<String>,
-    pub title_choice_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -371,10 +379,15 @@ pub async fn update_book_concept_in_pool(
           title = COALESCE(?, title),
           working_title = COALESCE(?, working_title),
           premise = COALESCE(?, premise),
+          protagonist_summary = COALESCE(?, protagonist_summary),
+          protagonist_goal = COALESCE(?, protagonist_goal),
           expanded_premise = COALESCE(?, expanded_premise),
           logline = COALESCE(?, logline),
           central_conflict = COALESCE(?, central_conflict),
+          antagonist_force = COALESCE(?, antagonist_force),
           stakes = COALESCE(?, stakes),
+          setting_sketch = COALESCE(?, setting_sketch),
+          ending_direction = COALESCE(?, ending_direction),
           genre = COALESCE(?, genre),
           subgenre = COALESCE(?, subgenre),
           target_audience = COALESCE(?, target_audience),
@@ -385,7 +398,6 @@ pub async fn update_book_concept_in_pool(
           themes_json = COALESCE(?, themes_json),
           unwanted_themes = COALESCE(?, unwanted_themes),
           alternative_titles_json = COALESCE(?, alternative_titles_json),
-          title_choice_note = COALESCE(?, title_choice_note),
           updated_at = ?
         WHERE id = ?
         "#,
@@ -393,10 +405,15 @@ pub async fn update_book_concept_in_pool(
     .bind(input.title)
     .bind(input.working_title)
     .bind(input.premise)
+    .bind(input.protagonist_summary)
+    .bind(input.protagonist_goal)
     .bind(input.expanded_premise)
     .bind(input.logline)
     .bind(input.central_conflict)
+    .bind(input.antagonist_force)
     .bind(input.stakes)
+    .bind(input.setting_sketch)
+    .bind(input.ending_direction)
     .bind(input.genre)
     .bind(input.subgenre)
     .bind(input.target_audience)
@@ -407,7 +424,6 @@ pub async fn update_book_concept_in_pool(
     .bind(input.themes_json)
     .bind(input.unwanted_themes)
     .bind(input.alternative_titles_json)
-    .bind(input.title_choice_note)
     .bind(&now)
     .bind(book_id)
     .execute(&mut *tx)

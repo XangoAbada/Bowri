@@ -4,10 +4,15 @@ export type ConceptFieldKey =
   | "title"
   | "workingTitle"
   | "premise"
+  | "protagonistSummary"
+  | "protagonistGoal"
   | "expandedPremise"
   | "logline"
   | "centralConflict"
+  | "antagonistForce"
   | "stakes"
+  | "settingSketch"
+  | "endingDirection"
   | "genre"
   | "subgenre"
   | "targetAudience"
@@ -17,7 +22,6 @@ export type ConceptFieldKey =
   | "themesJson"
   | "unwantedThemes"
   | "alternativeTitlesJson"
-  | "titleChoiceNote"
   | "styleGuide";
 
 export type AIProviderId = "codex-cli-bridge";
@@ -27,10 +31,15 @@ export type BookConceptPromptContext = Pick<
   | "title"
   | "workingTitle"
   | "premise"
+  | "protagonistSummary"
+  | "protagonistGoal"
   | "expandedPremise"
   | "logline"
   | "centralConflict"
+  | "antagonistForce"
   | "stakes"
+  | "settingSketch"
+  | "endingDirection"
   | "genre"
   | "subgenre"
   | "targetAudience"
@@ -41,7 +50,6 @@ export type BookConceptPromptContext = Pick<
   | "themesJson"
   | "unwantedThemes"
   | "alternativeTitlesJson"
-  | "titleChoiceNote"
 >;
 
 export type PromptPackage = {
@@ -103,11 +111,15 @@ export const listConceptFields: ConceptFieldKey[] = [
 
 export const longConceptFields: ConceptFieldKey[] = [
   "premise",
+  "protagonistSummary",
+  "protagonistGoal",
   "expandedPremise",
   "centralConflict",
+  "antagonistForce",
   "stakes",
+  "settingSketch",
+  "endingDirection",
   "unwantedThemes",
-  "titleChoiceNote",
   "styleGuide"
 ];
 
@@ -141,6 +153,26 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
       "Autor chce premise, logline, konflikt centralny, stawki i tematy, które może zaakceptować częściowo.",
     acceptsValues: false
   },
+  protagonistSummary: {
+    key: "protagonistSummary",
+    label: "Bohater / bohaterka",
+    action: "generate_protagonist_summary",
+    userInstruction:
+      "Wygeneruj zwięzły opis głównego bohatera lub bohaterki tej książki.",
+    currentWork:
+      "Autor chce wiedzieć, kto prowadzi historię, z jakiego miejsca startuje i dlaczego właśnie ta postać niesie książkę.",
+    acceptsValues: false
+  },
+  protagonistGoal: {
+    key: "protagonistGoal",
+    label: "Cel bohatera",
+    action: "generate_protagonist_goal",
+    userInstruction:
+      "Wygeneruj konkretny zewnętrzny cel bohatera, który będzie napędzał fabułę.",
+    currentWork:
+      "Autor chce jasne dążenie, które można później przekładać na konflikty, sceny i decyzje bohatera.",
+    acceptsValues: false
+  },
   expandedPremise: {
     key: "expandedPremise",
     label: "Rozszerzona premisa",
@@ -170,6 +202,16 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
       "Autor chce rdzeń napięcia fabularnego, który będzie napędzał decyzje bohatera.",
     acceptsValues: false
   },
+  antagonistForce: {
+    key: "antagonistForce",
+    label: "Siła przeciwna",
+    action: "generate_antagonist_force",
+    userInstruction:
+      "Wygeneruj siłę przeciwną dla tej książki: antagonistę, system, tajemnicę, problem albo blokadę.",
+    currentWork:
+      "Autor chce określić, co realnie stoi na drodze bohatera i jak wywiera presję na konflikt centralny.",
+    acceptsValues: false
+  },
   stakes: {
     key: "stakes",
     label: "Stawki",
@@ -177,6 +219,26 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     userInstruction: "Wygeneruj stawki osobiste i fabularne tej książki.",
     currentWork:
       "Autor chce wiedzieć, co bohater i świat tracą, jeśli historia pójdzie źle.",
+    acceptsValues: false
+  },
+  settingSketch: {
+    key: "settingSketch",
+    label: "Setting",
+    action: "generate_setting_sketch",
+    userInstruction:
+      "Wygeneruj szkic settingu: miejsce, czas i warunki świata wpływające na konflikt.",
+    currentWork:
+      "Autor chce użyteczny opis świata, który wspiera fabułę zamiast tworzyć osobną encyklopedię.",
+    acceptsValues: false
+  },
+  endingDirection: {
+    key: "endingDirection",
+    label: "Kierunek zakończenia",
+    action: "generate_ending_direction",
+    userInstruction:
+      "Wygeneruj roboczy kierunek zakończenia tej książki, fabularny lub emocjonalny.",
+    currentWork:
+      "Autor chce wiedzieć, dokąd historia zmierza, bez konieczności zamykania wszystkich szczegółów finału.",
     acceptsValues: false
   },
   genre: {
@@ -266,16 +328,6 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
       "Autor chce warianty tytułu, które może porównać z tytułem roboczym i finalnym.",
     acceptsValues: true
   },
-  titleChoiceNote: {
-    key: "titleChoiceNote",
-    label: "Notatka wyboru tytułu",
-    action: "generate_title_choice_note",
-    userInstruction:
-      "Napisz krótką notatkę uzasadniającą wybór tytułu tej książki.",
-    currentWork:
-      "Autor chce zapamiętać, dlaczego wybrany tytuł najlepiej niesie obietnicę historii.",
-    acceptsValues: false
-  },
   styleGuide: {
     key: "styleGuide",
     label: "Style guide",
@@ -343,10 +395,15 @@ ${promptPackage.userInstruction}
 - Tytuł finalny: ${emptyFallback(book.title)}
 - Roboczy tytuł: ${emptyFallback(book.workingTitle)}
 - Premise: ${emptyFallback(book.premise)}
+- Bohater / bohaterka: ${emptyFallback(book.protagonistSummary)}
+- Cel bohatera: ${emptyFallback(book.protagonistGoal)}
 - Rozszerzona premisa: ${emptyFallback(book.expandedPremise)}
 - Logline: ${emptyFallback(book.logline)}
 - Konflikt centralny: ${emptyFallback(book.centralConflict)}
+- Siła przeciwna: ${emptyFallback(book.antagonistForce)}
 - Stawki: ${emptyFallback(book.stakes)}
+- Setting: ${emptyFallback(book.settingSketch)}
+- Kierunek zakończenia: ${emptyFallback(book.endingDirection)}
 - Gatunek: ${emptyFallback(book.genre)}
 - Podgatunek: ${emptyFallback(book.subgenre)}
 - Ton: ${emptyFallback(book.tone)}
@@ -356,7 +413,6 @@ ${promptPackage.userInstruction}
 - Tematy: ${emptyFallback(renderJsonList(book.themesJson))}
 - Granice i tematy niechciane: ${emptyFallback(book.unwantedThemes)}
 - Alternatywne tytuły: ${emptyFallback(renderJsonList(book.alternativeTitlesJson))}
-- Notatka wyboru tytułu: ${emptyFallback(book.titleChoiceNote)}
 - Style guide: ${emptyFallback(book.styleGuide)}
 
 # Current Work
@@ -430,10 +486,15 @@ function bookConceptContext(book: Book): BookConceptPromptContext {
     title: book.title ?? "",
     workingTitle: book.workingTitle ?? "",
     premise: book.premise ?? "",
+    protagonistSummary: book.protagonistSummary ?? "",
+    protagonistGoal: book.protagonistGoal ?? "",
     expandedPremise: book.expandedPremise ?? "",
     logline: book.logline ?? "",
     centralConflict: book.centralConflict ?? "",
+    antagonistForce: book.antagonistForce ?? "",
     stakes: book.stakes ?? "",
+    settingSketch: book.settingSketch ?? "",
+    endingDirection: book.endingDirection ?? "",
     genre: book.genre ?? "",
     subgenre: book.subgenre ?? "",
     targetAudience: book.targetAudience ?? "",
@@ -443,8 +504,7 @@ function bookConceptContext(book: Book): BookConceptPromptContext {
     targetWordCount: book.targetWordCount ?? null,
     themesJson: book.themesJson ?? "[]",
     unwantedThemes: book.unwantedThemes ?? "",
-    alternativeTitlesJson: book.alternativeTitlesJson ?? "[]",
-    titleChoiceNote: book.titleChoiceNote ?? ""
+    alternativeTitlesJson: book.alternativeTitlesJson ?? "[]"
   };
 }
 
@@ -469,10 +529,15 @@ function premiseDevelopmentSchema(): unknown {
     version: 1,
     kind: "premise_development",
     summary: "concise premise sentence",
+    protagonistSummary: "string",
+    protagonistGoal: "string",
     logline: "string",
     expandedPremise: "string",
     centralConflict: "string",
+    antagonistForce: "string",
     stakes: "string",
+    settingSketch: "string",
+    endingDirection: "string",
     themes: ["string"],
     risks: ["string"],
     questionsForAuthor: ["string"]

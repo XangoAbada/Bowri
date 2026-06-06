@@ -504,17 +504,71 @@ a:focus-visible {
   max-width: none;
 }
 
-.concept-page-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: 18px;
-  align-items: stretch;
-}
-
 .concept-form {
   display: grid;
   align-content: start;
   gap: 16px;
+}
+
+.concept-stage-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.concept-stage-tab {
+  display: grid;
+  gap: 5px;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffefb;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.concept-stage-tab strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.concept-stage-tab.active {
+  border-color: #9ac2ad;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.concept-stage-heading {
+  display: flex;
+  gap: 18px;
+  align-items: end;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.concept-stage-heading h3,
+.cover-stage-controls h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.concept-stage-heading p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.concept-stage-panel {
+  min-height: 420px;
 }
 
 .concept-form-section {
@@ -535,21 +589,9 @@ a:focus-visible {
   font-weight: 900;
 }
 
-.cover-panel {
-  position: sticky;
-  top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-  min-width: 0;
-  height: 100%;
-  align-self: stretch;
-}
-
 .cover-preview {
   display: grid;
   place-items: center;
-  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -572,6 +614,35 @@ a:focus-visible {
   color: var(--ink-soft);
   font-size: 13px;
   font-weight: 800;
+}
+
+.cover-stage-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 340px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.cover-stage-layout .cover-preview {
+  aspect-ratio: 2 / 3;
+  width: 100%;
+}
+
+.cover-stage-controls {
+  display: grid;
+  align-content: start;
+  gap: 13px;
+  min-width: 0;
+}
+
+.concept-save-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.94);
+  backdrop-filter: blur(10px);
 }
 
 .cover-progress {
@@ -636,6 +707,14 @@ a:focus-visible {
 
 .field-label-text {
   min-width: 0;
+}
+
+.field-description {
+  margin: -2px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .field-label.narrow {
@@ -1002,24 +1081,6 @@ a:focus-visible {
 }
 
 @media (max-width: 1520px) {
-  .concept-page-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .cover-panel {
-    position: static;
-    height: auto;
-    width: min(100%, 460px);
-    max-width: 460px;
-    justify-self: center;
-  }
-
-  .cover-preview {
-    flex: none;
-    width: 100%;
-    aspect-ratio: 2 / 3;
-  }
-
   .style-guide-textarea {
     min-height: 300px;
   }
@@ -1034,17 +1095,22 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-side-panel,
-  .cover-panel {
+  .dashboard-side-panel {
     position: static;
     height: auto;
     max-height: none;
   }
 
-  .cover-panel {
-    width: min(100%, 420px);
-    max-width: 420px;
-    justify-self: center;
+  .concept-stage-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cover-stage-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cover-stage-layout .cover-preview {
+    max-width: 360px;
   }
 
   .context-panel {
@@ -1069,6 +1135,15 @@ a:focus-visible {
   .form-grid,
   .project-shell {
     grid-template-columns: 1fr;
+  }
+
+  .concept-stage-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .concept-stage-heading {
+    display: grid;
+    align-items: start;
   }
 
   .sidebar {

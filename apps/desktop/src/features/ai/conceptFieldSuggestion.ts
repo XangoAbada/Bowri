@@ -6,10 +6,15 @@ const conceptFieldKeySchema = z.enum([
   "title",
   "workingTitle",
   "premise",
+  "protagonistSummary",
+  "protagonistGoal",
   "expandedPremise",
   "logline",
   "centralConflict",
+  "antagonistForce",
   "stakes",
+  "settingSketch",
+  "endingDirection",
   "genre",
   "subgenre",
   "targetAudience",
@@ -19,7 +24,6 @@ const conceptFieldKeySchema = z.enum([
   "themesJson",
   "unwantedThemes",
   "alternativeTitlesJson",
-  "titleChoiceNote",
   "styleGuide"
 ]);
 
