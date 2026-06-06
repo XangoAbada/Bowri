@@ -42,6 +42,11 @@ Pola:
 - sprawdz, czy postac jest potrzebna fabule;
 - polacz postac z watkiem.
 
+Każde generowane albo uzupełniane pole profilu postaci powinno mieć przycisk
+AI lub mini akcję AI. Prompt dla pola postaci musi uwzględniać kluczowe pola
+książki, rolę fabularną, istniejące postacie, relacje, wątki i style guide,
+gdy są dostępne. Wyniki po polsku mają zachowywać poprawne polskie znaki.
+
 ## Relacje
 
 Relacja powinna miec:
@@ -143,6 +148,9 @@ Output JSON:
 - Mozna utworzyc postac recznie.
 - Mozna wygenerowac postac przez Codex CLI.
 - Profil postaci moze byc czesciowo zaakceptowany.
+- Generowanie pól profilu postaci działa per-field i używa kluczowego
+  kontekstu książki oraz Story Bible.
+- Wyniki AI po polsku używają poprawnych polskich znaków.
 - Relacje lacza dwie postacie.
 - Postac moze byc przypisana do sceny.
 - Prompt sceny zawiera glos i wiedze postaci POV.
@@ -154,4 +162,4 @@ Output JSON:
 - relacja nie moze wskazywac nieistniejacej postaci;
 - usuniecie postaci nie kasuje historii scen bez ostrzezenia;
 - prompt sceny zawiera tylko relewantne postacie.
-
+- prompt per-field postaci zawiera kluczowe pola książki, relacje i wątki.

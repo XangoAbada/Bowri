@@ -70,6 +70,14 @@ zrodlowe i dopiero wtedy implementuj.
 - [ ] Aplikacja jest lokalnym desktopem, bez kont uzytkownikow i chmury w V1.
 - [ ] Pierwszy ekran to dashboard projektow albo ostatni projekt, nie landing page.
 - [ ] Kazda faza zostawia aplikacje w stanie uruchamialnym.
+- [ ] Teksty widoczne w UI, prompty i odpowiedzi AI po polsku używają
+      poprawnych polskich znaków. Nie dotyczy to nazw technicznych, typów,
+      pól API ani identyfikatorów w kodzie.
+- [ ] Każde generowane albo uzupełniane pole ma własny przycisk AI lub mini
+      akcję AI dopasowaną do kontekstu pola.
+- [ ] Prompt generujący pojedyncze pole zawiera inne kluczowe pola projektu,
+      np. premise, gatunek, ton, odbiorców, style guide, postacie, lokację,
+      wątki albo reguły świata, zależnie od ekranu.
 
 ## Fazy implementacji
 
@@ -119,6 +127,9 @@ Zrodla:
 - [ ] Upewnic sie, ze style guide trafia do pozniejszych promptow.
 - [x] Dodac testy walidacji premisy, importu `premise_development` i promptu
       koncepcji.
+- [ ] Upewnić się, że każde generowane pole koncepcji ma przycisk AI, prompt
+      bierze pozostałe kluczowe pola koncepcji, a wynik po polsku zachowuje
+      polskie znaki.
 
 ### Faza 3: Plan powiesci
 
@@ -141,6 +152,9 @@ Zrodla:
 - [ ] Dodac kontrole jakosci: rozdzial bez konfliktu, brak payoffu,
       final bez przygotowania.
 - [ ] Dodac testy importu outline, `orderIndex`, reorder i walidacji konfliktu.
+- [ ] Upewnić się, że generowanie pól planu uwzględnia kluczowe pola
+      koncepcji i Story Bible oraz zachowuje polskie znaki w wynikach po
+      polsku.
 
 ### Faza 4: Postacie i relacje
 
@@ -160,6 +174,9 @@ Zrodla:
 - [ ] Upewnic sie, ze prompt sceny moze dostac glos i wiedze postaci POV.
 - [ ] Dodac testy profilu, importu JSON, relacji i filtrowania postaci w
       promptach.
+- [ ] Upewnić się, że każde generowane pole profilu postaci ma przycisk AI,
+      a prompt uwzględnia kluczowe pola książki, role fabularne, relacje i
+      istniejące postacie.
 
 ### Faza 5: Swiat i reguly
 
@@ -179,6 +196,8 @@ Zrodla:
 - [ ] Upewnic sie, ze prompt sceny zawiera tylko istotne reguly i lokacje.
 - [ ] Dodac testy importu elementu swiata, powiazan lokacji/regul i promptu
       sceny z lokacja.
+- [ ] Upewnić się, że generowanie pól świata i reguł ma akcje AI per pole oraz
+      używa kluczowego kontekstu książki, postaci, wątków i istniejących reguł.
 
 ### Faza 6: Watki, ciaglosc i wiedza
 
@@ -218,6 +237,8 @@ Zrodla:
 - [ ] Dodac warianty odpowiedzi AI i tryby wstawiania wyniku.
 - [ ] Wymagac decyzji uzytkownika przed zmiana tekstu przez AI.
 - [ ] Dodac testy licznika, zaznaczenia, promptu sceny, anulowania i rewrite.
+- [ ] Upewnić się, że generowanie pól sceny i akcje edytora uwzględniają
+      kluczowe pola sceny, rozdziału, Story Bible i style guide.
 
 ### Faza 8: Ekstrakcja dynamiczna
 

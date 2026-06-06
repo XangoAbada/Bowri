@@ -45,6 +45,12 @@ Pokazuje:
 - edytor tekstu;
 - panel AI.
 
+Każde generowane albo uzupełniane pole sceny, np. cel, konflikt, wynik, POV,
+lokacja, postacie i aktywne wątki, powinno mieć przycisk AI lub mini akcję AI.
+Prompt dla pola sceny musi uwzględniać kluczowe pola sceny, rozdziału,
+aktywny plan, Story Bible i style guide. Wyniki po polsku mają zachowywać
+poprawne polskie znaki.
+
 ## Popup AI Dla Zaznaczenia
 
 Opcje:
@@ -137,6 +143,9 @@ Wariant ma:
 - Autosave nie traci danych po restarcie.
 - Zaznaczenie tekstu pokazuje popup AI.
 - AI moze wygenerowac scene z planu.
+- Generowanie pól sceny działa per-field i używa kluczowego kontekstu sceny,
+  rozdziału, Story Bible oraz style guide.
+- Wyniki AI po polsku używają poprawnych polskich znaków.
 - AI moze przepisac zaznaczenie bez ruszania reszty tekstu.
 - Wstawienie wyniku wymaga decyzji uzytkownika.
 
@@ -146,6 +155,6 @@ Wariant ma:
 - zaznaczony tekst trafia do promptu;
 - brak zaznaczenia ukrywa akcje rewrite;
 - draft scene zawiera Story Bible context;
+- prompt per-field sceny zawiera kluczowe pola sceny, rozdziału i Story Bible;
 - anulowanie generowania nie zmienia tekstu;
 - zaakceptowanie rewrite zmienia tylko zaznaczenie.
-

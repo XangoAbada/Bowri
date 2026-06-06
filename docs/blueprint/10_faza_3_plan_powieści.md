@@ -53,6 +53,12 @@ Wybor struktury jest pomoca, nie blokada.
 - zaproponuj alternatywny midpoint;
 - zaproponuj mocniejszy final.
 
+Każde generowane albo uzupełniane pole planu powinno mieć akcję AI per pole,
+jeśli autor może pracować nad nim osobno. Prompt musi uwzględniać kluczowe
+pola koncepcji, aktywny plan, istniejące rozdziały, wątki, postacie i style
+guide, zależnie od tego, czego dotyczy pole. Wyniki po polsku mają zachowywać
+poprawne polskie znaki.
+
 ## Plan Rozdzialow
 
 Kazdy rozdzial:
@@ -138,6 +144,8 @@ Aplikacja powinna oznaczac:
 - Mozna wygenerowac i zapisac outline.
 - Rozdzialy tworza sie jako oddzielne encje.
 - Rozdzial ma powiazania z watkami i postaciami.
+- Generowanie pól planu uwzględnia kluczowy kontekst koncepcji i Story Bible.
+- Wyniki AI po polsku używają poprawnych polskich znaków.
 - AI moze wygenerowac alternatywny plan bez kasowania obecnego.
 - Uzytkownik moze oznaczyc wybrany plan jako aktywny.
 
@@ -148,4 +156,4 @@ Aplikacja powinna oznaczac:
 - przesuwanie rozdzialow;
 - walidacja pustego konfliktu;
 - prompt outline zawiera premise, gatunek, odbiorcow i styl.
-
+- prompt per-field planu zawiera kluczowe pola sąsiednie.

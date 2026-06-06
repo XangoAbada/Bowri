@@ -85,61 +85,61 @@ const emptyForm: ConceptForm = {
 };
 
 const fieldHints: Record<ConceptFieldKey, string> = {
-  title: "Tytul finalny jest kandydatem do okladki i eksportu.",
-  workingTitle: "Tytul roboczy pomaga szybko rozpoznac projekt.",
+  title: "Tytuł finalny jest kandydatem do okładki i eksportu.",
+  workingTitle: "Tytuł roboczy pomaga szybko rozpoznać projekt.",
   premise: "Premise to 1-2 zdania o bohaterze, konflikcie i stawce.",
-  expandedPremise: "Rozszerzona premisa trzyma rdzen historii w jednym akapicie.",
-  logline: "Logline pokazuje bohatera, cel, przeszkode i stawke w jednym zdaniu.",
-  centralConflict: "Konflikt centralny opisuje glowne tarcie napedzajace fabule.",
-  stakes: "Stawki mowia, co zostanie utracone, jesli bohater przegra.",
+  expandedPremise: "Rozszerzona premisa trzyma rdzeń historii w jednym akapicie.",
+  logline: "Logline pokazuje bohatera, cel, przeszkodę i stawkę w jednym zdaniu.",
+  centralConflict: "Konflikt centralny opisuje główne tarcie napędzające fabułę.",
+  stakes: "Stawki mówią, co zostanie utracone, jeśli bohater przegra.",
   genre: "Gatunek ustawia konwencje i oczekiwania czytelnika.",
-  subgenre: "Podgatunek doprecyzowuje obietnice bez blokowania hybryd.",
-  targetAudience: "Odbiorcy steruja jezykiem, tempem i poziomem mroku.",
+  subgenre: "Podgatunek doprecyzowuje obietnicę bez blokowania hybryd.",
+  targetAudience: "Odbiorcy sterują językiem, tempem i poziomem mroku.",
   tone: "Ton pilnuje nastroju scen i propozycji.",
-  pointOfView: "Punkt widzenia pomaga utrzymac spojna narracje scen.",
-  targetWordCount: "Docelowa liczba slow pomaga planowac rozdzialy i tempo.",
-  themesJson: "Tematy zapisuj jako krotkie etykiety oddzielone przecinkami.",
-  unwantedThemes: "Granice i tematy niechciane ograniczaja pozniejsze prompty.",
-  alternativeTitlesJson: "Alternatywne tytuly zapisuj jako liste oddzielona przecinkami.",
-  titleChoiceNote: "Notatka wyboru tytulu przechowuje powod decyzji autora.",
-  styleGuide: "Style guide zbiera preferencje jezyka, rytmu i zakazy."
+  pointOfView: "Punkt widzenia pomaga utrzymać spójną narrację scen.",
+  targetWordCount: "Docelowa liczba słów pomaga planować rozdziały i tempo.",
+  themesJson: "Tematy zapisuj jako krótkie etykiety oddzielone przecinkami.",
+  unwantedThemes: "Granice i tematy niechciane ograniczają późniejsze prompty.",
+  alternativeTitlesJson: "Alternatywne tytuły zapisuj jako listę oddzieloną przecinkami.",
+  titleChoiceNote: "Notatka wyboru tytułu przechowuje powód decyzji autora.",
+  styleGuide: "Style guide zbiera preferencje języka, rytmu i zakazy."
 };
 
 const genreOptions: ChoiceOption[] = [
-  { value: "fantasy", hint: "Magia, reguly swiata, obietnica niezwyklosci." },
-  { value: "kryminal", hint: "Zagadka, tropy, sledztwo i ujawnianie prawdy." },
-  { value: "obyczajowa", hint: "Relacje, codziennosc i emocjonalna przemiana." },
-  { value: "thriller", hint: "Presja czasu, zagrozenie i wysokie napiecie." },
-  { value: "horror", hint: "Lek, niepewnosc i narastajace poczucie grozy." },
+  { value: "fantasy", hint: "Magia, reguły świata, obietnica niezwykłości." },
+  { value: "kryminal", hint: "Zagadka, tropy, śledztwo i ujawnianie prawdy." },
+  { value: "obyczajowa", hint: "Relacje, codzienność i emocjonalna przemiana." },
+  { value: "thriller", hint: "Presja czasu, zagrożenie i wysokie napięcie." },
+  { value: "horror", hint: "Lęk, niepewność i narastające poczucie grozy." },
   { value: "science fiction", hint: "Technologia, spekulacja i konsekwencje idei." },
-  { value: "romans", hint: "Relacja uczuciowa jako glowna os napiecia." },
-  { value: "realizm magiczny", hint: "Niezwyklosc traktowana jak codziennosc." }
+  { value: "romans", hint: "Relacja uczuciowa jako główna oś napięcia." },
+  { value: "realizm magiczny", hint: "Niezwykłość traktowana jak codzienność." }
 ];
 
 const subgenreOptions: ChoiceOption[] = [
   { value: "dark academia", hint: "Sekrety, instytucje i intelektualny mrok." },
-  { value: "cozy mystery", hint: "Zagadka bez brutalnosci na pierwszym planie." },
-  { value: "urban fantasy", hint: "Niezwyklosc wpisana we wspolczesne miasto." },
-  { value: "space opera", hint: "Szeroka skala, przygoda i konflikt systemow." },
-  { value: "slow burn romance", hint: "Relacja budowana przez dluzsze napiecie." }
+  { value: "cozy mystery", hint: "Zagadka bez brutalności na pierwszym planie." },
+  { value: "urban fantasy", hint: "Niezwykłość wpisana we współczesne miasto." },
+  { value: "space opera", hint: "Szeroka skala, przygoda i konflikt systemów." },
+  { value: "slow burn romance", hint: "Relacja budowana przez dłuższe napięcie." }
 ];
 
 const audienceOptions: ChoiceOption[] = [
-  { value: "adult", hint: "Dorosly czytelnik, wieksza zlozonosc i tematy." },
-  { value: "YA", hint: "Mlodzi dorosli, szybkie tempo i silna identyfikacja." },
-  { value: "new adult", hint: "Wejscie w doroslosc, relacje i niezaleznosc." },
-  { value: "middle grade", hint: "Mlodsi czytelnicy, przygoda i klarowny konflikt." },
-  { value: "dzieci", hint: "Prostszy jezyk, bezpieczniejsze tematy i wyrazny rytm." },
-  { value: "fani kryminalu", hint: "Czytelnicy oczekujacy tropow, zwrotow i fair play." },
-  { value: "fani fantasy", hint: "Czytelnicy lubiacy swiat, mitologie i konsekwencje magii." }
+  { value: "adult", hint: "Dorosły czytelnik, większa złożoność i tematy." },
+  { value: "YA", hint: "Młodzi dorośli, szybkie tempo i silna identyfikacja." },
+  { value: "new adult", hint: "Wejście w dorosłość, relacje i niezależność." },
+  { value: "middle grade", hint: "Młodsi czytelnicy, przygoda i klarowny konflikt." },
+  { value: "dzieci", hint: "Prostszy język, bezpieczniejsze tematy i wyraźny rytm." },
+  { value: "fani kryminału", hint: "Czytelnicy oczekujący tropów, zwrotów i fair play." },
+  { value: "fani fantasy", hint: "Czytelnicy lubiący świat, mitologię i konsekwencje magii." }
 ];
 
 const toneOptions: ChoiceOption[] = [
-  { value: "mroczny", hint: "Ciezszy nastroj, tajemnica i moralne koszty." },
-  { value: "cieply", hint: "Bliskosc, nadzieja i empatia wobec postaci." },
-  { value: "ironiczny", hint: "Dystans, blyskotliwosc i podwazajacy narrator." },
-  { value: "liryczny", hint: "Obrazowy jezyk, rytm i emocjonalna gestosc." },
-  { value: "napiety", hint: "Presja i ciagle pytanie co dalej." },
+  { value: "mroczny", hint: "Cięższy nastrój, tajemnica i moralne koszty." },
+  { value: "ciepły", hint: "Bliskość, nadzieja i empatia wobec postaci." },
+  { value: "ironiczny", hint: "Dystans, błyskotliwość i podważający narrator." },
+  { value: "liryczny", hint: "Obrazowy język, rytm i emocjonalna gęstość." },
+  { value: "napięty", hint: "Presja i ciągłe pytanie co dalej." },
   { value: "kameralny", hint: "Mniejsza skala, intymne sceny i relacje." },
   { value: "epicki", hint: "Szeroka skala, wysokie stawki i rozmach." },
   { value: "humorystyczny", hint: "Lekki rytm, komizm sytuacyjny lub dialogowy." }
@@ -147,20 +147,20 @@ const toneOptions: ChoiceOption[] = [
 
 const pointOfViewOptions: ChoiceOption[] = [
   { value: "pierwsza osoba", hint: "Blisko emocji i subiektywnej narracji." },
-  { value: "trzecia osoba ograniczona", hint: "Blisko POV, ale z wieksza kontrola dystansu." },
-  { value: "trzecia osoba wszechwiedzaca", hint: "Szersza skala i swobodny przeglad swiata." },
+  { value: "trzecia osoba ograniczona", hint: "Blisko POV, ale z większą kontrolą dystansu." },
+  { value: "trzecia osoba wszechwiedząca", hint: "Szersza skala i swobodny przegląd świata." },
   { value: "wielu POV", hint: "Kilka perspektyw w jednej strukturze." },
-  { value: "czas terazniejszy", hint: "Natychmiastowosc i mocniejszy puls scen." },
-  { value: "czas przeszly", hint: "Klasyczny rytm narracyjny." }
+  { value: "czas teraźniejszy", hint: "Natychmiastowość i mocniejszy puls scen." },
+  { value: "czas przeszły", hint: "Klasyczny rytm narracyjny." }
 ];
 
 const themeOptions: ChoiceOption[] = [
-  { value: "tozsamosc", hint: "Kim jest bohater, kiedy odpadaja role." },
-  { value: "pamiec", hint: "Co zostaje z prawdy po czasie i manipulacji." },
-  { value: "wladza", hint: "Koszt kontroli nad innymi." },
-  { value: "rodzina", hint: "Wiezy, lojalnosc i dziedziczone rany." },
-  { value: "wolnosc", hint: "Cena samostanowienia." },
-  { value: "zdrada", hint: "Pekniecie zaufania i jego konsekwencje." }
+  { value: "tożsamość", hint: "Kim jest bohater, kiedy odpadają role." },
+  { value: "pamięć", hint: "Co zostaje z prawdy po czasie i manipulacji." },
+  { value: "władza", hint: "Koszt kontroli nad innymi." },
+  { value: "rodzina", hint: "Więzi, lojalność i dziedziczone rany." },
+  { value: "wolność", hint: "Cena samostanowienia." },
+  { value: "zdrada", hint: "Pęknięcie zaufania i jego konsekwencje." }
 ];
 
 export function BookConceptPage({ projectId }: BookConceptPageProps) {
@@ -350,7 +350,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
       if (result.status !== "success" || !result.rawOutput) {
         throw new GenerationError(
-          result.errorMessage || "Codex CLI nie zwrocil wyniku.",
+          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
           result.rawOutput ?? ""
         );
       }
@@ -410,8 +410,8 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     },
     onSuccess: async (result) => {
       setAiError("");
-      setCoverMessage("Utworzono okladke.");
-      setCoverProgressText("Okladka zapisana.");
+      setCoverMessage("Utworzono okładkę.");
+      setCoverProgressText("Okładka zapisana.");
       setCoverStartedAt(null);
       setStreamedCoverPreview(coverImageSource(result.book.coverImagePath));
       await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
@@ -419,7 +419,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      setCoverProgressText("Generowanie okladki zatrzymane.");
+      setCoverProgressText("Generowanie okładki zatrzymane.");
       setCoverStartedAt(null);
       setAiError(message);
     }
@@ -435,7 +435,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     function updateProgressText() {
       const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
       if (elapsedSeconds < 2) {
-        setCoverProgressText("Przygotowuje prompt okladki...");
+        setCoverProgressText("Przygotowuję prompt okładki...");
         return;
       }
       if (elapsedSeconds < 8) {
@@ -443,7 +443,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
         return;
       }
       if (elapsedSeconds < 45) {
-        setCoverProgressText(`Codex CLI generuje okladke (${elapsedSeconds}s)...`);
+        setCoverProgressText(`Codex CLI generuje okładkę (${elapsedSeconds}s)...`);
         return;
       }
       setCoverProgressText(`Dopracowuje finalny obraz (${elapsedSeconds}s)...`);
@@ -477,7 +477,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     setAiError("");
     setCoverMessage("");
     setStreamedCoverPreview("");
-    setCoverProgressText("Przygotowuje prompt okladki...");
+    setCoverProgressText("Przygotowuję prompt okładki...");
     setCoverStartedAt(Date.now());
     generateCoverMutation.mutate();
   }
@@ -498,35 +498,35 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
         <div className="section-title-row">
           <div>
             <p className="eyebrow">Faza 2</p>
-            <h2>Koncepcja ksiazki</h2>
+            <h2>Koncepcja książki</h2>
           </div>
         </div>
 
         {projectQuery.isError ? (
           <div className="empty-state">
-            <h3>Nie mozna wczytac projektu</h3>
-            <p>Sprawdz, czy aplikacja dziala w Tauri i baza jest dostepna.</p>
+            <h3>Nie można wczytać projektu</h3>
+            <p>Sprawdź, czy aplikacja działa w Tauri i baza jest dostępna.</p>
           </div>
         ) : null}
 
         <form className="concept-form" onSubmit={handleSubmit}>
-          <FormSection title="Tytuly">
+          <FormSection title="Tytuły">
             <div className="form-grid">
               <TextField
-                label="Tytul finalny"
+                label="Tytuł finalny"
                 field="title"
                 value={form.title}
-                placeholder="Tytul, ktory trafi na okladke"
+                placeholder="Tytuł, który trafi na okładkę"
                 disabled={aiDisabled}
                 loading={activeField === "title"}
                 onGenerate={generateField}
                 onChange={(value) => updateField("title", value)}
               />
               <TextField
-                label="Tytul roboczy"
+                label="Tytuł roboczy"
                 field="workingTitle"
                 value={form.workingTitle}
-                placeholder="Tytul roboczy"
+                placeholder="Tytuł roboczy"
                 disabled={aiDisabled}
                 loading={activeField === "workingTitle"}
                 onGenerate={generateField}
@@ -534,10 +534,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               />
             </div>
             <TextField
-              label="Alternatywne tytuly"
+              label="Alternatywne tytuły"
               field="alternativeTitlesJson"
               value={form.alternativeTitlesJson}
-              placeholder="Jeden tytul na linie albo po przecinku"
+              placeholder="Jeden tytuł na linię albo po przecinku"
               rows={3}
               disabled={aiDisabled}
               loading={activeField === "alternativeTitlesJson"}
@@ -545,10 +545,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               onChange={(value) => updateField("alternativeTitlesJson", value)}
             />
             <TextField
-              label="Notatka wyboru tytulu"
+              label="Notatka wyboru tytułu"
               field="titleChoiceNote"
               value={form.titleChoiceNote}
-              placeholder="Dlaczego ten tytul wygrywa"
+              placeholder="Dlaczego ten tytuł wygrywa"
               rows={3}
               disabled={aiDisabled}
               loading={activeField === "titleChoiceNote"}
@@ -557,7 +557,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
             />
           </FormSection>
 
-          <FormSection title="Rdzen historii">
+          <FormSection title="Rdzeń historii">
             <TextField
               label="Premise"
               field="premise"
@@ -585,7 +585,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 label="Konflikt centralny"
                 field="centralConflict"
                 value={form.centralConflict}
-                placeholder="Glowne tarcie fabularne"
+                placeholder="Główne tarcie fabularne"
                 rows={3}
                 disabled={aiDisabled}
                 loading={activeField === "centralConflict"}
@@ -597,7 +597,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               label="Rozszerzona premisa"
               field="expandedPremise"
               value={form.expandedPremise}
-              placeholder="Akapit rozwijajacy zalozenie ksiazki"
+              placeholder="Akapit rozwijający założenie książki"
               rows={5}
               disabled={aiDisabled}
               loading={activeField === "expandedPremise"}
@@ -608,7 +608,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               label="Stawki"
               field="stakes"
               value={form.stakes}
-              placeholder="Co bohater traci, jesli przegra"
+              placeholder="Co bohater traci, jeśli przegra"
               rows={4}
               disabled={aiDisabled}
               loading={activeField === "stakes"}
@@ -670,7 +670,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 loading={activeField === "pointOfView"}
               />
               <TextField
-                label="Docelowa liczba slow"
+                label="Docelowa liczba słów"
                 field="targetWordCount"
                 value={form.targetWordCount}
                 placeholder="np. 85000"
@@ -697,7 +697,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               label="Granice i tematy niechciane"
               field="unwantedThemes"
               value={form.unwantedThemes}
-              placeholder="Czego unikac w pozniejszych promptach"
+              placeholder="Czego unikać w późniejszych promptach"
               rows={4}
               disabled={aiDisabled}
               loading={activeField === "unwantedThemes"}
@@ -708,7 +708,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               label="Style guide"
               field="styleGuide"
               value={form.styleGuide}
-              placeholder="Notatki o jezyku, rytmie, zakazach i preferencjach"
+              placeholder="Notatki o języku, rytmie, zakazach i preferencjach"
               rows={5}
               disabled={aiDisabled}
               loading={activeField === "styleGuide"}
@@ -724,14 +724,14 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               disabled={saveMutation.isPending || !projectQuery.data}
             >
               <Save size={16} />
-              {saveMutation.isPending ? "Zapisuje" : "Zapisz"}
+              {saveMutation.isPending ? "Zapisuję" : "Zapisz"}
             </button>
             {saveMessage ? <span className="success-text">{saveMessage}</span> : null}
             {validationMessage ? (
               <span className="warning-text">{validationMessage}</span>
             ) : null}
             {saveMutation.isError && !validationMessage ? (
-              <span className="warning-text">Nie udalo sie zapisac koncepcji.</span>
+              <span className="warning-text">Nie udało się zapisać koncepcji.</span>
             ) : null}
           </div>
         </form>
@@ -751,19 +751,19 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       <aside className="content-panel cover-panel">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Okladka</p>
-            <h2>Robocza okladka</h2>
+            <p className="eyebrow">Okładka</p>
+            <h2>Robocza okładka</h2>
           </div>
           <ImageIcon size={20} aria-hidden="true" />
         </div>
 
         <div className={coverSrc ? "cover-preview has-image" : "cover-preview"}>
           {coverSrc ? (
-            <img src={coverSrc} alt="Okladka robocza" />
+            <img src={coverSrc} alt="Okładka robocza" />
           ) : (
             <div className="cover-placeholder">
               <ImageIcon size={30} aria-hidden="true" />
-              <span>Brak okladki</span>
+              <span>Brak okładki</span>
             </div>
           )}
         </div>
@@ -783,14 +783,14 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
             !projectQuery.data ||
             codexUnavailable
           }
-          title="Utworz okladke na podstawie danych z widoku koncepcji"
+          title="Utwórz okładkę na podstawie danych z widoku koncepcji"
         >
           {generateCoverMutation.isPending ? (
             <Loader2 size={16} className="spin-icon" />
           ) : (
             <Sparkles size={16} />
           )}
-          {generateCoverMutation.isPending ? "Tworze" : "Utworz okladke"}
+          {generateCoverMutation.isPending ? "Tworzę" : "Utwórz okładkę"}
         </button>
 
         {coverProgressText ? (
@@ -814,7 +814,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
         {coverMessage ? <p className="success-text">{coverMessage}</p> : null}
         {generateCoverMutation.isError ? (
-          <p className="warning-text">Nie udalo sie utworzyc okladki.</p>
+          <p className="warning-text">Nie udało się utworzyć okładki.</p>
         ) : null}
         {generateCoverMutation.isError && aiError ? (
           <p className="warning-text">{aiError}</p>
@@ -946,7 +946,7 @@ function AiFieldButton({
       className="icon-button ai-field-button"
       onClick={() => onGenerate(field)}
       disabled={disabled}
-      title={`Generuj pole "${config.label}" z AI. Prompt uwzgledni pozostale pola koncepcji.`}
+      title={`Generuj pole "${config.label}" z AI. Prompt uwzględni pozostałe pola koncepcji.`}
       aria-label={`Generuj ${config.label} z AI`}
     >
       {loading ? <Loader2 size={15} className="spin-icon" /> : <Sparkles size={15} />}
@@ -1038,7 +1038,7 @@ function MultiChoiceField({
               key={selected}
               className="choice-chip selected custom"
               onClick={() => toggleChoice(selected)}
-              title={`Wlasna opcja: ${selected}. Kliknij, aby usunac.`}
+              title={`Własna opcja: ${selected}. Kliknij, aby usunąć.`}
               aria-pressed
             >
               {selected}
@@ -1056,16 +1056,16 @@ function MultiChoiceField({
                 addCustomValue();
               }
             }}
-            placeholder="Wlasna opcja"
-            title={`Dopisz wlasna wartosc dla pola ${label}.`}
-            aria-label={`Wlasna opcja ${label}`}
+            placeholder="Własna opcja"
+            title={`Dopisz własną wartość dla pola ${label}.`}
+            aria-label={`Własna opcja ${label}`}
           />
           <button
             type="button"
             className="icon-button"
             onClick={addCustomValue}
-            title={`Dodaj wlasna opcje do pola ${label}`}
-            aria-label={`Dodaj wlasna opcje ${label}`}
+            title={`Dodaj własną opcję do pola ${label}`}
+            aria-label={`Dodaj własną opcję ${label}`}
           >
             <Plus size={15} />
           </button>
@@ -1107,15 +1107,15 @@ function conceptInputFromForm(form: ConceptForm): BookConceptInput {
 
 function validateConceptForm(form: ConceptForm): string {
   if (form.targetWordCount.trim() && parseOptionalPositiveInt(form.targetWordCount) === null) {
-    return "Docelowa liczba slow musi byc dodatnia liczba albo pozostac pusta.";
+    return "Docelowa liczba słów musi być dodatnią liczbą albo pozostać pusta.";
   }
 
   if (form.premise.length > 1200) {
-    return "Premise jest zbyt dluga; przenies szczegoly do rozszerzonej premisy.";
+    return "Premise jest zbyt długa; przenieś szczegóły do rozszerzonej premisy.";
   }
 
   if (form.logline.length > 700) {
-    return "Logline jest zbyt dlugi; powinien zmiescic sie w jednym zwartym zdaniu.";
+    return "Logline jest zbyt długi; powinien zmieścić się w jednym zwartym zdaniu.";
   }
 
   return "";

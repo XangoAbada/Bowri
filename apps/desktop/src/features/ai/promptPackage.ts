@@ -114,21 +114,21 @@ export const longConceptFields: ConceptFieldKey[] = [
 export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = {
   title: {
     key: "title",
-    label: "Tytul finalny",
+    label: "Tytuł finalny",
     action: "generate_title",
-    userInstruction: "Wygeneruj jeden dopracowany tytul finalny dla tej ksiazki.",
+    userInstruction: "Wygeneruj jeden dopracowany tytuł finalny dla tej książki.",
     currentWork:
-      "Autor chce tytul, ktory moze zastapic robocza nazwe i pasuje do obietnicy czytelniczej.",
+      "Autor chce tytuł, który może zastąpić roboczą nazwę i pasuje do obietnicy czytelniczej.",
     acceptsValues: false
   },
   workingTitle: {
     key: "workingTitle",
-    label: "Tytul roboczy",
+    label: "Tytuł roboczy",
     action: "generate_working_title",
     userInstruction:
-      "Wygeneruj jedna mocna propozycje tytulu roboczego dla tej ksiazki.",
+      "Wygeneruj jedną mocną propozycję tytułu roboczego dla tej książki.",
     currentWork:
-      "Autor chce tytul roboczy, ktory od razu niesie gatunek, ton i obietnice historii.",
+      "Autor chce tytuł roboczy, który od razu niesie gatunek, ton i obietnicę historii.",
     acceptsValues: false
   },
   premise: {
@@ -136,9 +136,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Premise",
     action: "expand_premise",
     userInstruction:
-      "Rozwin surowa premise w strukturalny fundament koncepcji ksiazki.",
+      "Rozwiń surową premise w strukturalny fundament koncepcji książki.",
     currentWork:
-      "Autor chce premise, logline, konflikt centralny, stawki i tematy, ktore moze zaakceptowac czesciowo.",
+      "Autor chce premise, logline, konflikt centralny, stawki i tematy, które może zaakceptować częściowo.",
     acceptsValues: false
   },
   expandedPremise: {
@@ -146,9 +146,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Rozszerzona premisa",
     action: "generate_expanded_premise",
     userInstruction:
-      "Wygeneruj rozszerzona premise tej ksiazki w jednym zwartym akapicie.",
+      "Wygeneruj rozszerzoną premise tej książki w jednym zwartym akapicie.",
     currentWork:
-      "Autor chce szerszy opis rdzenia historii bez przechodzenia jeszcze do planu rozdzialow.",
+      "Autor chce szerszy opis rdzenia historii bez przechodzenia jeszcze do planu rozdziałów.",
     acceptsValues: false
   },
   logline: {
@@ -156,27 +156,27 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Logline",
     action: "generate_logline",
     userInstruction:
-      "Wygeneruj zwiezly logline tej ksiazki: bohater, cel, przeszkoda i stawka.",
+      "Wygeneruj zwięzły logline tej książki: bohater, cel, przeszkoda i stawka.",
     currentWork:
-      "Autor chce jednozdaniowy logline, ktory klarownie komunikuje obietnice historii.",
+      "Autor chce jednozdaniowy logline, który klarownie komunikuje obietnicę historii.",
     acceptsValues: false
   },
   centralConflict: {
     key: "centralConflict",
     label: "Konflikt centralny",
     action: "generate_central_conflict",
-    userInstruction: "Wygeneruj klarowny konflikt centralny tej ksiazki.",
+    userInstruction: "Wygeneruj klarowny konflikt centralny tej książki.",
     currentWork:
-      "Autor chce rdzen napiecia fabularnego, ktory bedzie napedzal decyzje bohatera.",
+      "Autor chce rdzeń napięcia fabularnego, który będzie napędzał decyzje bohatera.",
     acceptsValues: false
   },
   stakes: {
     key: "stakes",
     label: "Stawki",
     action: "generate_stakes",
-    userInstruction: "Wygeneruj stawki osobiste i fabularne tej ksiazki.",
+    userInstruction: "Wygeneruj stawki osobiste i fabularne tej książki.",
     currentWork:
-      "Autor chce wiedziec, co bohater i swiat traca, jesli historia pojdzie zle.",
+      "Autor chce wiedzieć, co bohater i świat tracą, jeśli historia pójdzie źle.",
     acceptsValues: false
   },
   genre: {
@@ -184,9 +184,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Gatunek",
     action: "suggest_genre",
     userInstruction:
-      "Zaproponuj najtrafniejszy zestaw gatunkow lub podgatunkow dla tej ksiazki.",
+      "Zaproponuj najtrafniejszy zestaw gatunków lub podgatunków dla tej książki.",
     currentWork:
-      "Autor chce kilka etykiet gatunkowych, ktore pomoga pozniejszym promptom trzymac konwencje.",
+      "Autor chce kilka etykiet gatunkowych, które pomogą późniejszym promptom trzymać konwencję.",
     acceptsValues: true
   },
   subgenre: {
@@ -194,9 +194,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Podgatunek",
     action: "suggest_subgenre",
     userInstruction:
-      "Zaproponuj podgatunek lub mieszanke podgatunkow dla tej ksiazki.",
+      "Zaproponuj podgatunek lub mieszankę podgatunków dla tej książki.",
     currentWork:
-      "Autor chce doprecyzowac konwencje bez ograniczania glownego gatunku.",
+      "Autor chce doprecyzować konwencję bez ograniczania głównego gatunku.",
     acceptsValues: true
   },
   targetAudience: {
@@ -204,9 +204,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Odbiorcy",
     action: "suggest_target_audience",
     userInstruction:
-      "Zaproponuj docelowych odbiorcow tej ksiazki jako krotkie etykiety.",
+      "Zaproponuj docelowych odbiorców tej książki jako krótkie etykiety.",
     currentWork:
-      "Autor chce etykiety czytelnikow, ktore pomoga dopasowac jezyk, poziom mroku i tempo.",
+      "Autor chce etykiety czytelników, które pomogą dopasować język, poziom mroku i tempo.",
     acceptsValues: true
   },
   tone: {
@@ -214,9 +214,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Ton",
     action: "suggest_tone",
     userInstruction:
-      "Zaproponuj zestaw tonow narracyjnych pasujacych do tej ksiazki.",
+      "Zaproponuj zestaw tonów narracyjnych pasujących do tej książki.",
     currentWork:
-      "Autor chce etykiety tonu, ktore beda sterowac nastrojem i stylem pozniejszych generacji.",
+      "Autor chce etykiety tonu, które będą sterować nastrojem i stylem późniejszych generacji.",
     acceptsValues: true
   },
   pointOfView: {
@@ -224,28 +224,28 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Punkt widzenia",
     action: "suggest_point_of_view",
     userInstruction:
-      "Zaproponuj najlepszy punkt widzenia i tryb narracji dla tej ksiazki.",
+      "Zaproponuj najlepszy punkt widzenia i tryb narracji dla tej książki.",
     currentWork:
-      "Autor chce decyzje narracyjna, ktora bedzie zasilac pozniejsze prompty scen.",
+      "Autor chce decyzję narracyjną, która będzie zasilać późniejsze prompty scen.",
     acceptsValues: true
   },
   targetWordCount: {
     key: "targetWordCount",
-    label: "Docelowa liczba slow",
+    label: "Docelowa liczba słów",
     action: "suggest_target_word_count",
     userInstruction:
-      "Zaproponuj docelowa liczbe slow dla tej ksiazki jako jedna liczbe.",
+      "Zaproponuj docelową liczbę słów dla tej książki jako jedną liczbę.",
     currentWork:
-      "Autor chce realistyczna dlugosc dopasowana do gatunku i odbiorcow.",
+      "Autor chce realistyczną długość dopasowaną do gatunku i odbiorców.",
     acceptsValues: false
   },
   themesJson: {
     key: "themesJson",
     label: "Tematy",
     action: "suggest_themes",
-    userInstruction: "Zaproponuj glowne tematy tej ksiazki jako krotkie etykiety.",
+    userInstruction: "Zaproponuj główne tematy tej książki jako krótkie etykiety.",
     currentWork:
-      "Autor chce tematy, ktore beda wracac w planie, postaciach i scenach.",
+      "Autor chce tematy, które będą wracać w planie, postaciach i scenach.",
     acceptsValues: true
   },
   unwantedThemes: {
@@ -253,27 +253,27 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Granice i tematy niechciane",
     action: "suggest_unwanted_themes",
     userInstruction:
-      "Zaproponuj granice tresci i tematy, ktorych ta ksiazka powinna unikac.",
-    currentWork: "Autor chce jasne ograniczenia dla pozniejszych promptow AI.",
+      "Zaproponuj granice treści i tematy, których ta książka powinna unikać.",
+    currentWork: "Autor chce jasne ograniczenia dla późniejszych promptów AI.",
     acceptsValues: false
   },
   alternativeTitlesJson: {
     key: "alternativeTitlesJson",
-    label: "Alternatywne tytuly",
+    label: "Alternatywne tytuły",
     action: "generate_alternative_titles",
-    userInstruction: "Wygeneruj liste alternatywnych tytulow dla tej ksiazki.",
+    userInstruction: "Wygeneruj listę alternatywnych tytułów dla tej książki.",
     currentWork:
-      "Autor chce warianty tytulu, ktore moze porownac z tytulem roboczym i finalnym.",
+      "Autor chce warianty tytułu, które może porównać z tytułem roboczym i finalnym.",
     acceptsValues: true
   },
   titleChoiceNote: {
     key: "titleChoiceNote",
-    label: "Notatka wyboru tytulu",
+    label: "Notatka wyboru tytułu",
     action: "generate_title_choice_note",
     userInstruction:
-      "Napisz krotka notatke uzasadniajaca wybor tytulu tej ksiazki.",
+      "Napisz krótką notatkę uzasadniającą wybór tytułu tej książki.",
     currentWork:
-      "Autor chce zapamietac, dlaczego wybrany tytul najlepiej niesie obietnice historii.",
+      "Autor chce zapamiętać, dlaczego wybrany tytuł najlepiej niesie obietnicę historii.",
     acceptsValues: false
   },
   styleGuide: {
@@ -281,9 +281,9 @@ export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = 
     label: "Style guide",
     action: "generate_style_guide",
     userInstruction:
-      "Wygeneruj praktyczny style guide dla tej ksiazki: jezyk, rytm, tempo, zakazy i preferencje.",
+      "Wygeneruj praktyczny style guide dla tej książki: język, rytm, tempo, zakazy i preferencje.",
     currentWork:
-      "Autor chce uzyteczne notatki stylu do wielokrotnego uzycia w promptach scen i redakcji.",
+      "Autor chce użyteczne notatki stylu do wielokrotnego użycia w promptach scen i redakcji.",
     acceptsValues: false
   }
 };
@@ -326,21 +326,22 @@ export function renderPromptPackage(promptPackage: PromptPackage): string {
   const config = conceptFieldConfigs[targetField];
 
   return `# Role
-Jestes asystentem pisarskim pracujacym wewnatrz StoryForge2.
+Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
 
 # Task
 ${promptPackage.userInstruction}
 
 # Hard Rules
-- Pisz po polsku, chyba ze projekt ma inny jezyk.
-- Nie zapisuj ani nie zmieniaj kanonu; zwroc tylko propozycje.
-- Uwzglednij wszystkie pola z Book Context, nawet jesli docelowe pole jest puste.
+- Pisz po polsku, chyba że projekt ma inny język.
+- Dla locale "pl" używaj poprawnych polskich znaków.
+- Nie zapisuj ani nie zmieniaj kanonu; zwróć tylko propozycję.
+- Uwzględnij wszystkie pola z Book Context, nawet jeśli docelowe pole jest puste.
 - Nie dodawaj komentarzy poza wymaganym JSON.
-- Odpowiedz wylacznie poprawnym JSON bez trailing commas.
+- Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
 
 # Book Context
-- Tytul finalny: ${emptyFallback(book.title)}
-- Roboczy tytul: ${emptyFallback(book.workingTitle)}
+- Tytuł finalny: ${emptyFallback(book.title)}
+- Roboczy tytuł: ${emptyFallback(book.workingTitle)}
 - Premise: ${emptyFallback(book.premise)}
 - Rozszerzona premisa: ${emptyFallback(book.expandedPremise)}
 - Logline: ${emptyFallback(book.logline)}
@@ -351,11 +352,11 @@ ${promptPackage.userInstruction}
 - Ton: ${emptyFallback(book.tone)}
 - Odbiorcy: ${emptyFallback(book.targetAudience)}
 - Punkt widzenia: ${emptyFallback(book.pointOfView)}
-- Docelowa liczba slow: ${book.targetWordCount ?? "(brak)"}
+- Docelowa liczba słów: ${book.targetWordCount ?? "(brak)"}
 - Tematy: ${emptyFallback(renderJsonList(book.themesJson))}
 - Granice i tematy niechciane: ${emptyFallback(book.unwantedThemes)}
-- Alternatywne tytuly: ${emptyFallback(renderJsonList(book.alternativeTitlesJson))}
-- Notatka wyboru tytulu: ${emptyFallback(book.titleChoiceNote)}
+- Alternatywne tytuły: ${emptyFallback(renderJsonList(book.alternativeTitlesJson))}
+- Notatka wyboru tytułu: ${emptyFallback(book.titleChoiceNote)}
 - Style guide: ${emptyFallback(book.styleGuide)}
 
 # Current Work
@@ -363,7 +364,7 @@ Docelowe pole: ${targetField} (${config.label}).
 ${config.currentWork}
 
 # Output Contract
-Zwroc JSON:
+Zwróć JSON:
 ${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
 `;
 }
@@ -379,7 +380,7 @@ export function buildNewProjectTitlePromptPackage(
     action: "generate_working_title",
     locale,
     userInstruction:
-      "Wygeneruj jedna mocna propozycje tytulu roboczego dla nowego projektu ksiazki.",
+      "Wygeneruj jedną mocną propozycję tytułu roboczego dla nowego projektu książki.",
     context: {
       seedTitle
     },
@@ -398,27 +399,28 @@ export function renderNewProjectTitlePromptPackage(
   promptPackage: NewProjectTitlePromptPackage
 ): string {
   return `# Role
-Jestes asystentem pisarskim pracujacym wewnatrz StoryForge2.
+Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
 
 # Task
 ${promptPackage.userInstruction}
 
 # Hard Rules
-- Pisz po polsku, chyba ze projekt ma inny jezyk.
-- Zwroc jedna propozycje, ktora moze od razu stac sie nazwa nowego projektu.
-- Jesli autor wpisal szkic tytulu, potraktuj go jako inspiracje, a nie polecenie przepisania.
+- Pisz po polsku, chyba że projekt ma inny język.
+- Dla locale "pl" używaj poprawnych polskich znaków.
+- Zwróć jedną propozycję, która może od razu stać się nazwą nowego projektu.
+- Jeśli autor wpisał szkic tytułu, potraktuj go jako inspirację, a nie polecenie przepisania.
 - Nie dodawaj komentarzy poza wymaganym JSON.
-- Odpowiedz wylacznie poprawnym JSON bez trailing commas.
+- Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
 
 # New Project Seed
 - Wpis autora: ${emptyFallback(promptPackage.context.seedTitle)}
 
 # Current Work
-Docelowe pole: workingTitle (Tytul roboczy).
-Autor jest na dashboardzie i chce szybko nazwac nowy projekt ksiazki przed jego utworzeniem.
+Docelowe pole: workingTitle (Tytuł roboczy).
+Autor jest na dashboardzie i chce szybko nazwać nowy projekt książki przed jego utworzeniem.
 
 # Output Contract
-Zwroc JSON:
+Zwróć JSON:
 ${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
 `;
 }

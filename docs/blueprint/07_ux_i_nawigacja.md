@@ -53,6 +53,9 @@ Nie robic strony marketingowej.
 ## Przyciski AI
 
 Kazdy ekran ma miec przycisk AI dopasowany do kontekstu.
+Każde generowane albo uzupełniane pole ma mieć własny widoczny i dostępny
+przycisk AI lub mini akcję AI. Autor musi móc wygenerować pojedyncze pole bez
+generowania całej sekcji.
 
 Przyklady:
 
@@ -68,6 +71,13 @@ Przycisk AI powinien miec:
 - tooltip;
 - stan loading;
 - jasny blad, gdy Codex CLI nie jest gotowy.
+
+Przycisk AI dla pola powinien:
+
+- działać per-field;
+- budować prompt z kluczowych pól sąsiednich i Story Bible;
+- pokazywać propozycję przed zapisem;
+- nie nadpisywać pola bez akceptacji autora.
 
 ## Panel Propozycji AI
 
@@ -192,4 +202,3 @@ V1 minimum:
 - kontrast tekstu;
 - nawigacja klawiatura w edytorze;
 - komunikaty bledow nie tylko kolorem.
-

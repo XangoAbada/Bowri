@@ -4,14 +4,14 @@ import { parsePremiseDevelopment } from "./premiseDevelopment";
 const validOutput = {
   version: 1,
   kind: "premise_development",
-  summary: "Archiwistka odkrywa falszowanie pamieci miasta.",
-  logline: "Archiwistka musi zatrzymac druk falszywych wspomnien.",
+  summary: "Archiwistka odkrywa fałszowanie pamięci miasta.",
+  logline: "Archiwistka musi zatrzymać druk fałszywych wspomnień.",
   expandedPremise:
-    "W miescie kontrolowanym przez drukowane sny archiwistka szuka siostry i odkrywa system manipulacji.",
-  centralConflict: "Prawda kontra spokoj oparty na klamstwie.",
-  stakes: "Miasto moze utracic wlasna historie.",
-  themes: ["pamiec", "tozsamosc"],
-  risks: ["Ustalic koszt magii druku."],
+    "W mieście kontrolowanym przez drukowane sny archiwistka szuka siostry i odkrywa system manipulacji.",
+  centralConflict: "Prawda kontra spokój oparty na kłamstwie.",
+  stakes: "Miasto może utracić własną historię.",
+  themes: ["pamięć", "tożsamość"],
+  risks: ["Ustalić koszt magii druku."],
   questionsForAuthor: ["Kto pierwszy korzysta na manipulacji?"]
 };
 
@@ -28,7 +28,7 @@ describe("parsePremiseDevelopment", () => {
         }),
         expect.objectContaining({
           field: "themesJson",
-          value: "pamiec, tozsamosc"
+          value: "pamięć, tożsamość"
         })
       ])
     );

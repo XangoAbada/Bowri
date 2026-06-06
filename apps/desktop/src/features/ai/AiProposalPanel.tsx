@@ -129,7 +129,7 @@ export function AiProposalPanel({
 
       if (result.status !== "success" || !result.rawOutput) {
         throw new RetryError(
-          result.errorMessage || "Codex CLI nie zwrocil wyniku.",
+          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
           result.rawOutput ?? ""
         );
       }
@@ -174,7 +174,7 @@ export function AiProposalPanel({
           <FileJson size={18} aria-hidden="true" />
         </div>
         <p className="muted-text">
-          Wyniki AI pojawia sie tutaj od razu po kliknieciu przycisku pola.
+          Wyniki AI pojawią się tutaj od razu po kliknięciu przycisku pola.
         </p>
       </section>
     );
@@ -210,7 +210,7 @@ export function AiProposalPanel({
           }
         >
           {running ? <Loader2 size={14} className="spin-icon" /> : null}
-          {running ? "Generuje" : success ? "Gotowe" : "Blad"}
+          {running ? "Generuje" : success ? "Gotowe" : "Błąd"}
         </span>
       </div>
 
@@ -220,8 +220,8 @@ export function AiProposalPanel({
 
       {running ? (
         <p className="muted-text">
-          Zadanie jest w kolejce panelu. Wynik pojawi sie tutaj i nie zapisze
-          sie bez akceptacji.
+          Zadanie jest w kolejce panelu. Wynik pojawi się tutaj i nie zapisze
+          się bez akceptacji.
         </p>
       ) : null}
 
@@ -248,7 +248,7 @@ export function AiProposalPanel({
                   }
                   rows={rows}
                   disabled={!selected}
-                  title={`Mozesz poprawic propozycje dla pola ${item.label} przed zapisem.`}
+                  title={`Możesz poprawić propozycję dla pola ${item.label} przed zapisem.`}
                 />
               </div>
             );
@@ -263,7 +263,7 @@ export function AiProposalPanel({
             value={visibleProposal.editableValue}
             onChange={(event) => setEditableValue(event.target.value)}
             rows={proposalRows}
-            title={`Mozesz poprawic propozycje dla pola ${config.label} przed zapisem.`}
+            title={`Możesz poprawić propozycję dla pola ${config.label} przed zapisem.`}
           />
         </label>
       ) : null}
@@ -321,7 +321,7 @@ export function AiProposalPanel({
           disabled={acceptMutation.isPending || retryMutation.isPending}
         >
           <X size={16} />
-          Odrzuc
+          Odrzuć
         </button>
         <button
           type="button"
@@ -331,12 +331,12 @@ export function AiProposalPanel({
           title="Ponownie uruchom ten sam prompt z zapisanym snapshotem kontekstu."
         >
           <RotateCcw size={16} />
-          Ponow
+          Ponów
         </button>
       </div>
 
       {acceptMutation.isError ? (
-        <p className="warning-text">Nie udalo sie zapisac propozycji.</p>
+        <p className="warning-text">Nie udało się zapisać propozycji.</p>
       ) : null}
     </section>
   );

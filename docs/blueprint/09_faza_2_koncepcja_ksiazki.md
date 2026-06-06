@@ -25,6 +25,11 @@ Przycisk moze uzywac dedykowanej akcji albo wspolnego kontraktu bazowego,
 ale UX musi byc per-field i nie moze wymagac generowania calej sekcji, jesli
 autor chce uzupelnic tylko jedno pole.
 
+Zasada promptu: generowanie pojedynczego pola koncepcji musi uwzględniać inne
+kluczowe pola koncepcji, np. tytuł, premise, logline, gatunek, odbiorców, ton,
+punkt widzenia i style guide, jeśli są już dostępne. Odpowiedzi po polsku mają
+zachowywać poprawne polskie znaki.
+
 ## Pola
 
 ### Tytul
@@ -126,6 +131,8 @@ Output JSON:
 - Mozna wypelnic i zapisac wszystkie pola koncepcji.
 - AI moze generowac tytuly, premise i style guide.
 - Kazde pole koncepcji ma wlasny przycisk generacji AI.
+- Prompt dla pola koncepcji zawiera pozostałe kluczowe pola koncepcji.
+- Wyniki AI po polsku używają poprawnych polskich znaków.
 - Wyniki strukturalne importuja sie polami, nie jako jeden blob.
 - Uzytkownik moze zaakceptowac tylko czesc propozycji.
 - Style guide jest uzywany w pozniejszym promptcie sceny.
@@ -136,4 +143,6 @@ Output JSON:
 - import `premise_development`;
 - zapis alternatywnych tytulow;
 - prompt zawiera ton, gatunek i odbiorcow;
+- prompt per-field zawiera inne kluczowe pola koncepcji;
+- wynik AI po polsku zachowuje polskie znaki;
 - brak Codex CLI blokuje przycisk AI i pokazuje konfiguracje.

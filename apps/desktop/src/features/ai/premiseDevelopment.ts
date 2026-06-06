@@ -91,7 +91,7 @@ export function parsePremiseDevelopment(
   const fieldValues = candidates.filter((item) => item.value.trim().length > 0);
 
   if (fieldValues.length === 0) {
-    throw new Error("Odpowiedz AI nie zawiera pol premise do akceptacji.");
+    throw new Error("Odpowiedź AI nie zawiera pól premise do akceptacji.");
   }
 
   return {

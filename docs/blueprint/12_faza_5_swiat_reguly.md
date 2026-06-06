@@ -72,6 +72,12 @@ Przyklady:
 - wygeneruj prompt mapy;
 - wygeneruj prompt ilustracji lokacji.
 
+Każde generowane albo uzupełniane pole elementu świata lub reguły powinno mieć
+przycisk AI albo mini akcję AI. Prompt musi uwzględniać kluczowy kontekst
+książki, istniejące elementy świata, powiązane postacie, wątki, lokacje,
+reguły i konsekwencje fabularne. Wyniki po polsku mają zachowywać poprawne
+polskie znaki.
+
 ## Prompt: Generate World Element
 
 Output JSON:
@@ -122,6 +128,9 @@ Output JSON:
 
 - Mozna utworzyc lokacje i regule.
 - AI moze rozwinac element swiata.
+- Generowanie pól świata i reguł działa per-field i używa kluczowego kontekstu
+  Story Bible.
+- Wyniki AI po polsku używają poprawnych polskich znaków.
 - Regula moze byc powiazana ze scena.
 - Prompt sceny zawiera tylko reguly istotne dla sceny.
 - Kontrola ciaglosci moze wskazac potencjalne naruszenie reguly.
@@ -132,5 +141,5 @@ Output JSON:
 - powiazanie lokacji ze scena;
 - powiazanie reguly z elementem swiata;
 - prompt sceny z lokacja zawiera jej opis i reguly;
+- prompt per-field świata zawiera istniejące reguły, lokacje, postacie i wątki;
 - analiza reguly zwraca ostrzezenia bez automatycznego zmieniania kanonu.
-

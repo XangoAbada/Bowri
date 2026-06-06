@@ -98,7 +98,7 @@ export function DashboardPage() {
 
       if (result.status !== "success" || !result.rawOutput) {
         throw new GenerationError(
-          result.errorMessage || "Codex CLI nie zwrocil wyniku.",
+          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
           result.rawOutput ?? ""
         );
       }
@@ -160,7 +160,7 @@ export function DashboardPage() {
 
       if (result.status !== "success" || !result.rawOutput) {
         throw new GenerationError(
-          result.errorMessage || "Codex CLI nie zwrocil wyniku.",
+          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
           result.rawOutput ?? ""
         );
       }
@@ -221,13 +221,13 @@ export function DashboardPage() {
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="Roboczy tytul ksiazki"
+                  placeholder="Roboczy tytuł książki"
                 />
                 <button
                   type="button"
                   className="icon-button ai-inline-button"
-                  aria-label="Generuj tytul dla nowego projektu"
-                  title="Generuj tytul dla nowego projektu"
+                  aria-label="Generuj tytuł dla nowego projektu"
+                  title="Generuj tytuł dla nowego projektu"
                   onClick={() => generateNewProjectTitleMutation.mutate()}
                   disabled={
                     generateNewProjectTitleMutation.isPending ||
@@ -245,8 +245,8 @@ export function DashboardPage() {
                 <button
                   type="submit"
                   className="icon-button strong"
-                  aria-label="Utworz projekt"
-                  title="Utworz projekt"
+                  aria-label="Utwórz projekt"
+                  title="Utwórz projekt"
                   disabled={createMutation.isPending || name.trim().length === 0}
                 >
                   <Plus size={17} />
@@ -254,7 +254,7 @@ export function DashboardPage() {
               </div>
             </label>
             {createMutation.isError ? (
-              <p className="warning-text">Nie udalo sie utworzyc projektu.</p>
+              <p className="warning-text">Nie udało się utworzyć projektu.</p>
             ) : null}
           </form>
         </section>
@@ -269,14 +269,14 @@ export function DashboardPage() {
           </div>
 
           {projectsQuery.isLoading ? (
-            <p className="muted-text">Laduje projekty...</p>
+            <p className="muted-text">Ładuję projekty...</p>
           ) : null}
 
           {projectsQuery.isError ? (
             <div className="empty-state">
               <h3>Backend desktopowy nie odpowiada</h3>
               <p>
-                Uruchom aplikacje przez Tauri, aby korzystac z lokalnej bazy
+                Uruchom aplikację przez Tauri, aby korzystać z lokalnej bazy
                 SQLite i komend Rust.
               </p>
             </div>
@@ -284,8 +284,8 @@ export function DashboardPage() {
 
           {projectsQuery.data?.length === 0 ? (
             <div className="empty-state">
-              <h3>Jeszcze nie ma projektow</h3>
-              <p>Utworz pierwszy projekt, a StoryForge2 zalozy ksiazke i baze.</p>
+              <h3>Jeszcze nie ma projektów</h3>
+              <p>Utwórz pierwszy projekt, a StoryForge2 założy książkę i bazę.</p>
             </div>
           ) : null}
 
@@ -329,8 +329,8 @@ export function DashboardPage() {
                       codexStatusQuery.isLoading ||
                       !project.activeBookId
                     }
-                    title="Generuj tytul roboczy z AI"
-                    aria-label={`Generuj tytul roboczy z AI dla projektu ${displayTitle}`}
+                    title="Generuj tytuł roboczy z AI"
+                    aria-label={`Generuj tytuł roboczy z AI dla projektu ${displayTitle}`}
                   >
                     {generating ? (
                       <Loader2 size={16} className="spin-icon" />
@@ -368,7 +368,7 @@ export function DashboardPage() {
               <Sparkles size={18} aria-hidden="true" />
             </div>
             <p className="muted-text">
-              Wybierz projekt i uruchom generowanie tytulu roboczego.
+              Wybierz projekt i uruchom generowanie tytułu roboczego.
             </p>
           </section>
         )}

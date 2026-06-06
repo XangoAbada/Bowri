@@ -85,8 +85,12 @@ Kazdy prompt sprawdzic snapshotem:
 - zawiera hard rules;
 - zawiera output contract;
 - zawiera tylko relewantny kontekst;
+- prompt per-field zawiera inne kluczowe pola potrzebne do wygenerowania tego
+  pola;
 - nie zawiera tokenow ani sciezek auth;
 - ma poprawny jezyk.
+- dla `locale: "pl"` wymusza odpowiedź po polsku z poprawnymi polskimi
+  znakami.
 
 ## Testy Parserow
 
@@ -126,6 +130,7 @@ Parser JSON powinien obsluzyc:
 - kolejnosc rozdzialow;
 - brak notatek w trybie manuskrypt-only;
 - poprawne polskie znaki.
+- poprawne polskie znaki w UI, promptach, wynikach AI i eksportach po polsku.
 
 ## Acceptance V1
 
@@ -156,4 +161,3 @@ V1 jest gotowa, gdy:
 - Zamknij aplikacje.
 - Otworz ponownie i sprawdz dane.
 - Wyeksportuj Markdown.
-

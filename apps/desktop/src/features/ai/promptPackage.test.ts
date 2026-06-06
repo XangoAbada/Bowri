@@ -26,22 +26,22 @@ const book: Book = {
   projectId: "project-1",
   title: "",
   workingTitle: "Cienie Drukarni",
-  premise: "Zecerka odkrywa, ze drukowane sny zmieniaja wspomnienia miasta.",
+  premise: "Zecerka odkrywa, że drukowane sny zmieniają wspomnienia miasta.",
   expandedPremise: "Drukarnia przechowuje sny miasta.",
-  logline: "Zecerka musi zatrzymac druk wspomnien.",
-  centralConflict: "Prawda kontra wygodna pamiec miasta.",
-  stakes: "Miasto moze utracic wspolna tozsamosc.",
+  logline: "Zecerka musi zatrzymać druk wspomnień.",
+  centralConflict: "Prawda kontra wygodna pamięć miasta.",
+  stakes: "Miasto może utracić wspólną tożsamość.",
   genre: "fantasy",
   subgenre: "urban fantasy",
   targetAudience: "adult",
   tone: "mroczny, liryczny",
-  styleGuide: "Krotkie zdania w scenach napiecia.",
+  styleGuide: "Krótkie zdania w scenach napięcia.",
   pointOfView: "trzecia osoba ograniczona",
   targetWordCount: 85000,
-  themesJson: JSON.stringify(["pamiec", "tozsamosc"]),
+  themesJson: JSON.stringify(["pamięć", "tożsamość"]),
   unwantedThemes: "Bez gore.",
   alternativeTitlesJson: JSON.stringify(["Ostatni atrament"]),
-  titleChoiceNote: "Tytul podkresla druk i pamiec.",
+  titleChoiceNote: "Tytuł podkreśla druk i pamięć.",
   coverImagePath: "",
   coverPrompt: "",
   coverNegativePrompt: "",
@@ -73,7 +73,7 @@ describe("renderPromptPackage", () => {
     expect(prompt).toContain(book.subgenre);
     expect(prompt).toContain(book.targetAudience);
     expect(prompt).toContain(book.styleGuide);
-    expect(prompt).toContain("pamiec, tozsamosc");
+    expect(prompt).toContain("pamięć, tożsamość");
   });
 
   it("renders a per-field prompt for every phase 2 concept field", () => {

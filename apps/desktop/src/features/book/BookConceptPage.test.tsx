@@ -36,7 +36,7 @@ const projectDetails: ProjectDetails = {
     id: "book-1",
     projectId: "project-1",
     title: "",
-    workingTitle: "Stary tytul",
+    workingTitle: "Stary tytuł",
     premise: "Bohaterka szuka zaginionej siostry.",
     expandedPremise: "",
     logline: "",
@@ -45,7 +45,7 @@ const projectDetails: ProjectDetails = {
     genre: "kryminal",
     subgenre: "",
     targetAudience: "adult",
-    tone: "napiety",
+    tone: "napięty",
     styleGuide: "",
     pointOfView: "",
     targetWordCount: null,
@@ -67,25 +67,25 @@ const conceptFieldOutput = JSON.stringify({
   version: 1,
   kind: "concept_field_suggestion",
   field: "workingTitle",
-  summary: "Testowy tytul",
-  value: "Siostra z mgly",
+  summary: "Testowy tytuł",
+  value: "Siostra z mgły",
   values: [],
-  rationale: "Podkresla tajemnice.",
+  rationale: "Podkreśla tajemnicę.",
   warnings: []
 });
 
 const premiseDevelopmentOutput = JSON.stringify({
   version: 1,
   kind: "premise_development",
-  summary: "Archiwistka odkrywa, ze pamiec miasta jest falszowana.",
-  logline: "Archiwistka musi zatrzymac druk falszywych wspomnien.",
+  summary: "Archiwistka odkrywa, że pamięć miasta jest fałszowana.",
+  logline: "Archiwistka musi zatrzymać druk fałszywych wspomnień.",
   expandedPremise:
-    "W miescie, gdzie gazety zmieniaja wspomnienia, archiwistka szuka zaginionej siostry i odkrywa mechanizm kontroli.",
-  centralConflict: "Prawda kontra spokoj zbudowany na klamstwie.",
-  stakes: "Jesli bohaterka przegra, miasto zapomni wlasna historie.",
-  themes: ["pamiec", "tozsamosc"],
-  risks: ["Pilnowac, aby magia druku miala koszt."],
-  questionsForAuthor: ["Kto pierwszy zyskuje na falszowaniu pamieci?"]
+    "W mieście, gdzie gazety zmieniają wspomnienia, archiwistka szuka zaginionej siostry i odkrywa mechanizm kontroli.",
+  centralConflict: "Prawda kontra spokój zbudowany na kłamstwie.",
+  stakes: "Jeśli bohaterka przegra, miasto zapomni własną historię.",
+  themes: ["pamięć", "tożsamość"],
+  risks: ["Pilnować, aby magia druku miała koszt."],
+  questionsForAuthor: ["Kto pierwszy zyskuje na fałszowaniu pamięci?"]
 });
 
 function renderWithQueryClient() {
@@ -136,7 +136,7 @@ describe("BookConceptPage AI flow", () => {
     });
     vi.mocked(updateBookConcept).mockResolvedValue({
       ...projectDetails.book,
-      workingTitle: "Siostra z mgly"
+      workingTitle: "Siostra z mgły"
     });
     useProposalStore.setState({ activeProposal: null });
     useCodexSettingsStore.setState({
@@ -157,9 +157,9 @@ describe("BookConceptPage AI flow", () => {
 
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
     const generateButton = screen.getByRole("button", {
-      name: /Generuj Tytul roboczy z AI/i
+      name: /Generuj Tytuł roboczy z AI/i
     });
 
     await waitFor(() => expect(generateButton).not.toBeDisabled());
@@ -170,7 +170,7 @@ describe("BookConceptPage AI flow", () => {
 
     resolveRun(successfulRun());
 
-    expect(await screen.findByDisplayValue("Siostra z mgly")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Siostra z mgły")).toBeInTheDocument();
     expect(runCodexPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "generate_working_title",
@@ -183,7 +183,7 @@ describe("BookConceptPage AI flow", () => {
 
     await waitFor(() =>
       expect(updateBookConcept).toHaveBeenCalledWith("book-1", {
-        workingTitle: "Siostra z mgly"
+        workingTitle: "Siostra z mgły"
       })
     );
   });
@@ -191,26 +191,26 @@ describe("BookConceptPage AI flow", () => {
   it("saves all phase 2 concept fields", async () => {
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Tytul finalny"), {
-      target: { value: "Finalny tytul" }
+    fireEvent.change(screen.getByLabelText("Tytuł finalny"), {
+      target: { value: "Finalny tytuł" }
     });
     fireEvent.change(screen.getByLabelText("Logline"), {
-      target: { value: "Jedno zdanie sprzedajace historie." }
+      target: { value: "Jedno zdanie sprzedające historię." }
     });
-    fireEvent.change(screen.getByLabelText("Docelowa liczba slow"), {
+    fireEvent.change(screen.getByLabelText("Docelowa liczba słów"), {
       target: { value: "85000" }
     });
-    fireEvent.change(screen.getByLabelText("Alternatywne tytuly"), {
-      target: { value: "Tytul A, Tytul B" }
+    fireEvent.change(screen.getByLabelText("Alternatywne tytuły"), {
+      target: { value: "Tytuł A, Tytuł B" }
     });
     fireEvent.click(screen.getByRole("button", { name: "fantasy" }));
-    fireEvent.change(screen.getByLabelText("Wlasna opcja Gatunek"), {
+    fireEvent.change(screen.getByLabelText("Własna opcja Gatunek"), {
       target: { value: "noir" }
     });
     fireEvent.click(
-      screen.getByRole("button", { name: /Dodaj wlasna opcje Gatunek/i })
+      screen.getByRole("button", { name: /Dodaj własną opcję Gatunek/i })
     );
     fireEvent.click(screen.getByRole("button", { name: /Zapisz/i }));
 
@@ -218,10 +218,10 @@ describe("BookConceptPage AI flow", () => {
       expect(updateBookConcept).toHaveBeenCalledWith(
         "book-1",
         expect.objectContaining({
-          title: "Finalny tytul",
-          logline: "Jedno zdanie sprzedajace historie.",
+          title: "Finalny tytuł",
+          logline: "Jedno zdanie sprzedające historię.",
           targetWordCount: 85000,
-          alternativeTitlesJson: JSON.stringify(["Tytul A", "Tytul B"]),
+          alternativeTitlesJson: JSON.stringify(["Tytuł A", "Tytuł B"]),
           genre: "kryminal, fantasy, noir"
         })
       )
@@ -231,13 +231,13 @@ describe("BookConceptPage AI flow", () => {
   it("renders an AI button for every phase 2 concept field", async () => {
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
 
     for (const label of [
-      "Tytul finalny",
-      "Tytul roboczy",
-      "Alternatywne tytuly",
-      "Notatka wyboru tytulu",
+      "Tytuł finalny",
+      "Tytuł roboczy",
+      "Alternatywne tytuły",
+      "Notatka wyboru tytułu",
       "Premise",
       "Logline",
       "Konflikt centralny",
@@ -248,7 +248,7 @@ describe("BookConceptPage AI flow", () => {
       "Odbiorcy",
       "Ton",
       "Punkt widzenia",
-      "Docelowa liczba slow",
+      "Docelowa liczba słów",
       "Tematy",
       "Granice i tematy niechciane",
       "Style guide"
@@ -272,13 +272,13 @@ describe("BookConceptPage AI flow", () => {
 
     renderWithQueryClient();
 
-    expect(await screen.findByDisplayValue("Stary tytul")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: /Generuj Premise z AI/i })
     );
 
     expect(
-      await screen.findByDisplayValue("Archiwistka musi zatrzymac druk falszywych wspomnien.")
+      await screen.findByDisplayValue("Archiwistka musi zatrzymać druk fałszywych wspomnień.")
     ).toBeInTheDocument();
     fireEvent.click(getCheckboxByLabel("Rozszerzona premisa"));
     fireEvent.click(getCheckboxByLabel("Stawki"));
@@ -287,9 +287,9 @@ describe("BookConceptPage AI flow", () => {
 
     await waitFor(() =>
       expect(updateBookConcept).toHaveBeenCalledWith("book-1", {
-        premise: "Archiwistka odkrywa, ze pamiec miasta jest falszowana.",
-        logline: "Archiwistka musi zatrzymac druk falszywych wspomnien.",
-        centralConflict: "Prawda kontra spokoj zbudowany na klamstwie."
+        premise: "Archiwistka odkrywa, że pamięć miasta jest fałszowana.",
+        logline: "Archiwistka musi zatrzymać druk fałszywych wspomnień.",
+        centralConflict: "Prawda kontra spokój zbudowany na kłamstwie."
       })
     );
   });
@@ -298,12 +298,12 @@ describe("BookConceptPage AI flow", () => {
     renderWithQueryClient();
 
     const coverButton = await screen.findByRole("button", {
-      name: /Utworz okladke/i
+      name: /Utwórz okładkę/i
     });
     await waitFor(() => expect(coverButton).not.toBeDisabled());
 
     fireEvent.change(screen.getByLabelText("Premise"), {
-      target: { value: "Nowa bohaterka znajduje mape ukryta w druku." }
+      target: { value: "Nowa bohaterka znajduje mapę ukrytą w druku." }
     });
     fireEvent.click(coverButton);
 
@@ -311,7 +311,7 @@ describe("BookConceptPage AI flow", () => {
       expect(generateBookCover).toHaveBeenCalledWith(
         expect.objectContaining({
           coverPrompt: expect.stringContaining(
-            "Nowa bohaterka znajduje mape ukryta w druku."
+            "Nowa bohaterka znajduje mapę ukrytą w druku."
           ),
           codexPath: "codex",
           model: "gpt-5.5",

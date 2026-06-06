@@ -117,6 +117,8 @@ Jestes asystentem pisarskim pracujacym wewnatrz StoryForge2.
 
 # Hard Rules
 - Pisz po polsku, chyba ze projekt ma inny jezyk.
+- Dla `locale: "pl"` używaj poprawnych polskich znaków w treści widocznej dla
+  użytkownika i w odpowiedzi AI.
 - Nie zmieniaj kanonu bez oznaczenia propozycji.
 - Nie wprowadzaj nowych glownych faktow, jesli zadanie tego nie wymaga.
 - Odpowiedz tylko w wymaganym formacie.
@@ -195,6 +197,20 @@ Tekst sceny.
 
 ## Budowanie Kontekstu
 
+### Dla pojedynczego pola
+
+Każde generowane pole powinno mieć prompt z kluczowym kontekstem sąsiednim.
+Nie generować pola w izolacji, jeśli istnieją dane, które zmieniają sens
+odpowiedzi.
+
+Wysłać zależnie od ekranu:
+
+- premise, gatunek, ton, odbiorców i style guide dla koncepcji;
+- aktywne postacie, relacje, role fabularne i wątki dla postaci;
+- lokację, reguły świata, postacie i wątki dla scen;
+- istniejące elementy świata, reguły i konsekwencje fabularne dla świata;
+- dotychczasowy plan, rozdziały, konflikty i payoffy dla outline.
+
 ### Dla tytulow
 
 Wyslac:
@@ -259,6 +275,12 @@ Nie zmieniaj merytorycznej tresci.
 Zwroc poprawny JSON zgodny z kontraktem.
 ```
 
+## Testowanie Promptow
+
+Snapshot promptu powinien sprawdzać nie tylko format, ale też to, czy prompt
+zawiera inne kluczowe pola wymagane do wygenerowania danego pola oraz czy
+reguły językowe wymuszają polskie znaki dla `locale: "pl"`.
+
 ## Token Hygiene
 
 Nie wysylac:
@@ -274,4 +296,3 @@ Wysylac:
 - tylko relewantne encje;
 - ostatnie sceny;
 - fakty potrzebne do spójnosci.
-

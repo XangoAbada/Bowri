@@ -14,7 +14,7 @@ describe("browser preview commands", () => {
 
   it("creates, lists and opens a browser-preview project", async () => {
     const created = await browserCreateProject({
-      name: "Projekt z podgladu",
+      name: "Projekt z podglądu",
       language: "pl"
     });
 
@@ -22,14 +22,14 @@ describe("browser preview commands", () => {
     const opened = await browserGetProject(created.project.id);
 
     expect(listed).toHaveLength(1);
-    expect(listed[0].workingTitle).toBe("Projekt z podgladu");
+    expect(listed[0].workingTitle).toBe("Projekt z podglądu");
     expect(listed[0].coverImagePath).toBe("");
     expect(opened.book.id).toBe(created.book.id);
   });
 
   it("updates concept fields without dropping existing values", async () => {
     const created = await browserCreateProject({
-      name: "Projekt z podgladu",
+      name: "Projekt z podglądu",
       language: "pl"
     });
 
@@ -46,7 +46,7 @@ describe("browser preview commands", () => {
 
   it("stores browser-preview cover metadata in project summaries", async () => {
     const created = await browserCreateProject({
-      name: "Projekt z okladka",
+      name: "Projekt z okładką",
       language: "pl"
     });
 

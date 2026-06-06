@@ -51,7 +51,7 @@ const projectSummary: ProjectSummary = {
   language: "pl",
   updatedAt: "2026-06-05T12:00:00Z",
   activeBookId: "book-1",
-  workingTitle: "Roboczy tytul",
+  workingTitle: "Roboczy tytuł",
   coverImagePath:
     "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22/%3E"
 };
@@ -70,7 +70,7 @@ const projectDetails: ProjectDetails = {
     id: "book-1",
     projectId: "project-1",
     title: "",
-    workingTitle: "Roboczy tytul",
+    workingTitle: "Roboczy tytuł",
     premise: "Bohaterka szuka zaginionej siostry.",
     expandedPremise: "",
     logline: "",
@@ -79,7 +79,7 @@ const projectDetails: ProjectDetails = {
     genre: "kryminal",
     subgenre: "",
     targetAudience: "adult",
-    tone: "napiety",
+    tone: "napięty",
     styleGuide: "",
     pointOfView: "",
     targetWordCount: null,
@@ -101,10 +101,10 @@ const titleOutput = JSON.stringify({
   version: 1,
   kind: "concept_field_suggestion",
   field: "workingTitle",
-  summary: "Nowy tytul",
-  value: "Siostra z mgly",
+  summary: "Nowy tytuł",
+  value: "Siostra z mgły",
   values: [],
-  rationale: "Podkresla tajemnice.",
+  rationale: "Podkreśla tajemnicę.",
   warnings: []
 });
 
@@ -157,7 +157,7 @@ describe("DashboardPage", () => {
     });
     vi.mocked(updateBookConcept).mockResolvedValue({
       ...projectDetails.book,
-      workingTitle: "Siostra z mgly"
+      workingTitle: "Siostra z mgły"
     });
     useProposalStore.setState({ activeProposal: null });
     useCodexSettingsStore.setState({
@@ -171,21 +171,21 @@ describe("DashboardPage", () => {
   it("renders book-shaped project cards with covers and accepts dashboard title proposals", async () => {
     const rendered = renderDashboard();
 
-    expect(await screen.findByText("Roboczy tytul")).toBeInTheDocument();
+    expect(await screen.findByText("Roboczy tytuł")).toBeInTheDocument();
     expect(rendered.container.querySelector(".project-cover-art img")).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /Generuj tytul roboczy z AI dla projektu Roboczy tytul/i
+        name: /Generuj tytuł roboczy z AI dla projektu Roboczy tytuł/i
       })
     );
 
-    expect(await screen.findByDisplayValue("Siostra z mgly")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Siostra z mgły")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
 
     await waitFor(() =>
       expect(updateBookConcept).toHaveBeenCalledWith("book-1", {
-        workingTitle: "Siostra z mgly"
+        workingTitle: "Siostra z mgły"
       })
     );
   });
@@ -194,14 +194,14 @@ describe("DashboardPage", () => {
     renderDashboard();
 
     const generateButton = await screen.findByRole("button", {
-      name: /Generuj tytul dla nowego projektu/i
+      name: /Generuj tytuł dla nowego projektu/i
     });
     await waitFor(() => expect(generateButton).not.toBeDisabled());
-    const titleInput = screen.getByPlaceholderText("Roboczy tytul ksiazki");
+    const titleInput = screen.getByPlaceholderText("Roboczy tytuł książki");
 
     fireEvent.click(generateButton);
 
-    expect(await screen.findByDisplayValue("Siostra z mgly")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Siostra z mgły")).toBeInTheDocument();
     expect(titleInput).toHaveValue("");
     expect(generateNewProjectTitle).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -213,7 +213,7 @@ describe("DashboardPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
 
-    await waitFor(() => expect(titleInput).toHaveValue("Siostra z mgly"));
+    await waitFor(() => expect(titleInput).toHaveValue("Siostra z mgły"));
     expect(createProject).not.toHaveBeenCalled();
     expect(updateBookConcept).not.toHaveBeenCalled();
   });

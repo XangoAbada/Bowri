@@ -132,7 +132,7 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
       <summary className="provider-summary-row">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">AI provider</p>
+            <p className="eyebrow">Dostawca AI</p>
             <h2>{compact ? "Codex CLI" : "Status Codex CLI"}</h2>
             <p className="muted-text provider-subtitle">
               {model} / {reasoningLabel(reasoningEffort)}
@@ -182,7 +182,7 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
           <select
             value={model}
             onChange={(event) => setModel(event.target.value)}
-            title="Model uzywany przez codex exec przy generowaniu tresci pol."
+            title="Model używany przez codex exec przy generowaniu treści pól."
           >
             {modelOptions.map((option) => (
               <option value={option.value} key={option.value} title={option.title}>
