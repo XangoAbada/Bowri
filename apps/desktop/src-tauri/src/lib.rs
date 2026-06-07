@@ -691,6 +691,7 @@ pub async fn generate_book_cover_in_pool(
         .join(&input.project_id)
         .join(&input.book_id);
     tokio::fs::create_dir_all(&final_dir).await?;
+    reject_duplicate_previous_cover_file(&generated_image_path, &final_dir).await?;
     let final_image_path = final_dir.join(format!("cover-{ai_run_id}.png"));
     tokio::fs::copy(&generated_image_path, &final_image_path).await?;
     verify_generated_png_file(&final_image_path, "Saved cover image").await?;
@@ -1163,7 +1164,10 @@ async fn execute_codex_image_generation(
 
     let image_path = workspace.join("cover.png");
     let image_path_text = image_path.to_string_lossy().to_string();
-    let prompt = request.prompt.replace("{OUTPUT_FILE}", &image_path_text);
+    let prompt = format!(
+        "{}\nFresh generation nonce: {ai_run_id}. Use this only to randomize the image generation; do not render it as visible cover text.\n",
+        request.prompt.replace("{OUTPUT_FILE}", &image_path_text)
+    );
     match tokio::fs::remove_file(&image_path).await {
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -1185,7 +1189,7 @@ async fn execute_codex_image_generation(
         .clone()
         .unwrap_or_else(|| "codex".to_string());
     let command_spec = resolve_codex_command(&codex_path).await;
-    let instruction = "Run the StoryForge2 cover image prompt from stdin. Create a brand-new image from scratch with image_generation. Do not edit, extend, inpaint, upscale, vary, reuse, or derive from any previous image. Prefer the requested output path, but if the image tool saves elsewhere or filesystem copying is blocked, do not retry shell commands; return only the requested JSON with the best available fresh imagePath. StoryForge2 will resolve and copy the final PNG.";
+    let instruction = "Run the StoryForge2 cover image prompt from stdin. You must invoke the built-in $imagegen/image_generation tool to create a brand-new PNG from scratch before returning. Do not edit, extend, inpaint, upscale, vary, reuse, or derive from any previous image. Do not run shell commands, inspect the filesystem, copy files, or move files. Never return placeholder paths such as _image_id_.png. Return only compact JSON with imagePath set to the actual generated PNG path; if the exact filename is unavailable, return the generated_images session directory. StoryForge2 will resolve and copy the final PNG.";
 
     emit_cover_progress(
         app,
@@ -1202,7 +1206,11 @@ async fn execute_codex_image_generation(
         .args(command_spec.prefix_args)
         .arg("exec")
         .arg("--enable")
-        .arg("image_generation");
+        .arg("image_generation")
+        .arg("--disable")
+        .arg("hooks")
+        .arg("--disable")
+        .arg("shell_tool");
 
     if let Some(model) = request
         .model
@@ -1364,6 +1372,56 @@ async fn reject_duplicate_existing_cover(
     Ok(())
 }
 
+async fn reject_duplicate_previous_cover_file(
+    generated_path: &Path,
+    cover_dir: &Path,
+) -> Result<(), AppError> {
+    let generated_bytes = tokio::fs::read(generated_path).await?;
+    if generated_bytes.is_empty() {
+        return Ok(());
+    }
+
+    let mut entries = match tokio::fs::read_dir(cover_dir).await {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(AppError::from(error)),
+    };
+
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        if path == generated_path {
+            continue;
+        }
+        if !path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
+        {
+            continue;
+        }
+        let metadata = match entry.metadata().await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(AppError::from(error)),
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let existing_bytes = match tokio::fs::read(&path).await {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(AppError::from(error)),
+        };
+        if existing_bytes == generated_bytes {
+            return Err(AppError::Process(
+                "Codex CLI zwrocil obraz identyczny z poprzednia propozycja okladki. Ponow generowanie; StoryForge nie zapisze zduplikowanego PNG jako nowej okladki.".into(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 async fn resolve_generated_cover_path(
     requested_path: &Path,
     stdout: &str,
@@ -1407,14 +1465,13 @@ async fn resolve_generated_cover_path_from_sources(
     }
 
     if let Some(generated_images_dir) = generated_images_dir {
-        if let Some(path) =
-            latest_codex_generated_image_from_output(
-                stdout,
-                stderr,
-                &generated_images_dir,
-                min_modified_at,
-            )
-            .await?
+        if let Some(path) = latest_codex_generated_image_from_output(
+            stdout,
+            stderr,
+            &generated_images_dir,
+            min_modified_at,
+        )
+        .await?
         {
             return Ok(path);
         }
@@ -1958,7 +2015,10 @@ mod tests {
         assert_eq!(logs[0].reasoning_effort, "medium");
         assert_eq!(logs[0].prompt, "# Role\nPrompt testowy");
         assert_eq!(logs[0].prompt_package_json, prompt_package);
-        assert_eq!(logs[0].raw_output.as_deref(), Some(r#"{"kind":"concept_field_suggestion","value":"Premisa"}"#));
+        assert_eq!(
+            logs[0].raw_output.as_deref(),
+            Some(r#"{"kind":"concept_field_suggestion","value":"Premisa"}"#)
+        );
     }
 
     #[tokio::test]
@@ -2019,14 +2079,10 @@ mod tests {
         let requested_path =
             std::env::temp_dir().join(format!("storyforge2-requested-{}.png", Uuid::new_v4()));
 
-        let resolved = resolve_generated_cover_path(
-            &requested_path,
-            &stdout,
-            "",
-            SystemTime::UNIX_EPOCH,
-        )
-        .await
-        .unwrap();
+        let resolved =
+            resolve_generated_cover_path(&requested_path, &stdout, "", SystemTime::UNIX_EPOCH)
+                .await
+                .unwrap();
 
         assert_eq!(resolved, image_path);
         let _ = tokio::fs::remove_file(resolved).await;
@@ -2048,14 +2104,10 @@ mod tests {
         .to_string();
         let requested_path = run_dir.join("requested.png");
 
-        let resolved = resolve_generated_cover_path(
-            &requested_path,
-            &stdout,
-            "",
-            SystemTime::UNIX_EPOCH,
-        )
-        .await
-        .unwrap();
+        let resolved =
+            resolve_generated_cover_path(&requested_path, &stdout, "", SystemTime::UNIX_EPOCH)
+                .await
+                .unwrap();
 
         assert_eq!(resolved, image_path);
         let _ = tokio::fs::remove_dir_all(run_dir).await;
@@ -2087,8 +2139,10 @@ mod tests {
     async fn duplicate_existing_cover_is_rejected() {
         let existing_path =
             std::env::temp_dir().join(format!("storyforge2-existing-cover-{}.png", Uuid::new_v4()));
-        let generated_path =
-            std::env::temp_dir().join(format!("storyforge2-generated-cover-{}.png", Uuid::new_v4()));
+        let generated_path = std::env::temp_dir().join(format!(
+            "storyforge2-generated-cover-{}.png",
+            Uuid::new_v4()
+        ));
         tokio::fs::write(&existing_path, PNG_SIGNATURE)
             .await
             .unwrap();
@@ -2098,20 +2152,61 @@ mod tests {
         let existing_path_text = existing_path.to_string_lossy().to_string();
 
         let error = reject_duplicate_existing_cover(&generated_path, &existing_path_text)
-        .await
-        .unwrap_err()
-        .to_string();
+            .await
+            .unwrap_err()
+            .to_string();
 
         assert!(error.contains("identyczny z aktualna okladka"));
 
-        tokio::fs::write(&generated_path, [PNG_SIGNATURE.as_slice(), b"fresh"].concat())
-            .await
-            .unwrap();
+        tokio::fs::write(
+            &generated_path,
+            [PNG_SIGNATURE.as_slice(), b"fresh"].concat(),
+        )
+        .await
+        .unwrap();
         reject_duplicate_existing_cover(&generated_path, &existing_path_text)
             .await
             .unwrap();
 
         let _ = tokio::fs::remove_file(existing_path).await;
+        let _ = tokio::fs::remove_file(generated_path).await;
+    }
+
+    #[tokio::test]
+    async fn duplicate_previous_cover_file_is_rejected() {
+        let cover_dir =
+            std::env::temp_dir().join(format!("storyforge2-cover-dir-{}", Uuid::new_v4()));
+        let previous_path = cover_dir.join("cover-previous.png");
+        let generated_path = std::env::temp_dir().join(format!(
+            "storyforge2-generated-cover-{}.png",
+            Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(&cover_dir).await.unwrap();
+        tokio::fs::write(&previous_path, PNG_SIGNATURE)
+            .await
+            .unwrap();
+        tokio::fs::write(&generated_path, PNG_SIGNATURE)
+            .await
+            .unwrap();
+
+        let error = reject_duplicate_previous_cover_file(&generated_path, &cover_dir)
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("poprzednia propozycja okladki"));
+
+        tokio::fs::write(
+            &generated_path,
+            [PNG_SIGNATURE.as_slice(), b"fresh"].concat(),
+        )
+        .await
+        .unwrap();
+        reject_duplicate_previous_cover_file(&generated_path, &cover_dir)
+            .await
+            .unwrap();
+
+        let _ = tokio::fs::remove_dir_all(cover_dir).await;
         let _ = tokio::fs::remove_file(generated_path).await;
     }
 
@@ -2172,16 +2267,15 @@ mod tests {
         })
         .to_string();
 
-        let resolved =
-            resolve_generated_cover_path_from_sources(
-                &requested_path,
-                &stdout,
-                "",
-                None,
-                SystemTime::UNIX_EPOCH,
-            )
-                .await
-                .unwrap();
+        let resolved = resolve_generated_cover_path_from_sources(
+            &requested_path,
+            &stdout,
+            "",
+            None,
+            SystemTime::UNIX_EPOCH,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(resolved, generated_path);
         let _ = tokio::fs::remove_dir_all(session_dir).await;

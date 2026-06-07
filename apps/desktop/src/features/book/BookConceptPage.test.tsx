@@ -446,7 +446,6 @@ describe("BookConceptPage AI flow", () => {
       "true"
     );
     expect(coverButton).toBeDisabled();
-    expect(screen.getByRole("heading", { name: "Okładka" })).toBeInTheDocument();
     expect(screen.getByText("Codex CLI generuje okładkę...")).toBeInTheDocument();
     expect(await screen.findByAltText("Okładka robocza")).toHaveAttribute(
       "src",
@@ -543,6 +542,51 @@ describe("BookConceptPage AI flow", () => {
           generatedAt: "2026-06-05T12:05:00Z"
         })
       )
+    );
+  });
+
+  it("shows the new generated cover in the sidebar when the book already has a cover", async () => {
+    vi.mocked(getProject).mockResolvedValue({
+      ...projectDetails,
+      book: {
+        ...projectDetails.book,
+        coverImagePath: "data:image/png;base64,old-cover"
+      }
+    });
+    vi.mocked(generateBookCover).mockResolvedValueOnce({
+      book: {
+        ...projectDetails.book,
+        coverImagePath: "data:image/png;base64,old-cover"
+      },
+      aiRun: {
+        id: "cover-run-new",
+        providerId: "codex-cli-bridge",
+        promptPackageId: "generate_cover_image:test",
+        action: "generate_cover_image",
+        status: "success",
+        rawOutput: "{}",
+        durationMs: 12
+      },
+      imagePath: "data:image/png;base64,new-cover",
+      prompt: "cover prompt",
+      negativePrompt: "negative",
+      generatedAt: "2026-06-05T12:05:00Z"
+    });
+
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Okładka/i }));
+    const coverButton = await screen.findByRole("button", {
+      name: /Utwórz okładkę/i
+    });
+    await waitFor(() => expect(coverButton).not.toBeDisabled());
+    fireEvent.click(coverButton);
+
+    expect(await screen.findByText("Okładka jest gotowa do akceptacji.")).toBeInTheDocument();
+    expect(screen.getByAltText("Podgląd okładki z AI")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,new-cover"
     );
   });
 

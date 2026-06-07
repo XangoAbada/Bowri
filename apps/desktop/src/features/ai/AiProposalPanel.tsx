@@ -490,7 +490,7 @@ function useAiQueueRunner() {
             rawOutput: result.aiRun.rawOutput ?? "",
             editableValue: result.imagePath,
             durationMs: result.aiRun.durationMs,
-            coverImagePath: result.book.coverImagePath || result.imagePath,
+            coverImagePath: result.imagePath,
             coverGeneratedAt: result.generatedAt,
             progressMessage: "Okładka gotowa do akceptacji.",
             progress: 100,
