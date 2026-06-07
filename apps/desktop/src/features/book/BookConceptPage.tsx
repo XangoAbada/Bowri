@@ -1,7 +1,14 @@
 import {
+  ArrowRight,
+  CheckCircle2,
+  ChevronUp,
   Clock3,
+  ExternalLink,
+  Eye,
   Image as ImageIcon,
+  ListChecks,
   Loader2,
+  MessageCircle,
   Plus,
   Save,
   Sparkles,
@@ -30,6 +37,8 @@ import {
   renderBookCoverPromptPackage
 } from "../ai/coverPromptPackage";
 import { CoverImageLightbox } from "../ai/CoverImageLightbox";
+import { AiPromptContextPanel } from "../ai/AiPromptContextPanel";
+import { AiProposalPanel } from "../ai/AiProposalPanel";
 import {
   buildConceptFieldPromptPackage,
   conceptFieldConfigs,
@@ -54,6 +63,7 @@ import {
 
 type BookConceptPageProps = {
   projectId: string;
+  showAiPanels?: boolean;
 };
 
 type ConceptForm = {
@@ -265,7 +275,10 @@ const themeOptions: ChoiceOption[] = [
   { value: "zdrada", hint: "Pęknięcie zaufania i jego konsekwencje." }
 ];
 
-export function BookConceptPage({ projectId }: BookConceptPageProps) {
+export function BookConceptPage({
+  projectId,
+  showAiPanels = false
+}: BookConceptPageProps) {
   const queryClient = useQueryClient();
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
@@ -510,6 +523,9 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
   const codexUnavailable = codexStatusQuery.data?.available === false;
   const aiDisabled = !projectQuery.data || codexUnavailable;
+  const hasVisibleAiProposals = proposals.some(
+    (proposal) => proposal.projectId === projectId
+  );
   const fieldStatus = (field: ConceptFieldKey): AiProposalStatus | null =>
     pendingProposalStatus(proposals, {
       projectId,
@@ -541,16 +557,37 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   );
   const activeStageConfig =
     conceptStages.find((stage) => stage.key === activeStage) ?? conceptStages[0];
+  const activeStageIndex = Math.max(
+    0,
+    conceptStages.findIndex((stage) => stage.key === activeStageConfig.key)
+  );
+  const activeStageNumber = activeStageIndex + 1;
+  const activeCompletion = stageCompletion(activeStageConfig, form);
+  const nextStage = conceptStages[activeStageIndex + 1] ?? null;
+  const activeStagePreviewFields = activeStageConfig.fields.map((field) => ({
+    field: field as ConceptFieldKey,
+    label: conceptFieldConfigs[field as ConceptFieldKey].label,
+    value: form[field]
+  }));
+
+  function goToNextStage() {
+    if (!nextStage) {
+      return;
+    }
+
+    setProjectViewState(projectId, "conceptStage", nextStage.key);
+  }
+
+  function scrollChecklistIntoView() {
+    document
+      .getElementById("concept-checklist")
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
 
   return (
     <ConceptPromptContext.Provider value={activateFieldPromptContext}>
-      <section className="content-panel concept-panel">
-      <div className="section-title-row">
-        <div>
-          <p className="eyebrow">Faza 2</p>
-          <h2>Koncepcja książki</h2>
-        </div>
-      </div>
+      <div className="concept-workspace">
+        <section className="concept-main-column">
 
       {projectQuery.isError ? (
         <div className="empty-state">
@@ -559,9 +596,14 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
         </div>
       ) : null}
 
-      <form className="concept-form" onSubmit={handleSubmit}>
-        <div className="concept-stage-tabs" role="tablist" aria-label="Etapy koncepcji">
-          {conceptStages.map((stage) => {
+          <form className="concept-form" onSubmit={handleSubmit}>
+            <div className="concept-stage-card">
+              <div
+                className="concept-stage-tabs"
+                role="tablist"
+                aria-label="Etapy koncepcji"
+              >
+          {conceptStages.map((stage, index) => {
             const completion = stageCompletion(stage, form);
             const selected = stage.key === activeStageConfig.key;
             return (
@@ -575,20 +617,41 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   setProjectViewState(projectId, "conceptStage", stage.key)
                 }
               >
-                <span>{stage.title}</span>
-                <strong>
-                  {completion.complete}/{completion.total}
-                </strong>
+                <span className="stage-number">{index + 1}</span>
+                <span className="stage-copy">
+                  <strong>{stage.title}</strong>
+                  <span>
+                    {completion.complete}/{completion.total}
+                  </span>
+                </span>
               </button>
             );
           })}
+              </div>
         </div>
 
-        <div className="concept-stage-heading">
-          <p>{activeStageConfig.summary}</p>
-        </div>
+            <div className="concept-editor-card">
+              <div className="concept-stage-heading">
+                <span className="stage-heading-icon">
+                  <Sparkles size={18} />
+                </span>
+                <div>
+                  <h2>
+                    Faza 2.{activeStageNumber} {activeStageConfig.title}
+                  </h2>
+                  <p>{activeStageConfig.summary}</p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button checklist-jump-button"
+                  onClick={scrollChecklistIntoView}
+                >
+                  <ListChecks size={16} />
+                  Lista kontrolna
+                </button>
+              </div>
 
-        <div role="tabpanel" className="concept-stage-panel">
+              <div role="tabpanel" className="concept-stage-panel">
           {activeStage === "idea" ? (
             <FormSection>
               <TextField
@@ -933,25 +996,45 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
           ) : null}
         </div>
 
-        <div className="concept-save-row">
-          <div className="button-row">
-            <button
-              type="submit"
-              className="primary-button"
-              disabled={saveMutation.isPending || !projectQuery.data}
-            >
-              <Save size={16} />
-              {saveMutation.isPending ? "Zapisuję" : "Zapisz"}
-            </button>
-            {saveMessage ? <span className="success-text">{saveMessage}</span> : null}
-            {validationMessage ? (
-              <span className="warning-text">{validationMessage}</span>
-            ) : null}
-            {saveMutation.isError && !validationMessage ? (
-              <span className="warning-text">Nie udało się zapisać koncepcji.</span>
-            ) : null}
-          </div>
-        </div>
+            </div>
+
+            <div className="concept-save-row">
+              <div className="button-row">
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saveMutation.isPending || !projectQuery.data}
+                >
+                  <Save size={16} />
+                  {saveMutation.isPending ? "Zapisuję" : "Zapisz zmiany"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={goToNextStage}
+                  disabled={!nextStage}
+                >
+                  Następny etap
+                  <ArrowRight size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button plan-view-button"
+                  disabled
+                  title="Widok planu będzie dostępny w kolejnej fazie."
+                >
+                  <ListChecks size={16} />
+                  Przejdź do widoku planu
+                </button>
+                {saveMessage ? <span className="success-text">{saveMessage}</span> : null}
+                {validationMessage ? (
+                  <span className="warning-text">{validationMessage}</span>
+                ) : null}
+                {saveMutation.isError && !validationMessage ? (
+                  <span className="warning-text">Nie udało się zapisać koncepcji.</span>
+                ) : null}
+              </div>
+            </div>
       </form>
 
       {codexUnavailable ? (
@@ -962,12 +1045,135 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       ) : null}
 
       {aiError ? <p className="warning-text">{aiError}</p> : null}
+        </section>
+
+        <aside className="concept-side-column" aria-label="Panel koncepcji">
+          <section className="concept-side-card">
+            <div className="side-card-heading">
+              <h2>
+                <Eye size={17} />
+                Podgląd koncepcji
+              </h2>
+              <ChevronUp size={16} aria-hidden="true" />
+            </div>
+            <div className="concept-preview-box">
+              <span>Tytuł roboczy</span>
+              <strong>{form.workingTitle.trim() || "Bez tytułu"}</strong>
+            </div>
+            <div className="concept-preview-list">
+              {activeStagePreviewFields.map((item) => {
+                const filled = item.value.trim().length > 0;
+                return (
+                  <div className="concept-preview-row" key={item.field}>
+                    <span>{item.label}</span>
+                    <strong>{filled ? "Uzupełniono" : "Puste"}</strong>
+                  </div>
+                );
+              })}
+            </div>
+            <button type="button" className="ghost-button side-wide-button" disabled>
+              Zobacz całą koncepcję
+              <ExternalLink size={15} />
+            </button>
+          </section>
+
+          <section className="concept-side-card" id="concept-checklist">
+            <div className="side-card-heading">
+              <h2>
+                <CheckCircle2 size={17} />
+                Lista kontrolna: {activeStageConfig.title}
+              </h2>
+              <ChevronUp size={16} aria-hidden="true" />
+            </div>
+            <div className="checklist-items">
+              {activeStagePreviewFields.map((item) => {
+                const filled = item.value.trim().length > 0;
+                return (
+                  <div className={filled ? "checklist-item done" : "checklist-item"} key={item.field}>
+                    <CheckCircle2 size={15} />
+                    <span>{item.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="checklist-count">
+              {activeCompletion.complete} / {activeCompletion.total} uzupełnionych
+            </p>
+            <div className="checklist-progress" aria-hidden="true">
+              <span
+                style={{
+                  width: `${Math.round(
+                    (activeCompletion.complete / activeCompletion.total) * 100
+                  )}%`
+                }}
+              />
+            </div>
+          </section>
+
+          <section className="concept-side-card ai-assistant-card">
+            <div className="side-card-heading">
+              <h2>
+                <Sparkles size={17} />
+                Asystent AI
+              </h2>
+              <span className="status-pill">Beta</span>
+            </div>
+            <p className="muted-text">
+              Potrzebujesz inspiracji? AI może pomóc ulepszyć Twoją koncepcję.
+            </p>
+            <div className="assistant-action-list">
+              <button
+                type="button"
+                className="assistant-action"
+                onClick={() => generateField("premise")}
+                disabled={aiDisabled || Boolean(fieldStatus("premise"))}
+              >
+                <Sparkles size={16} />
+                Ulepsz premisę
+                <ArrowRight size={15} />
+              </button>
+              <button
+                type="button"
+                className="assistant-action"
+                onClick={() => generateField("protagonistSummary")}
+                disabled={aiDisabled || Boolean(fieldStatus("protagonistSummary"))}
+              >
+                <Sparkles size={16} />
+                Pogłęb bohatera
+                <ArrowRight size={15} />
+              </button>
+              <button
+                type="button"
+                className="assistant-action"
+                onClick={() => generateField("centralConflict")}
+                disabled={aiDisabled || Boolean(fieldStatus("centralConflict"))}
+              >
+                <Sparkles size={16} />
+                Zaproponuj konflikt
+                <ArrowRight size={15} />
+              </button>
+              <button type="button" className="ghost-button side-wide-button" disabled>
+                <MessageCircle size={16} />
+                Zadaj własne pytanie...
+              </button>
+            </div>
+          </section>
+
+          {showAiPanels ? (
+            <>
+              <AiPromptContextPanel />
+              {hasVisibleAiProposals ? (
+                <AiProposalPanel projectId={projectId} />
+              ) : null}
+            </>
+          ) : null}
+        </aside>
 
       <CoverImageLightbox
         image={previewImage}
         onClose={() => setPreviewImage(null)}
       />
-      </section>
+      </div>
     </ConceptPromptContext.Provider>
   );
 }

@@ -1,31 +1,28 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
-  BookOpen,
   Boxes,
   Brain,
+  CheckCircle2,
+  ChevronDown,
+  CircleDot,
+  Database,
   FileText,
   History,
+  Lightbulb,
   Map,
   PenLine,
   Settings,
+  ShieldCheck,
   Users
 } from "lucide-react";
-import {
-  CSSProperties,
-  PointerEvent as ReactPointerEvent,
-  ReactNode,
-  useEffect
-} from "react";
+import { ReactNode, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getProject } from "../shared/api/commands";
-import { AiProposalPanel } from "../features/ai/AiProposalPanel";
-import { AiPromptContextPanel } from "../features/ai/AiPromptContextPanel";
-import { CodexStatusPanel } from "../features/ai/CodexStatusPanel";
-import { useCodexSettingsStore } from "../features/ai/codexSettingsStore";
 import {
   projectLogReturnHref,
   useProjectNavigationStore
 } from "./projectNavigationStore";
+import storyforgeLogo from "../assets/storyforge-logo-source.png";
 
 type ProjectShellProps = {
   projectId: string;
@@ -53,12 +50,6 @@ export function ProjectShell({
       href: currentLocation.href
     })
   });
-  const contextPanelWidth = useCodexSettingsStore(
-    (state) => state.contextPanelWidth
-  );
-  const setContextPanelWidth = useCodexSettingsStore(
-    (state) => state.setContextPanelWidth
-  );
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
@@ -75,31 +66,18 @@ export function ProjectShell({
     projectQuery.data?.book.workingTitle ||
     projectQuery.data?.project.name ||
     "Projekt";
+  const subtitle =
+    activeSection === "concept"
+      ? "Faza 2: Koncepcja książki"
+      : activeSection === "aiLog"
+        ? "Log AI"
+        : "Ustawienia AI";
 
   useEffect(() => {
     if (activeSection !== "aiLog") {
       rememberLogReturnLocation(projectId, location.href);
     }
   }, [activeSection, location.href, projectId, rememberLogReturnLocation]);
-
-  function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = contextPanelWidth;
-
-    function handlePointerMove(moveEvent: PointerEvent) {
-      const nextWidth = clamp(startWidth + startX - moveEvent.clientX, 280, 560);
-      setContextPanelWidth(nextWidth);
-    }
-
-    function handlePointerUp() {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    }
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-  }
 
   function toggleAiLog() {
     if (activeSection === "aiLog") {
@@ -117,18 +95,12 @@ export function ProjectShell({
   }
 
   return (
-    <div
-      className="project-shell"
-      style={
-        {
-          "--context-panel-width": `${contextPanelWidth}px`
-        } as CSSProperties
-      }
-    >
+    <div className="project-shell">
       <aside className="sidebar">
         <Link className="brand-link" to="/">
-          <span>SF2</span>
-          <strong>StoryForge2</strong>
+          <span className="brand-mark">
+            <img src={storyforgeLogo} alt="" />
+          </span>
         </Link>
 
         <nav className="sidebar-nav" aria-label="Etapy pisania">
@@ -137,73 +109,72 @@ export function ProjectShell({
             params={{ projectId }}
             className={activeSection === "concept" ? "nav-item active" : "nav-item"}
           >
-            <BookOpen size={17} />
+            <Lightbulb size={18} />
             Koncepcja
           </Link>
 
           {disabledSections.map(({ label, icon: Icon }) => (
             <span className="nav-item disabled" key={label}>
-              <Icon size={17} />
+              <Icon size={18} />
               {label}
             </span>
           ))}
         </nav>
 
-        <Link
-          to="/projects/$projectId/ai"
-          params={{ projectId }}
-          className={activeSection === "ai" ? "nav-item active bottom" : "nav-item bottom"}
-        >
-          <Settings size={17} />
-          AI
-        </Link>
+        <div className="sidebar-bottom-nav">
+          <Link
+            to="/projects/$projectId/ai"
+            params={{ projectId }}
+            className={activeSection === "ai" ? "nav-item active" : "nav-item"}
+          >
+            <ShieldCheck size={18} />
+            AI
+          </Link>
+          <button
+            type="button"
+            className={activeSection === "aiLog" ? "nav-item active" : "nav-item"}
+            title={activeSection === "aiLog" ? "Zamknij log AI" : "Otwórz log AI"}
+            onClick={toggleAiLog}
+          >
+            <History size={18} />
+            Log AI
+          </button>
+          <span className="nav-item disabled">
+            <Settings size={18} />
+            Ustawienia
+          </span>
+        </div>
       </aside>
 
       <div className="workspace">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Projekt</p>
-            <h1>{title}</h1>
+            <h1>Projekt: {title}</h1>
+            <p>{subtitle}</p>
           </div>
-          {projectQuery.isError ? (
-            <span className="status-pill muted">błąd danych</span>
-          ) : (
-            <span className="status-pill">lokalny SQLite</span>
-          )}
+          <div className="workspace-header-actions" aria-label="Status projektu">
+            <span className="autosave-status">
+              <CheckCircle2 size={16} />
+              Zapisano automatycznie • 10:42
+            </span>
+            <button type="button" className="topbar-select">
+              <Database size={16} />
+              Lokalny SQLite
+              <ChevronDown size={15} />
+            </button>
+            <button
+              type="button"
+              className={projectQuery.isError ? "topbar-select muted" : "topbar-select ready"}
+            >
+              {projectQuery.isError ? <CircleDot size={16} /> : <CheckCircle2 size={16} />}
+              {projectQuery.isError ? "Błąd danych" : "Gotowy"}
+              <ChevronDown size={15} />
+            </button>
+          </div>
         </header>
 
         <main className="workspace-main">{children}</main>
       </div>
-
-      <aside className="context-panel">
-        <button
-          type="button"
-          className="context-resize-handle"
-          onPointerDown={handleResizeStart}
-          title="Przeciągnij, aby zmienić szerokość panelu AI"
-          aria-label="Zmień szerokość panelu AI"
-        />
-        <CodexStatusPanel compact />
-        <AiPromptContextPanel />
-        <AiProposalPanel projectId={projectId} />
-        <button
-          type="button"
-          className={
-            activeSection === "aiLog"
-              ? "context-log-link active"
-              : "context-log-link"
-          }
-          title={activeSection === "aiLog" ? "Zamknij log AI" : "Otwórz log AI"}
-          onClick={toggleAiLog}
-        >
-          <History size={16} />
-          Log AI
-        </button>
-      </aside>
     </div>
   );
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }

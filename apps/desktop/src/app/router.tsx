@@ -60,7 +60,7 @@ function ProjectConceptRoute() {
   const projectId = useProjectId();
   return (
     <ProjectShell projectId={projectId} activeSection="concept">
-      <BookConceptPage projectId={projectId} />
+      <BookConceptPage projectId={projectId} showAiPanels />
     </ProjectShell>
   );
 }
