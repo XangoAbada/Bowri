@@ -84,6 +84,38 @@ describe("renderPromptPackage", () => {
     expect(prompt).toContain(book.targetAudience);
     expect(prompt).toContain(book.styleGuide);
     expect(prompt).toContain("pamięć, tożsamość");
+    expect(prompt).toContain("# Response Length");
+    expect(prompt).toContain("1200 znaków");
+    expect(prompt).toContain("Maksymalna długość docelowej wartości pola value");
+  });
+
+  it("marks non-empty fields as expand mode and allows rewriting the existing value", () => {
+    const promptPackage = buildConceptFieldPromptPackage(project, book, "premise");
+    const prompt = renderPromptPackage(promptPackage);
+
+    expect(promptPackage.context.generationMode).toBe("expand");
+    expect(promptPackage.context.targetFieldCurrentValue).toBe(book.premise);
+    expect(prompt).toContain("Tryb pracy: expand");
+    expect(prompt).toContain("Możesz przebudować");
+    expect(prompt).toContain("Zwróć kompletną docelową wartość pola");
+  });
+
+  it("marks empty fields as generate mode", () => {
+    const promptPackage = buildConceptFieldPromptPackage(project, book, "title");
+    const prompt = renderPromptPackage(promptPackage);
+
+    expect(promptPackage.context.generationMode).toBe("generate");
+    expect(promptPackage.context.targetFieldCurrentValue).toBe("");
+    expect(prompt).toContain("Tryb pracy: generate");
+  });
+
+  it("adds strict label rules for multi-choice fields", () => {
+    const promptPackage = buildConceptFieldPromptPackage(project, book, "pointOfView");
+    const prompt = renderPromptPackage(promptPackage);
+
+    expect(prompt).toContain("# Multi-Choice Field Rules");
+    expect(prompt).toContain("bez przecinków");
+    expect(prompt).toContain("bez pełnego zdania");
   });
 
   it("renders a per-field prompt for every phase 2 concept field", () => {
@@ -117,6 +149,8 @@ describe("renderPromptPackage", () => {
       const prompt = renderPromptPackage(promptPackage);
 
       expect(prompt).toContain(`Docelowe pole: ${field}`);
+      expect(prompt).toContain("# Response Length");
+      expect(prompt).toContain("Maksymalna długość");
       expect(promptPackage.outputContract.format).toBe("json");
     }
   });
@@ -135,19 +169,49 @@ describe("renderPromptPackage", () => {
     expect(promptPackage.coverPrompt).toContain(book.antagonistForce);
     expect(promptPackage.coverPrompt).toContain(book.settingSketch);
     expect(promptPackage.coverPrompt).toContain(book.genre);
-    expect(promptPackage.coverPrompt).toContain(book.targetAudience);
     expect(promptPackage.coverPrompt).toContain(book.tone);
     expect(promptPackage.coverPrompt).toContain(book.styleGuide);
+    expect(promptPackage.coverPrompt).not.toContain(book.targetAudience);
+    expect(promptPackage.coverPrompt).not.toContain("(missing)");
     expect(promptPackage.generationOptions.providerId).toBe("codex-cli-bridge");
     expect(promptPackage.generationOptions.feature).toBe("image_generation");
+    expect(promptPackage.generationOptions.mode).toBe("fresh");
     expect(prompt).toContain("$imagegen");
-    expect(prompt).toContain("Codex CLI image generation");
-    expect(prompt).toContain("generated_images");
-    expect(prompt).toContain("Include the book title as readable cover typography");
+    expect(prompt).toContain("Create it from scratch as a fresh image generation.");
+    expect(prompt).toContain("Do not edit, extend");
+    expect(prompt).toContain("Image brief:");
+    expect(prompt).toContain("Return only compact JSON");
     expect(prompt).toContain(`"${book.workingTitle}"`);
     expect(prompt).not.toContain("no visible text");
+    expect(prompt).not.toContain("# Output Contract");
+    expect(prompt).not.toContain("generated_images");
     expect(prompt).toContain("D:\\covers\\cover.png");
-    expect(prompt).toContain("book_cover_image");
+    expect(prompt).not.toContain("book_cover_image");
+  });
+
+  it("omits empty cover prompt cues instead of rendering placeholders", () => {
+    const sparseBook = {
+      ...book,
+      premise: "",
+      protagonistSummary: "",
+      centralConflict: "",
+      antagonistForce: "",
+      settingSketch: "",
+      genre: "",
+      subgenre: "",
+      targetAudience: "",
+      tone: "",
+      styleGuide: ""
+    };
+
+    const promptPackage = buildBookCoverPromptPackage(project, sparseBook);
+
+    expect(promptPackage.coverPrompt).toContain(`"${book.workingTitle}"`);
+    expect(promptPackage.coverPrompt).not.toContain("(missing)");
+    expect(promptPackage.coverPrompt).not.toContain("Story image:");
+    expect(promptPackage.coverPrompt).not.toContain("Character cue:");
+    expect(promptPackage.coverPrompt).not.toContain("Threat or tension:");
+    expect(promptPackage.coverPrompt).not.toContain("World cue:");
   });
 
   it("renders a new-project title prompt without an existing project", () => {
@@ -159,5 +223,7 @@ describe("renderPromptPackage", () => {
     expect(prompt).toContain("Tajemnica archiwum");
     expect(prompt).toContain("concept_field_suggestion");
     expect(prompt).toContain("workingTitle");
+    expect(prompt).toContain("# Response Length");
+    expect(prompt).toContain("90 znaków");
   });
 });

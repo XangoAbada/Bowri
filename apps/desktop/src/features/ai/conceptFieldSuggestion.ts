@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ConceptFieldKey } from "./promptPackage";
+import { listConceptFields, type ConceptFieldKey } from "./promptPackage";
 import { extractJsonCandidate } from "./titleSuggestions";
 
 const conceptFieldKeySchema = z.enum([
@@ -70,10 +70,9 @@ export function parseConceptFieldSuggestion(
     );
   }
 
+  const values = normalizeValues(response, expectedField);
   const textValue =
-    response.values.length > 0
-      ? response.values.join(", ")
-      : response.value?.trim() ?? "";
+    values.length > 0 ? values.join(", ") : response.value?.trim() ?? "";
 
   if (!textValue) {
     throw new Error("Odpowiedź AI nie zawiera propozycji wartości.");
@@ -81,6 +80,31 @@ export function parseConceptFieldSuggestion(
 
   return {
     ...response,
+    values,
     textValue
   };
+}
+
+function normalizeValues(
+  response: ConceptFieldSuggestionResponse,
+  expectedField?: ConceptFieldKey
+): string[] {
+  const listField = expectedField
+    ? listConceptFields.includes(expectedField)
+    : response.values.length > 0;
+  const sourceValues =
+    response.values.length > 0
+      ? response.values
+      : listField && response.value
+        ? response.value.split(/[,;\n]/)
+        : [];
+
+  return [
+    ...new Set(
+      sourceValues
+        .flatMap((value) => (listField ? value.split(/[,;\n]/) : [value]))
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  ];
 }

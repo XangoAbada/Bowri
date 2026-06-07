@@ -3,6 +3,7 @@ import { DashboardPage } from "../features/projects/DashboardPage";
 import { ProjectShell } from "./ProjectShell";
 import { BookConceptPage } from "../features/book/BookConceptPage";
 import { CodexSettingsPage } from "../features/ai/CodexSettingsPage";
+import { AiLogPage } from "../features/ai/AiLogPage";
 
 const rootRoute = createRootRoute({
   component: RootLayout
@@ -32,11 +33,18 @@ const projectAiRoute = createRoute({
   component: ProjectAiRoute
 });
 
+const projectAiLogRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId/ai-log",
+  component: ProjectAiLogRoute
+});
+
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
   projectRoute,
   projectConceptRoute,
-  projectAiRoute
+  projectAiRoute,
+  projectAiLogRoute
 ]);
 
 export const router = createRouter({
@@ -62,6 +70,15 @@ function ProjectAiRoute() {
   return (
     <ProjectShell projectId={projectId} activeSection="ai">
       <CodexSettingsPage />
+    </ProjectShell>
+  );
+}
+
+function ProjectAiLogRoute() {
+  const projectId = useProjectId();
+  return (
+    <ProjectShell projectId={projectId} activeSection="aiLog">
+      <AiLogPage projectId={projectId} />
     </ProjectShell>
   );
 }

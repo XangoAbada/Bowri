@@ -25,6 +25,7 @@ export type ConceptFieldKey =
   | "styleGuide";
 
 export type AIProviderId = "codex-cli-bridge";
+export type PromptGenerationMode = "generate" | "expand";
 
 export type BookConceptPromptContext = Pick<
   Book,
@@ -60,6 +61,9 @@ export type PromptPackage = {
   userInstruction: string;
   context: {
     targetField: ConceptFieldKey;
+    generationMode: PromptGenerationMode;
+    targetFieldCurrentValue: string;
+    maxResponseCharacters: number | null;
     book: BookConceptPromptContext;
   };
   outputContract: {
@@ -79,6 +83,7 @@ export type NewProjectTitlePromptPackage = {
   userInstruction: string;
   context: {
     seedTitle: string;
+    maxResponseCharacters: number;
   };
   outputContract: {
     kind: "concept_field_suggestion";
@@ -122,6 +127,31 @@ export const longConceptFields: ConceptFieldKey[] = [
   "unwantedThemes",
   "styleGuide"
 ];
+
+export const conceptFieldMaxResponseCharacters: Record<ConceptFieldKey, number> = {
+  title: 90,
+  workingTitle: 90,
+  premise: 1200,
+  protagonistSummary: 900,
+  protagonistGoal: 500,
+  expandedPremise: 2200,
+  logline: 700,
+  centralConflict: 800,
+  antagonistForce: 900,
+  stakes: 800,
+  settingSketch: 900,
+  endingDirection: 800,
+  genre: 260,
+  subgenre: 320,
+  targetAudience: 420,
+  tone: 320,
+  pointOfView: 520,
+  targetWordCount: 20,
+  themesJson: 420,
+  unwantedThemes: 900,
+  alternativeTitlesJson: 600,
+  styleGuide: 1800
+};
 
 export const conceptFieldConfigs: Record<ConceptFieldKey, ConceptFieldConfig> = {
   title: {
@@ -347,6 +377,11 @@ export function buildConceptFieldPromptPackage(
 ): PromptPackage {
   const config = conceptFieldConfigs[field];
   const isPremiseDevelopment = config.action === "expand_premise";
+  const bookContext = bookConceptContext(book);
+  const targetFieldCurrentValue = currentFieldValue(bookContext, field);
+  const generationMode: PromptGenerationMode = targetFieldCurrentValue.trim()
+    ? "expand"
+    : "generate";
 
   return {
     id: createPromptId(config.action),
@@ -356,7 +391,10 @@ export function buildConceptFieldPromptPackage(
     userInstruction: config.userInstruction,
     context: {
       targetField: field,
-      book: bookConceptContext(book)
+      generationMode,
+      targetFieldCurrentValue,
+      maxResponseCharacters: conceptFieldMaxResponseCharacters[field] ?? null,
+      book: bookContext
     },
     outputContract: {
       kind: isPremiseDevelopment
@@ -374,8 +412,36 @@ export function buildConceptFieldPromptPackage(
 }
 
 export function renderPromptPackage(promptPackage: PromptPackage): string {
-  const { book, targetField } = promptPackage.context;
+  const {
+    book,
+    targetField,
+    generationMode,
+    targetFieldCurrentValue,
+    maxResponseCharacters
+  } = promptPackage.context;
   const config = conceptFieldConfigs[targetField];
+  const listRules = config.acceptsValues
+    ? `
+# Multi-Choice Field Rules
+- To pole przyjmuje wiele krótkich etykiet.
+- Zwróć konkretne elementy w values jako osobne stringi.
+- Każdy element values ma być krótką etykietą bez przecinków i bez pełnego zdania.
+- Pole value może zawierać te same elementy połączone przecinkami.
+- Nie zwracaj szerokiego opisu narracyjnego jako jednego elementu listy.`
+    : "";
+  const modeInstruction =
+    generationMode === "expand"
+      ? `Tryb pracy: expand.
+Obecna zawartość pola "${config.label}" jest materiałem wyjściowym:
+${emptyFallback(targetFieldCurrentValue)}
+
+Uwzględnij tę treść i rozwiń ją w lepszą, pełniejszą propozycję. Możesz przebudować, doprecyzować i przepisać istniejącą treść, jeśli dzięki temu wynik będzie spójniejszy. Zwróć kompletną docelową wartość pola, nie sam dopisek.`
+      : `Tryb pracy: generate.
+Pole "${config.label}" jest puste albo wymaga nowej propozycji. Wygeneruj kompletną docelową wartość pola.`;
+  const responseLengthRules = renderResponseLengthRules(
+    config,
+    maxResponseCharacters
+  );
 
   return `# Role
 Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
@@ -390,6 +456,10 @@ ${promptPackage.userInstruction}
 - Uwzględnij wszystkie pola z Book Context, nawet jeśli docelowe pole jest puste.
 - Nie dodawaj komentarzy poza wymaganym JSON.
 - Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
+
+${listRules}
+
+${responseLengthRules}
 
 # Book Context
 - Tytuł finalny: ${emptyFallback(book.title)}
@@ -419,6 +489,9 @@ ${promptPackage.userInstruction}
 Docelowe pole: ${targetField} (${config.label}).
 ${config.currentWork}
 
+# Generation Mode
+${modeInstruction}
+
 # Output Contract
 Zwróć JSON:
 ${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
@@ -438,7 +511,8 @@ export function buildNewProjectTitlePromptPackage(
     userInstruction:
       "Wygeneruj jedną mocną propozycję tytułu roboczego dla nowego projektu książki.",
     context: {
-      seedTitle
+      seedTitle,
+      maxResponseCharacters: conceptFieldMaxResponseCharacters[field]
     },
     outputContract: {
       kind: "concept_field_suggestion",
@@ -474,6 +548,10 @@ ${promptPackage.userInstruction}
 # Current Work
 Docelowe pole: workingTitle (Tytuł roboczy).
 Autor jest na dashboardzie i chce szybko nazwać nowy projekt książki przed jego utworzeniem.
+
+# Response Length
+- Maksymalna długość tytułu roboczego w polu value: ${promptPackage.context.maxResponseCharacters} znaków.
+- summary, rationale i warnings mają być krótkie.
 
 # Output Contract
 Zwróć JSON:
@@ -517,11 +595,49 @@ function conceptFieldSuggestionSchema(
     kind: "concept_field_suggestion",
     field,
     summary: "string",
-    value: acceptsValues ? "string | null" : "string",
-    values: acceptsValues ? ["string"] : "[]",
+    value: acceptsValues
+      ? "comma-separated short labels matching values, or null"
+      : "string",
+    values: acceptsValues
+      ? ["short concrete label without commas or full sentences"]
+      : "[]",
     rationale: "string",
     warnings: ["string"]
   };
+}
+
+function renderResponseLengthRules(
+  config: ConceptFieldConfig,
+  maxResponseCharacters: number | null
+): string {
+  if (!maxResponseCharacters) {
+    return "";
+  }
+
+  const targetRule = config.acceptsValues
+    ? `- Maksymalna długość pola value po połączeniu elementów values: ${maxResponseCharacters} znaków.`
+    : `- Maksymalna długość docelowej wartości pola value: ${maxResponseCharacters} znaków.`;
+
+  return `# Response Length
+${targetRule}
+- Zmieść najważniejszy sens w limicie; jeśli materiału jest za dużo, kondensuj zamiast przekraczać limit.
+- summary, rationale i warnings mają być krótkie i pomocnicze.`;
+}
+
+function currentFieldValue(
+  book: BookConceptPromptContext,
+  field: ConceptFieldKey
+): string {
+  const value = book[field];
+  if (field === "targetWordCount") {
+    return typeof value === "number" ? value.toString() : "";
+  }
+
+  if (field === "themesJson" || field === "alternativeTitlesJson") {
+    return renderJsonList(typeof value === "string" ? value : "");
+  }
+
+  return typeof value === "string" ? value : "";
 }
 
 function premiseDevelopmentSchema(): unknown {

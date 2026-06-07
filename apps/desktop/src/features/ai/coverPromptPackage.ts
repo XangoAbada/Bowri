@@ -28,6 +28,7 @@ export type CoverPromptPackage = {
   generationOptions: {
     providerId: "codex-cli-bridge";
     feature: "image_generation";
+    mode: "fresh";
     outputFormat: "png";
     aspectRatio: "2:3";
   };
@@ -41,7 +42,7 @@ export function buildBookCoverPromptPackage(
 ): CoverPromptPackage {
   const coverPrompt = renderCoverVisualPrompt(book);
   const negativePrompt =
-    "No watermark, no publisher logo, no author name, no mockup frame, no UI, no unreadable typography, no duplicate book covers, no gore.";
+    "No watermark, publisher logo, author name, subtitle, extra text, mockup frame, UI, illegible title, or duplicate cover layout.";
 
   return {
     id: createPromptId("generate_cover_image"),
@@ -79,6 +80,7 @@ export function buildBookCoverPromptPackage(
     generationOptions: {
       providerId: "codex-cli-bridge",
       feature: "image_generation",
+      mode: "fresh",
       outputFormat: "png",
       aspectRatio: "2:3"
     },
@@ -91,35 +93,20 @@ export function renderBookCoverPromptPackage(
   promptPackage: CoverPromptPackage,
   outputFilePath = "{OUTPUT_FILE}"
 ): string {
-  const coverTitle = titleForCover(promptPackage.context.book);
-
-  return `# Role
-You are generating a working book cover asset for StoryForge2.
-
-# Task
-Use Codex CLI image generation to create one portrait PNG book cover image.
-Invoke $imagegen explicitly. Prefer this output path:
+  return `Generate one portrait PNG book cover image with $imagegen.
+Create it from scratch as a fresh image generation. Do not edit, extend, inpaint, upscale, reuse, vary, or derive from any existing cover, preview, file, or prior generated image.
+Save the PNG at:
 ${outputFilePath}
 
-# Visual Prompt
+Image brief:
 ${promptPackage.coverPrompt}
 
-# Negative Prompt
+Avoid:
 ${promptPackage.negativePrompt}
+Also avoid using any previously generated or saved image as input.
 
-# Hard Rules
-- The cover must be portrait with a 2:3 book-cover composition.
-- Make a real raster image, not SVG, HTML, CSS, or a text-only placeholder.
-- Include the book title as readable cover typography inside the image: "${coverTitle}".
-- The title text should be prominent, spelled exactly as provided, and integrated with the cover design.
-- Do not call any image API directly or ask for an API key.
-- Prefer saving the generated PNG to the output path above.
-- If Codex image generation saves the PNG under the Codex generated_images directory and moving or copying is blocked, do not retry shell commands; return JSON with imagePath set to the actual generated PNG path if it is known.
-- Return only JSON when image generation is complete.
-
-# Output Contract
-Return JSON:
-${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
+Return only compact JSON after generation:
+{"imagePath":"<actual PNG path>"}
 `;
 }
 
@@ -127,26 +114,30 @@ export function renderCoverVisualPrompt(book: Book): string {
   const coverTitle = titleForCover(book);
 
   return [
-    "Use case: illustration-story",
-    "Asset type: working book cover",
-    `Primary request: a polished editorial cover for the book title "${coverTitle}"`,
-    `Scene/backdrop: visual metaphor for this premise: ${emptyFallback(book.premise)}`,
-    `Main character cue: ${emptyFallback(book.protagonistSummary)}`,
-    `Opposing force or threat cue: ${emptyFallback(book.antagonistForce)}`,
-    `Setting cues: ${emptyFallback(book.settingSketch)}`,
-    `Style/medium: sophisticated illustrated book-cover art, strong silhouette, tactile print texture`,
-    `Composition/framing: portrait 2:3, central focal image, generous safe margins, clear title area`,
-    `Typography/title: include readable title text exactly as "${coverTitle}", prominent and professionally typeset`,
-    `Lighting/mood: ${emptyFallback(book.tone)}`,
-    `Genre cues: ${emptyFallback(book.genre)}`,
-    `Audience: ${emptyFallback(book.targetAudience)}`,
-    `Style notes: ${emptyFallback(book.styleGuide)}`,
-    "Constraints: no watermark, no logo, no author name, no series badge; only the book title should appear as text"
-  ].join("\n");
+    `Title text: "${coverTitle}"`,
+    "Format: portrait 2:3 editorial book cover, polished raster illustration.",
+    "Composition: one clear central visual idea, strong silhouette, readable title area, generous margins.",
+    optionalLine(
+      "Genre and mood",
+      compact([book.genre, book.subgenre, book.tone].filter(isFilled).join(", "))
+    ),
+    optionalLine("Story image", compact(book.premise, 260)),
+    optionalLine("Character cue", compact(book.protagonistSummary, 180)),
+    optionalLine(
+      "Threat or tension",
+      compact([book.centralConflict, book.antagonistForce].filter(isFilled).join("; "), 220)
+    ),
+    optionalLine("World cue", compact(book.settingSketch, 180)),
+    optionalLine("Design note", compact(book.styleGuide, 160)),
+    "Typography: show only the title, spelled exactly, no subtitle or author name."
+  ]
+    .filter(isFilled)
+    .join("\n");
 }
 
 function titleForCover(book: Pick<Book, "title" | "workingTitle">): string {
-  return emptyFallback(book.title || book.workingTitle);
+  const title = book.title.trim() || book.workingTitle.trim();
+  return title.length > 0 ? title : "Untitled book";
 }
 
 function createPromptId(action: AIAction): string {
@@ -159,6 +150,19 @@ function createPromptId(action: AIAction): string {
     .slice(2)}`;
 }
 
-function emptyFallback(value: string): string {
-  return value.trim().length > 0 ? value : "(missing)";
+function optionalLine(label: string, value: string): string {
+  return value ? `${label}: ${value}` : "";
+}
+
+function compact(value: string, maxLength = 200): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trim()}...`;
+}
+
+function isFilled(value: string): boolean {
+  return value.trim().length > 0;
 }

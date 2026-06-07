@@ -34,6 +34,29 @@ describe("parseConceptFieldSuggestion", () => {
     expect(parsed.warnings).toHaveLength(1);
   });
 
+  it("splits fallback value for multi-choice fields", () => {
+    const parsed = parseConceptFieldSuggestion(
+      JSON.stringify({
+        version: 1,
+        kind: "concept_field_suggestion",
+        field: "pointOfView",
+        value: "trzecia osoba ograniczona, czas przeszły, bliska perspektywa",
+        values: [],
+        warnings: []
+      }),
+      "pointOfView"
+    );
+
+    expect(parsed.values).toEqual([
+      "trzecia osoba ograniczona",
+      "czas przeszły",
+      "bliska perspektywa"
+    ]);
+    expect(parsed.textValue).toBe(
+      "trzecia osoba ograniczona, czas przeszły, bliska perspektywa"
+    );
+  });
+
   it("rejects invalid JSON", () => {
     expect(() => parseConceptFieldSuggestion("{ bad }", "genre")).toThrow(
       /Niepoprawny JSON/

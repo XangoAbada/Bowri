@@ -1,15 +1,34 @@
-import { Link } from "@tanstack/react-router";
-import { BookOpen, Boxes, Brain, FileText, Map, PenLine, Settings, Users } from "lucide-react";
-import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import {
+  BookOpen,
+  Boxes,
+  Brain,
+  FileText,
+  History,
+  Map,
+  PenLine,
+  Settings,
+  Users
+} from "lucide-react";
+import {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+  useEffect
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getProject } from "../shared/api/commands";
 import { AiProposalPanel } from "../features/ai/AiProposalPanel";
 import { CodexStatusPanel } from "../features/ai/CodexStatusPanel";
 import { useCodexSettingsStore } from "../features/ai/codexSettingsStore";
+import {
+  projectLogReturnHref,
+  useProjectNavigationStore
+} from "./projectNavigationStore";
 
 type ProjectShellProps = {
   projectId: string;
-  activeSection: "concept" | "ai";
+  activeSection: "concept" | "ai" | "aiLog";
   children: ReactNode;
 };
 
@@ -27,6 +46,12 @@ export function ProjectShell({
   activeSection,
   children
 }: ProjectShellProps) {
+  const navigate = useNavigate();
+  const location = useLocation({
+    select: (currentLocation) => ({
+      href: currentLocation.href
+    })
+  });
   const contextPanelWidth = useCodexSettingsStore(
     (state) => state.contextPanelWidth
   );
@@ -38,11 +63,23 @@ export function ProjectShell({
     queryFn: () => getProject(projectId),
     retry: 0
   });
+  const rememberLogReturnLocation = useProjectNavigationStore(
+    (state) => state.rememberLogReturnLocation
+  );
+  const storedLogReturnLocation = useProjectNavigationStore(
+    (state) => state.logReturnLocations[projectId]
+  );
 
   const title =
     projectQuery.data?.book.workingTitle ||
     projectQuery.data?.project.name ||
     "Projekt";
+
+  useEffect(() => {
+    if (activeSection !== "aiLog") {
+      rememberLogReturnLocation(projectId, location.href);
+    }
+  }, [activeSection, location.href, projectId, rememberLogReturnLocation]);
 
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -61,6 +98,21 @@ export function ProjectShell({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function toggleAiLog() {
+    if (activeSection === "aiLog") {
+      void navigate({
+        href: projectLogReturnHref(projectId, storedLogReturnLocation)
+      });
+      return;
+    }
+
+    rememberLogReturnLocation(projectId, location.href);
+    void navigate({
+      to: "/projects/$projectId/ai-log",
+      params: { projectId }
+    });
   }
 
   return (
@@ -132,6 +184,19 @@ export function ProjectShell({
         />
         <CodexStatusPanel compact />
         <AiProposalPanel projectId={projectId} />
+        <button
+          type="button"
+          className={
+            activeSection === "aiLog"
+              ? "context-log-link active"
+              : "context-log-link"
+          }
+          title={activeSection === "aiLog" ? "Zamknij log AI" : "Otwórz log AI"}
+          onClick={toggleAiLog}
+        >
+          <History size={16} />
+          Log AI
+        </button>
       </aside>
     </div>
   );

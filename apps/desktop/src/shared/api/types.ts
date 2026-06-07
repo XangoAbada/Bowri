@@ -177,6 +177,22 @@ export type AiRunResult = {
   durationMs: number;
 };
 
+export type AiLogEntry = {
+  id: string;
+  projectId: string;
+  providerId: string;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  action: string;
+  promptPackageJson: unknown;
+  prompt: string;
+  rawOutput?: string | null;
+  status: string;
+  errorMessage?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+};
+
 export type GenerateBookCoverInput = {
   projectId: string;
   bookId: string;
@@ -189,6 +205,14 @@ export type GenerateBookCoverInput = {
   timeoutSeconds?: number;
   model?: string;
   reasoningEffort?: ReasoningEffort;
+};
+
+export type AcceptGeneratedBookCoverInput = {
+  bookId: string;
+  imagePath: string;
+  coverPrompt: string;
+  coverNegativePrompt: string;
+  generatedAt: string;
 };
 
 export type BookCoverResult = {

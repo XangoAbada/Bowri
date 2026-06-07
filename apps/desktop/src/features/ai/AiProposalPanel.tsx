@@ -1,21 +1,35 @@
-import { Check, FileJson, Loader2, RotateCcw, X } from "lucide-react";
+import { Check, Clock3, FileJson, Loader2, RotateCcw, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
+import { coverImageSource } from "../../shared/api/assets";
+import { isTauriRuntime } from "../../shared/api/browserDevCommands";
 import {
+  acceptGeneratedBookCover,
+  generateBookCover,
   generateNewProjectTitle,
   runCodexPrompt,
   updateBookConcept
 } from "../../shared/api/commands";
-import type { BookConceptInput } from "../../shared/api/types";
+import type {
+  BookConceptInput,
+  CoverGenerationProgressEvent
+} from "../../shared/api/types";
 import { parseConceptFieldSuggestion } from "./conceptFieldSuggestion";
 import { useCodexSettingsStore } from "./codexSettingsStore";
 import { parsePremiseDevelopment } from "./premiseDevelopment";
 import {
   conceptFieldConfigs,
   ConceptFieldKey,
-  listConceptFields,
   longConceptFields
 } from "./promptPackage";
-import { ActiveAiProposal, ParsedAiProposal, useProposalStore } from "./proposalStore";
+import {
+  ActiveAiProposal,
+  BOOK_COVER_FIELD,
+  ParsedAiProposal,
+  useProposalStore
+} from "./proposalStore";
+import { CoverImageLightbox } from "./CoverImageLightbox";
 
 type AiProposalPanelProps = {
   projectId: string;
@@ -26,33 +40,36 @@ export function AiProposalPanel({
   projectId,
   onAcceptValue
 }: AiProposalPanelProps) {
+  useAiQueueRunner();
+  useCoverGenerationProgressListener();
+
   const queryClient = useQueryClient();
-  const proposal = useProposalStore((state) => state.activeProposal);
+  const [previewImage, setPreviewImage] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
+  const proposals = useProposalStore((state) => state.proposals);
   const setEditableValue = useProposalStore((state) => state.setEditableValue);
   const setEditableField = useProposalStore((state) => state.setEditableField);
   const toggleSelectedField = useProposalStore((state) => state.toggleSelectedField);
   const clearProposal = useProposalStore((state) => state.clearProposal);
-  const startProposal = useProposalStore((state) => state.startProposal);
-  const finishProposal = useProposalStore((state) => state.finishProposal);
-  const failProposal = useProposalStore((state) => state.failProposal);
-  const codexPath = useCodexSettingsStore((state) => state.codexPath);
-  const timeoutSeconds = useCodexSettingsStore((state) => state.timeoutSeconds);
-  const model = useCodexSettingsStore((state) => state.model);
-  const reasoningEffort = useCodexSettingsStore(
-    (state) => state.reasoningEffort
-  );
-
-  const visibleProposal =
-    proposal && proposal.projectId === projectId ? proposal : null;
+  const retryProposal = useProposalStore((state) => state.retryProposal);
+  const visibleProposals = proposals
+    .filter((proposal) => proposal.projectId === projectId)
+    .sort(compareProposalsForPanel);
 
   const acceptMutation = useMutation({
-    mutationFn: async () => {
-      if (!visibleProposal || visibleProposal.status !== "success") {
+    mutationFn: async (proposalId: string) => {
+      const proposal = useProposalStore
+        .getState()
+        .proposals.find((item) => item.id === proposalId);
+
+      if (!proposal || proposal.status !== "success") {
         return null;
       }
 
-      if (visibleProposal.scope === "newProject") {
-        const value = visibleProposal.editableValue.trim();
+      if (proposal.scope === "newProject") {
+        const value = proposal.editableValue.trim();
         if (!onAcceptValue) {
           throw new Error("Brak obslugi akceptacji propozycji nowego projektu.");
         }
@@ -61,109 +78,48 @@ export function AiProposalPanel({
         return null;
       }
 
-      if (isPremiseDevelopment(visibleProposal.parsed)) {
-        const input = proposalInputFromFields(
-          visibleProposal.editableFields,
-          visibleProposal.selectedFields
-        );
-        return updateBookConcept(visibleProposal.bookId, input);
+      if (isBookCoverProposal(proposal)) {
+        const imagePath = (proposal.coverImagePath || proposal.editableValue).trim();
+        if (!imagePath || !proposal.coverPrompt || !proposal.coverGeneratedAt) {
+          throw new Error("Brak kompletnej propozycji okładki do akceptacji.");
+        }
+
+        return acceptGeneratedBookCover({
+          bookId: proposal.bookId,
+          imagePath,
+          coverPrompt: proposal.coverPrompt,
+          coverNegativePrompt: proposal.coverNegativePrompt ?? "",
+          generatedAt: proposal.coverGeneratedAt
+        });
       }
 
-      const value = visibleProposal.editableValue.trim();
+      if (isPremiseDevelopment(proposal.parsed)) {
+        const input = proposalInputFromFields(
+          proposal.editableFields,
+          proposal.selectedFields
+        );
+        return updateBookConcept(proposal.bookId, input);
+      }
+
+      const value = proposal.editableValue.trim();
       return updateBookConcept(
-        visibleProposal.bookId,
-        proposalInputFromValue(value, visibleProposal)
+        proposal.bookId,
+        proposalInputFromValue(value, { field: proposal.field as ConceptFieldKey })
       );
     },
-    onSuccess: async () => {
-      clearProposal();
-      if (visibleProposal?.scope !== "newProject") {
+    onSuccess: async (_payload, proposalId) => {
+      const proposal = useProposalStore
+        .getState()
+        .proposals.find((item) => item.id === proposalId);
+      clearProposal(proposalId);
+      if (proposal?.scope !== "newProject") {
         await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         await queryClient.invalidateQueries({ queryKey: ["projects"] });
       }
     }
   });
 
-  const retryMutation = useMutation({
-    mutationFn: async () => {
-      if (!visibleProposal) {
-        return null;
-      }
-
-      const snapshot = {
-        scope: visibleProposal.scope,
-        projectId: visibleProposal.projectId,
-        bookId: visibleProposal.bookId,
-        field: visibleProposal.field,
-        action: visibleProposal.action,
-        promptPackageId: visibleProposal.promptPackageId,
-        promptPackageJson: visibleProposal.promptPackageJson,
-        prompt: visibleProposal.prompt
-      };
-
-      startProposal(snapshot);
-
-      const result =
-        snapshot.scope === "newProject"
-          ? await generateNewProjectTitle({
-              action: "generate_working_title",
-              promptPackageId: snapshot.promptPackageId,
-              promptPackageJson: snapshot.promptPackageJson,
-              prompt: snapshot.prompt,
-              codexPath,
-              timeoutSeconds,
-              model,
-              reasoningEffort
-            })
-          : await runCodexPrompt({
-              projectId: snapshot.projectId,
-              action: snapshot.action,
-              promptPackageId: snapshot.promptPackageId,
-              promptPackageJson: snapshot.promptPackageJson,
-              prompt: snapshot.prompt,
-              codexPath,
-              timeoutSeconds,
-              model,
-              reasoningEffort
-            });
-
-      if (result.status !== "success" || !result.rawOutput) {
-        throw new RetryError(
-          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
-          result.rawOutput ?? ""
-        );
-      }
-
-      const parsed = parseProposalResult(
-        result.rawOutput,
-        snapshot.field,
-        snapshot.action
-      );
-      return { parsed, result };
-    },
-    onSuccess: (payload) => {
-      if (!payload) {
-        return;
-      }
-
-      finishProposal({
-        aiRunId: payload.result.id,
-        rawOutput: payload.result.rawOutput ?? "",
-        parsed: payload.parsed,
-        editableValue: payload.parsed.textValue,
-        editableFields: editableFieldsFromParsed(payload.parsed),
-        selectedFields: selectedFieldsFromParsed(payload.parsed),
-        durationMs: payload.result.durationMs
-      });
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      const rawOutput = error instanceof RetryError ? error.rawOutput : "";
-      failProposal(message, rawOutput);
-    }
-  });
-
-  if (!visibleProposal) {
+  if (visibleProposals.length === 0) {
     return (
       <section className="context-section compact">
         <div className="section-title-row">
@@ -180,55 +136,181 @@ export function AiProposalPanel({
     );
   }
 
-  const config = conceptFieldConfigs[visibleProposal.field];
-  const running = visibleProposal.status === "running";
-  const success = visibleProposal.status === "success";
-  const premiseProposal = isPremiseDevelopment(visibleProposal.parsed)
-    ? visibleProposal.parsed
-    : null;
-  const structured = premiseProposal !== null;
-  const proposalRows =
-    longConceptFields.includes(visibleProposal.field) || structured ? 8 : 3;
-  const canAccept = structured
-    ? hasSelectedEditableField(visibleProposal)
-    : visibleProposal.editableValue.trim().length > 0;
-
   return (
     <section className="context-section compact proposal-panel">
       <div className="section-title-row">
         <div>
           <p className="eyebrow">Codex CLI</p>
-          <h2>{config.label}</h2>
+          <h2>Kolejka AI</h2>
         </div>
-        <span
-          className={
-            success
-              ? "status-pill ready"
-              : visibleProposal.status === "error"
-                ? "status-pill muted"
-                : "status-pill"
-          }
-        >
-          {running ? <Loader2 size={14} className="spin-icon" /> : null}
-          {running ? "Generuje" : success ? "Gotowe" : "Błąd"}
+        <span className="status-pill">
+          <Clock3 size={14} aria-hidden="true" />
+          {visibleProposals.length}
         </span>
       </div>
 
-      {visibleProposal.parsed?.summary ? (
-        <p className="muted-text">{visibleProposal.parsed.summary}</p>
+      <div className="proposal-queue-list">
+        {visibleProposals.map((proposal) => (
+          <ProposalQueueItem
+            key={proposal.id}
+            proposal={proposal}
+            accepting={acceptMutation.isPending && acceptMutation.variables === proposal.id}
+            retrying={proposal.status === "queued"}
+            onAccept={() => acceptMutation.mutate(proposal.id)}
+            onClear={() => clearProposal(proposal.id)}
+            onRetry={() => retryProposal(proposal.id)}
+            onPreview={(src, alt) => setPreviewImage({ src, alt })}
+            onEditableValueChange={(value) => setEditableValue(proposal.id, value)}
+            onEditableFieldChange={(field, value) =>
+              setEditableField(proposal.id, field, value)
+            }
+            onToggleField={(field) => toggleSelectedField(proposal.id, field)}
+          />
+        ))}
+      </div>
+
+      {acceptMutation.isError ? (
+        <p className="warning-text">Nie udało się zapisać propozycji.</p>
+      ) : null}
+
+      <CoverImageLightbox
+        image={previewImage}
+        onClose={() => setPreviewImage(null)}
+      />
+    </section>
+  );
+}
+
+type ProposalQueueItemProps = {
+  proposal: ActiveAiProposal;
+  accepting: boolean;
+  retrying: boolean;
+  onAccept: () => void;
+  onClear: () => void;
+  onRetry: () => void;
+  onPreview: (src: string, alt: string) => void;
+  onEditableValueChange: (value: string) => void;
+  onEditableFieldChange: (field: ConceptFieldKey, value: string) => void;
+  onToggleField: (field: ConceptFieldKey) => void;
+};
+
+function ProposalQueueItem({
+  proposal,
+  accepting,
+  retrying,
+  onAccept,
+  onClear,
+  onRetry,
+  onPreview,
+  onEditableValueChange,
+  onEditableFieldChange,
+  onToggleField
+}: ProposalQueueItemProps) {
+  const coverProposal = isBookCoverProposal(proposal);
+  const label = coverProposal
+    ? "Okładka"
+    : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
+  const running = proposal.status === "running";
+  const queued = proposal.status === "queued";
+  const success = proposal.status === "success";
+  const error = proposal.status === "error";
+  const premiseProposal = isPremiseDevelopment(proposal.parsed)
+    ? proposal.parsed
+    : null;
+  const structured = premiseProposal !== null;
+  const proposalRows =
+    !coverProposal &&
+    (longConceptFields.includes(proposal.field as ConceptFieldKey) || structured)
+      ? 8
+      : 3;
+  const canAccept = coverProposal
+    ? Boolean((proposal.coverImagePath || proposal.editableValue).trim())
+    : structured
+    ? hasSelectedEditableField(proposal)
+    : proposal.editableValue.trim().length > 0;
+
+  return (
+    <article className={`proposal-queue-item ${proposal.status}`}>
+      <div className="proposal-queue-heading">
+        <div>
+          <p className="eyebrow">
+            {coverProposal
+              ? "Okładka"
+              : proposal.scope === "newProject"
+                ? "Nowy projekt"
+                : "Pole"}
+          </p>
+          <h3>{label}</h3>
+        </div>
+        <span className={statusClassName(proposal.status)}>
+          {running ? <Loader2 size={14} className="spin-icon" /> : null}
+          {statusLabel(proposal.status)}
+        </span>
+      </div>
+
+      {proposal.parsed?.summary ? (
+        <p className="muted-text">{proposal.parsed.summary}</p>
+      ) : null}
+
+      {queued ? (
+        <p className="muted-text">
+          Zadanie czeka, aż poprzednia generacja w kolejce się zakończy.
+        </p>
       ) : null}
 
       {running ? (
         <p className="muted-text">
-          Zadanie jest w kolejce panelu. Wynik pojawi się tutaj i nie zapisze
-          się bez akceptacji.
+          {coverProposal
+            ? proposal.progressMessage ?? "Codex CLI generuje okładkę."
+            : "Codex CLI generuje wynik. Propozycja nie zapisze się bez akceptacji."}
+        </p>
+      ) : null}
+
+      {coverProposal && proposal.progressMessage && !running ? (
+        <p className="muted-text">{proposal.progressMessage}</p>
+      ) : null}
+
+      {coverProposal && (proposal.partialImageDataUrl || proposal.coverImagePath) ? (
+        <button
+          type="button"
+          className="proposal-cover-preview proposal-cover-preview-button"
+          onClick={() =>
+            onPreview(
+              coverImageSource(
+                proposal.partialImageDataUrl || proposal.coverImagePath
+              ),
+              "Podgląd okładki z AI"
+            )
+          }
+          title="Otwórz okładkę w pełnym podglądzie"
+        >
+          <img
+            src={coverImageSource(
+              proposal.partialImageDataUrl || proposal.coverImagePath
+            )}
+            alt="Podgląd okładki z AI"
+          />
+        </button>
+      ) : null}
+
+      {coverProposal && running ? (
+        <div className="cover-progress active" role="status" aria-live="polite">
+          <div className="cover-progress-track" aria-hidden="true">
+            <span />
+          </div>
+        </div>
+      ) : null}
+
+      {coverProposal && success ? (
+        <p className="success-text">
+          Okładka jest gotowa do akceptacji.
         </p>
       ) : null}
 
       {success && premiseProposal ? (
         <div className="proposal-field-list">
           {premiseProposal.fieldValues.map((item) => {
-            const selected = visibleProposal.selectedFields[item.field] !== false;
+            const selected = proposal.selectedFields[item.field] !== false;
             const rows = longConceptFields.includes(item.field) ? 5 : 3;
             return (
               <div className="proposal-field-item" key={item.field}>
@@ -236,15 +318,15 @@ export function AiProposalPanel({
                   <input
                     type="checkbox"
                     checked={selected}
-                    onChange={() => toggleSelectedField(item.field)}
+                    onChange={() => onToggleField(item.field)}
                   />
                   <span>{item.label}</span>
                 </label>
                 <textarea
                   aria-label={`Edytuj ${item.label}`}
-                  value={visibleProposal.editableFields[item.field] ?? item.value}
+                  value={proposal.editableFields[item.field] ?? item.value}
                   onChange={(event) =>
-                    setEditableField(item.field, event.target.value)
+                    onEditableFieldChange(item.field, event.target.value)
                   }
                   rows={rows}
                   disabled={!selected}
@@ -256,31 +338,29 @@ export function AiProposalPanel({
         </div>
       ) : null}
 
-      {success && !structured ? (
+      {success && !structured && !coverProposal ? (
         <label className="field-label">
           Propozycja do akceptacji
           <textarea
-            value={visibleProposal.editableValue}
-            onChange={(event) => setEditableValue(event.target.value)}
+            value={proposal.editableValue}
+            onChange={(event) => onEditableValueChange(event.target.value)}
             rows={proposalRows}
-            title={`Możesz poprawić propozycję dla pola ${config.label} przed zapisem.`}
+            title={`Możesz poprawić propozycję dla pola ${label} przed zapisem.`}
           />
         </label>
       ) : null}
 
-      {visibleProposal.parsed &&
-      "rationale" in visibleProposal.parsed &&
-      visibleProposal.parsed.rationale ? (
-        <p className="muted-text">{visibleProposal.parsed.rationale}</p>
+      {proposal.parsed && "rationale" in proposal.parsed && proposal.parsed.rationale ? (
+        <p className="muted-text">{proposal.parsed.rationale}</p>
       ) : null}
 
-      {visibleProposal.errorMessage ? (
-        <p className="warning-text">{visibleProposal.errorMessage}</p>
+      {proposal.errorMessage ? (
+        <p className="warning-text">{proposal.errorMessage}</p>
       ) : null}
 
-      {visibleProposal.parsed && visibleProposal.parsed.warnings.length > 0 ? (
+      {proposal.parsed && proposal.parsed.warnings.length > 0 ? (
         <div className="warning-box">
-          {visibleProposal.parsed.warnings.map((warning) => (
+          {proposal.parsed.warnings.map((warning) => (
             <p key={warning}>{warning}</p>
           ))}
         </div>
@@ -297,10 +377,10 @@ export function AiProposalPanel({
         </details>
       ) : null}
 
-      {visibleProposal.rawOutput ? (
+      {proposal.rawOutput ? (
         <details className="raw-output">
           <summary>Surowy wynik</summary>
-          <pre>{visibleProposal.rawOutput}</pre>
+          <pre>{proposal.rawOutput}</pre>
         </details>
       ) : null}
 
@@ -308,17 +388,17 @@ export function AiProposalPanel({
         <button
           type="button"
           className="primary-button"
-          onClick={() => acceptMutation.mutate()}
-          disabled={acceptMutation.isPending || running || !canAccept}
+          onClick={onAccept}
+          disabled={accepting || running || queued || error || !canAccept}
         >
           <Check size={16} />
-          Akceptuj
+          {accepting ? "Zapisuję" : "Akceptuj"}
         </button>
         <button
           type="button"
           className="ghost-button"
-          onClick={() => clearProposal()}
-          disabled={acceptMutation.isPending || retryMutation.isPending}
+          onClick={onClear}
+          disabled={accepting || running}
         >
           <X size={16} />
           Odrzuć
@@ -326,20 +406,218 @@ export function AiProposalPanel({
         <button
           type="button"
           className="ghost-button"
-          onClick={() => retryMutation.mutate()}
-          disabled={running || acceptMutation.isPending || retryMutation.isPending}
+          onClick={onRetry}
+          disabled={running || queued || accepting || retrying}
           title="Ponownie uruchom ten sam prompt z zapisanym snapshotem kontekstu."
         >
           <RotateCcw size={16} />
           Ponów
         </button>
       </div>
-
-      {acceptMutation.isError ? (
-        <p className="warning-text">Nie udało się zapisać propozycji.</p>
-      ) : null}
-    </section>
+    </article>
   );
+}
+
+function useAiQueueRunner() {
+  const queuedProposal = useProposalStore((state) =>
+    state.proposals.find((proposal) => proposal.status === "queued")
+  );
+  const hasRunningProposal = useProposalStore((state) =>
+    state.proposals.some((proposal) => proposal.status === "running")
+  );
+  const startQueuedProposal = useProposalStore((state) => state.startQueuedProposal);
+  const finishProposal = useProposalStore((state) => state.finishProposal);
+  const failProposal = useProposalStore((state) => state.failProposal);
+  const updateProposalProgress = useProposalStore(
+    (state) => state.updateProposalProgress
+  );
+  const codexPath = useCodexSettingsStore((state) => state.codexPath);
+  const timeoutSeconds = useCodexSettingsStore((state) => state.timeoutSeconds);
+  const model = useCodexSettingsStore((state) => state.model);
+  const reasoningEffort = useCodexSettingsStore(
+    (state) => state.reasoningEffort
+  );
+
+  useEffect(() => {
+    if (!queuedProposal || hasRunningProposal) {
+      return;
+    }
+
+    const proposalId = queuedProposal.id;
+    startQueuedProposal(proposalId);
+
+    async function runQueuedProposal() {
+      const snapshot = useProposalStore
+        .getState()
+        .proposals.find((proposal) => proposal.id === proposalId);
+      if (!snapshot) {
+        return;
+      }
+
+      try {
+        if (isBookCoverProposal(snapshot)) {
+          updateProposalProgress(proposalId, {
+            progressMessage: "Przygotowuję prompt okładki..."
+          });
+
+          if (!snapshot.coverPrompt || !snapshot.coverNegativePrompt) {
+            throw new QueueRunError("Brak promptu okładki w zadaniu kolejki.");
+          }
+
+          const result = await generateBookCover({
+            projectId: snapshot.projectId,
+            bookId: snapshot.bookId,
+            promptPackageId: snapshot.promptPackageId,
+            promptPackageJson: snapshot.promptPackageJson,
+            prompt: snapshot.prompt,
+            coverPrompt: snapshot.coverPrompt,
+            coverNegativePrompt: snapshot.coverNegativePrompt,
+            codexPath,
+            timeoutSeconds,
+            model,
+            reasoningEffort
+          });
+
+          if (result.aiRun.status !== "success") {
+            throw new QueueRunError(
+              result.aiRun.errorMessage || "Nie udało się utworzyć okładki.",
+              result.aiRun.rawOutput ?? ""
+            );
+          }
+
+          finishProposal(proposalId, {
+            aiRunId: result.aiRun.id,
+            rawOutput: result.aiRun.rawOutput ?? "",
+            editableValue: result.imagePath,
+            durationMs: result.aiRun.durationMs,
+            coverImagePath: result.book.coverImagePath || result.imagePath,
+            coverGeneratedAt: result.generatedAt,
+            progressMessage: "Okładka gotowa do akceptacji.",
+            progress: 100,
+            partialImageDataUrl: null
+          });
+          return;
+        }
+
+        const result =
+          snapshot.scope === "newProject"
+            ? await generateNewProjectTitle({
+                action: "generate_working_title",
+                promptPackageId: snapshot.promptPackageId,
+                promptPackageJson: snapshot.promptPackageJson,
+                prompt: snapshot.prompt,
+                codexPath,
+                timeoutSeconds,
+                model,
+                reasoningEffort
+              })
+            : await runCodexPrompt({
+                projectId: snapshot.projectId,
+                action: snapshot.action,
+                promptPackageId: snapshot.promptPackageId,
+                promptPackageJson: snapshot.promptPackageJson,
+                prompt: snapshot.prompt,
+                codexPath,
+                timeoutSeconds,
+                model,
+                reasoningEffort
+              });
+
+        if (result.status !== "success" || !result.rawOutput) {
+          throw new QueueRunError(
+            result.errorMessage || "Codex CLI nie zwrócił wyniku.",
+            result.rawOutput ?? ""
+          );
+        }
+
+        const parsed = parseProposalResult(
+          result.rawOutput,
+          snapshot.field as ConceptFieldKey,
+          snapshot.action
+        );
+        finishProposal(proposalId, {
+          aiRunId: result.id,
+          rawOutput: result.rawOutput ?? "",
+          parsed,
+          editableValue: parsed.textValue,
+          editableFields: editableFieldsFromParsed(parsed),
+          selectedFields: selectedFieldsFromParsed(parsed),
+          durationMs: result.durationMs
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const rawOutput = error instanceof QueueRunError ? error.rawOutput : "";
+        failProposal(proposalId, message, rawOutput);
+      }
+    }
+
+    void runQueuedProposal();
+  }, [
+    queuedProposal?.id,
+    hasRunningProposal,
+    startQueuedProposal,
+    finishProposal,
+    failProposal,
+    updateProposalProgress,
+    codexPath,
+    timeoutSeconds,
+    model,
+    reasoningEffort
+  ]);
+}
+
+function useCoverGenerationProgressListener() {
+  const updateProposalProgress = useProposalStore(
+    (state) => state.updateProposalProgress
+  );
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let cancelled = false;
+    const unlistenPromise = listen<CoverGenerationProgressEvent>(
+      "cover-generation-progress",
+      (event) => {
+        const payload = event.payload;
+        const proposal = useProposalStore
+          .getState()
+          .proposals.find(
+            (item) =>
+              isBookCoverProposal(item) &&
+              item.projectId === payload.projectId &&
+              item.bookId === payload.bookId &&
+              (item.status === "running" ||
+                item.status === "queued" ||
+                item.aiRunId === payload.aiRunId)
+          );
+
+        if (!proposal) {
+          return;
+        }
+
+        updateProposalProgress(proposal.id, {
+          progressMessage: payload.message,
+          progress: payload.progress ?? null,
+          ...(payload.partialImageDataUrl
+            ? { partialImageDataUrl: payload.partialImageDataUrl }
+            : {})
+        });
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      unlistenPromise
+        .then((unlisten) => {
+          if (cancelled) {
+            unlisten();
+          }
+        })
+        .catch(() => undefined);
+    };
+  }, [updateProposalProgress]);
 }
 
 export function parseProposalResult(
@@ -380,7 +658,7 @@ export function selectedFieldsFromParsed(
 
 export function proposalInputFromValue(
   value: string,
-  proposal: Pick<ActiveAiProposal, "field">
+  proposal: { field: ConceptFieldKey }
 ): BookConceptInput {
   return proposalInputForField(proposal.field, value);
 }
@@ -470,6 +748,12 @@ function isPremiseDevelopment(
   return parsed?.kind === "premise_development";
 }
 
+function isBookCoverProposal(
+  proposal: Pick<ActiveAiProposal, "field" | "scope">
+): boolean {
+  return proposal.scope === "bookCover" || proposal.field === BOOK_COVER_FIELD;
+}
+
 function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {
   return Object.entries(proposal.selectedFields).some(([field, selected]) => {
     const value = proposal.editableFields[field as ConceptFieldKey] ?? "";
@@ -497,12 +781,62 @@ function serializeListValue(value: string): string {
   return JSON.stringify([...new Set(items)]);
 }
 
-class RetryError extends Error {
+function statusLabel(status: ActiveAiProposal["status"]): string {
+  switch (status) {
+    case "queued":
+      return "W kolejce";
+    case "running":
+      return "Generuje";
+    case "success":
+      return "Gotowe";
+    case "error":
+      return "Błąd";
+  }
+}
+
+function statusClassName(status: ActiveAiProposal["status"]): string {
+  if (status === "success") {
+    return "status-pill ready";
+  }
+
+  if (status === "error") {
+    return "status-pill muted";
+  }
+
+  return "status-pill";
+}
+
+function compareProposalsForPanel(
+  left: ActiveAiProposal,
+  right: ActiveAiProposal
+): number {
+  const statusDiff = statusRank(left.status) - statusRank(right.status);
+  if (statusDiff !== 0) {
+    return statusDiff;
+  }
+
+  return left.createdAt.localeCompare(right.createdAt);
+}
+
+function statusRank(status: ActiveAiProposal["status"]): number {
+  switch (status) {
+    case "running":
+      return 0;
+    case "queued":
+      return 1;
+    case "success":
+      return 2;
+    case "error":
+      return 3;
+  }
+}
+
+class QueueRunError extends Error {
   rawOutput: string;
 
   constructor(message: string, rawOutput = "") {
     super(message);
-    this.name = "RetryError";
+    this.name = "QueueRunError";
     this.rawOutput = rawOutput;
   }
 }

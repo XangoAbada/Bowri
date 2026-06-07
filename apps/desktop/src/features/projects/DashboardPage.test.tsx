@@ -35,6 +35,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("../../shared/api/commands", () => ({
+  acceptGeneratedBookCover: vi.fn(),
   checkCodexCli: vi.fn(),
   createProject: vi.fn(),
   generateNewProjectTitle: vi.fn(),
@@ -163,7 +164,7 @@ describe("DashboardPage", () => {
       ...projectDetails.book,
       workingTitle: "Siostra z mgły"
     });
-    useProposalStore.setState({ activeProposal: null });
+    useProposalStore.setState({ proposals: [], activeProposal: null });
     useCodexSettingsStore.setState({
       codexPath: "codex",
       model: "gpt-5.5",

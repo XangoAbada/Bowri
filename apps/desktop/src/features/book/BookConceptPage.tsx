@@ -1,37 +1,41 @@
-import { Image as ImageIcon, Loader2, Plus, Save, Sparkles, X } from "lucide-react";
+import {
+  Clock3,
+  Image as ImageIcon,
+  Loader2,
+  Plus,
+  Save,
+  Sparkles,
+  X
+} from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listen } from "@tauri-apps/api/event";
 import {
   checkCodexCli,
-  generateBookCover,
   getProject,
-  runCodexPrompt,
   updateBookConcept
 } from "../../shared/api/commands";
-import { isTauriRuntime } from "../../shared/api/browserDevCommands";
-import type {
-  BookConceptInput,
-  CoverGenerationProgressEvent
-} from "../../shared/api/types";
+import type { BookConceptInput } from "../../shared/api/types";
 import { coverImageSource } from "../../shared/api/assets";
-import {
-  editableFieldsFromParsed,
-  parseProposalResult,
-  selectedFieldsFromParsed
-} from "../ai/AiProposalPanel";
+import { useProjectNavigationStore } from "../../app/projectNavigationStore";
 import {
   buildBookCoverPromptPackage,
   renderBookCoverPromptPackage
 } from "../ai/coverPromptPackage";
+import { CoverImageLightbox } from "../ai/CoverImageLightbox";
 import {
   buildConceptFieldPromptPackage,
   conceptFieldConfigs,
+  conceptFieldMaxResponseCharacters,
   ConceptFieldKey,
   renderPromptPackage
 } from "../ai/promptPackage";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
-import { useProposalStore } from "../ai/proposalStore";
+import {
+  AiProposalStatus,
+  BOOK_COVER_FIELD,
+  pendingProposalStatus,
+  useProposalStore
+} from "../ai/proposalStore";
 
 type BookConceptPageProps = {
   projectId: string;
@@ -245,24 +249,22 @@ const themeOptions: ChoiceOption[] = [
 export function BookConceptPage({ projectId }: BookConceptPageProps) {
   const queryClient = useQueryClient();
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
-  const timeoutSeconds = useCodexSettingsStore((state) => state.timeoutSeconds);
-  const model = useCodexSettingsStore((state) => state.model);
-  const reasoningEffort = useCodexSettingsStore(
-    (state) => state.reasoningEffort
-  );
-  const startProposal = useProposalStore((state) => state.startProposal);
-  const finishProposal = useProposalStore((state) => state.finishProposal);
-  const failProposal = useProposalStore((state) => state.failProposal);
-  const activeProposal = useProposalStore((state) => state.activeProposal);
+  const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
+  const proposals = useProposalStore((state) => state.proposals);
   const [form, setForm] = useState<ConceptForm>(emptyForm);
-  const [activeStage, setActiveStage] = useState<ConceptStageKey>("idea");
+  const activeStage = useProjectNavigationStore((state) =>
+    normalizeConceptStage(state.viewState[projectId]?.conceptStage)
+  );
+  const setProjectViewState = useProjectNavigationStore(
+    (state) => state.setProjectViewState
+  );
   const [saveMessage, setSaveMessage] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
-  const [coverMessage, setCoverMessage] = useState("");
-  const [coverProgressText, setCoverProgressText] = useState("");
-  const [coverStartedAt, setCoverStartedAt] = useState<number | null>(null);
-  const [streamedCoverPreview, setStreamedCoverPreview] = useState("");
   const [aiError, setAiError] = useState("");
+  const [previewImage, setPreviewImage] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
 
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
@@ -340,40 +342,6 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     };
   }, [form, projectQuery.data]);
 
-  useEffect(() => {
-    const activeBookId = projectQuery.data?.book.id;
-    if (!activeBookId || !isTauriRuntime()) {
-      return;
-    }
-
-    let cancelled = false;
-    const unlistenPromise = listen<CoverGenerationProgressEvent>(
-      "cover-generation-progress",
-      (event) => {
-        const payload = event.payload;
-        if (payload.projectId !== projectId || payload.bookId !== activeBookId) {
-          return;
-        }
-
-        setCoverProgressText(payload.message);
-        if (payload.partialImageDataUrl) {
-          setStreamedCoverPreview(payload.partialImageDataUrl);
-        }
-      }
-    );
-
-    return () => {
-      cancelled = true;
-      unlistenPromise
-        .then((unlisten) => {
-          if (cancelled) {
-            unlisten();
-          }
-        })
-        .catch(() => undefined);
-    };
-  }, [projectId, projectQuery.data?.book.id]);
-
   const saveMutation = useMutation({
     mutationFn: () => {
       if (!projectQuery.data) {
@@ -422,125 +390,16 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
         prompt
       };
 
-      startProposal(snapshot);
+      enqueueProposal(snapshot);
+      return null;
 
-      const result = await runCodexPrompt({
-        projectId,
-        action: promptPackage.action,
-        promptPackageId: promptPackage.id,
-        promptPackageJson: promptPackage,
-        prompt,
-        codexPath,
-        timeoutSeconds,
-        model,
-        reasoningEffort
-      });
-
-      if (result.status !== "success" || !result.rawOutput) {
-        throw new GenerationError(
-          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
-          result.rawOutput ?? ""
-        );
-      }
-
-      const parsed = parseProposalResult(
-        result.rawOutput,
-        field,
-        promptPackage.action
-      );
-      return { parsed, result };
     },
-    onSuccess: ({ parsed, result }) => {
-      setAiError("");
-      finishProposal({
-        aiRunId: result.id,
-        rawOutput: result.rawOutput ?? "",
-        parsed,
-        editableValue: parsed.textValue,
-        editableFields: editableFieldsFromParsed(parsed),
-        selectedFields: selectedFieldsFromParsed(parsed),
-        durationMs: result.durationMs
-      });
-    },
+    onSuccess: () => setAiError(""),
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      const rawOutput = error instanceof GenerationError ? error.rawOutput : "";
-      setAiError(message);
-      failProposal(message, rawOutput);
-    }
-  });
-
-  const generateCoverMutation = useMutation({
-    mutationFn: async () => {
-      if (!projectQuery.data || !bookForPrompt) {
-        throw new GenerationError("Brak danych projektu.");
-      }
-
-      const promptPackage = buildBookCoverPromptPackage(
-        projectQuery.data.project,
-        bookForPrompt
-      );
-      const prompt = renderBookCoverPromptPackage(promptPackage);
-
-      return generateBookCover({
-        projectId,
-        bookId: projectQuery.data.book.id,
-        promptPackageId: promptPackage.id,
-        promptPackageJson: promptPackage,
-        prompt,
-        coverPrompt: promptPackage.coverPrompt,
-        coverNegativePrompt: promptPackage.negativePrompt,
-        codexPath,
-        timeoutSeconds,
-        model,
-        reasoningEffort
-      });
-    },
-    onSuccess: async (result) => {
-      setAiError("");
-      setCoverMessage("Utworzono okładkę.");
-      setCoverProgressText("Okładka zapisana.");
-      setCoverStartedAt(null);
-      setStreamedCoverPreview(coverImageSource(result.book.coverImagePath));
-      await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      setCoverProgressText("Generowanie okładki zatrzymane.");
-      setCoverStartedAt(null);
       setAiError(message);
     }
   });
-
-  useEffect(() => {
-    if (!generateCoverMutation.isPending || coverStartedAt === null) {
-      return;
-    }
-
-    const startedAt = coverStartedAt;
-
-    function updateProgressText() {
-      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
-      if (elapsedSeconds < 2) {
-        setCoverProgressText("Przygotowuję prompt okładki...");
-        return;
-      }
-      if (elapsedSeconds < 8) {
-        setCoverProgressText("Uruchamiam Codex CLI...");
-        return;
-      }
-      if (elapsedSeconds < 45) {
-        setCoverProgressText(`Codex CLI generuje okładkę (${elapsedSeconds}s)...`);
-        return;
-      }
-      setCoverProgressText(`Dopracowuje finalny obraz (${elapsedSeconds}s)...`);
-    }
-
-    updateProgressText();
-    const intervalId = window.setInterval(updateProgressText, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [coverStartedAt, generateCoverMutation.isPending]);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -563,22 +422,62 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
   function generateCover() {
     setAiError("");
-    setCoverMessage("");
-    setStreamedCoverPreview("");
-    setCoverProgressText("Przygotowuję prompt okładki...");
-    setCoverStartedAt(Date.now());
-    generateCoverMutation.mutate();
+    if (!projectQuery.data || !bookForPrompt) {
+      setAiError("Brak danych projektu.");
+      return;
+    }
+
+    const promptPackage = buildBookCoverPromptPackage(
+      projectQuery.data.project,
+      bookForPrompt
+    );
+    const prompt = renderBookCoverPromptPackage(promptPackage);
+
+    enqueueProposal({
+      scope: "bookCover",
+      projectId,
+      bookId: projectQuery.data.book.id,
+      field: BOOK_COVER_FIELD,
+      action: promptPackage.action,
+      promptPackageId: promptPackage.id,
+      promptPackageJson: promptPackage,
+      prompt,
+      coverPrompt: promptPackage.coverPrompt,
+      coverNegativePrompt: promptPackage.negativePrompt
+    });
   }
 
   const codexUnavailable = codexStatusQuery.data?.available === false;
-  const aiDisabled =
-    generateFieldMutation.isPending || !projectQuery.data || codexUnavailable;
-  const activeField =
-    activeProposal?.projectId === projectId && activeProposal.status === "running"
-      ? activeProposal.field
-      : null;
-  const coverSrc =
-    streamedCoverPreview || coverImageSource(projectQuery.data?.book.coverImagePath);
+  const aiDisabled = !projectQuery.data || codexUnavailable;
+  const fieldStatus = (field: ConceptFieldKey): AiProposalStatus | null =>
+    pendingProposalStatus(proposals, {
+      projectId,
+      field,
+      scope: "bookConcept"
+    });
+  const activeBookId = projectQuery.data?.book.id;
+  const coverTask = proposals
+    .filter(
+      (proposal) =>
+        proposal.projectId === projectId &&
+        proposal.bookId === activeBookId &&
+        proposal.field === BOOK_COVER_FIELD
+    )
+    .sort(compareCoverTasksForView)[0];
+  const coverStatus = pendingProposalStatus(proposals, {
+    projectId,
+    bookId: activeBookId,
+    field: BOOK_COVER_FIELD,
+    scope: "bookCover"
+  });
+  const coverRunning = coverStatus === "running";
+  const coverQueued = coverStatus === "queued";
+  const coverPending = coverRunning || coverQueued;
+  const coverProgressText = coverTask?.progressMessage ?? "";
+  const coverSrc = coverImageSource(
+    (coverRunning ? coverTask?.partialImageDataUrl : "") ||
+      projectQuery.data?.book.coverImagePath
+  );
   const activeStageConfig =
     conceptStages.find((stage) => stage.key === activeStage) ?? conceptStages[0];
 
@@ -610,7 +509,9 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 role="tab"
                 aria-selected={selected}
                 className={selected ? "concept-stage-tab active" : "concept-stage-tab"}
-                onClick={() => setActiveStage(stage.key)}
+                onClick={() =>
+                  setProjectViewState(projectId, "conceptStage", stage.key)
+                }
               >
                 <span>{stage.title}</span>
                 <strong>
@@ -634,7 +535,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 value={form.workingTitle}
                 placeholder="Nazwa projektu na czas pracy"
                 disabled={aiDisabled}
-                loading={activeField === "workingTitle"}
+                loading={fieldStatus("workingTitle")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("workingTitle", value)}
               />
@@ -645,7 +546,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 placeholder="Kto, czego chce, co mu przeszkadza i dlaczego to ważne"
                 rows={4}
                 disabled={aiDisabled}
-                loading={activeField === "premise"}
+                loading={fieldStatus("premise")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("premise", value)}
               />
@@ -657,7 +558,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Kim jest postać prowadząca historię"
                   rows={4}
                   disabled={aiDisabled}
-                  loading={activeField === "protagonistSummary"}
+                  loading={fieldStatus("protagonistSummary")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("protagonistSummary", value)}
                 />
@@ -668,7 +569,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Konkretne dążenie napędzające fabułę"
                   rows={4}
                   disabled={aiDisabled}
-                  loading={activeField === "protagonistGoal"}
+                  loading={fieldStatus("protagonistGoal")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("protagonistGoal", value)}
                 />
@@ -680,7 +581,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 placeholder="Miejsce, czas i warunki świata wpływające na konflikt"
                 rows={4}
                 disabled={aiDisabled}
-                loading={activeField === "settingSketch"}
+                loading={fieldStatus("settingSketch")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("settingSketch", value)}
               />
@@ -697,7 +598,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Bohater, cel, przeszkoda, stawka"
                   rows={3}
                   disabled={aiDisabled}
-                  loading={activeField === "logline"}
+                  loading={fieldStatus("logline")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("logline", value)}
                 />
@@ -708,7 +609,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Główne tarcie fabularne"
                   rows={3}
                   disabled={aiDisabled}
-                  loading={activeField === "centralConflict"}
+                  loading={fieldStatus("centralConflict")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("centralConflict", value)}
                 />
@@ -721,7 +622,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Antagonista, system, tajemnica albo blokada"
                   rows={4}
                   disabled={aiDisabled}
-                  loading={activeField === "antagonistForce"}
+                  loading={fieldStatus("antagonistForce")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("antagonistForce", value)}
                 />
@@ -732,7 +633,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Co zostanie utracone, jeśli bohater przegra"
                   rows={4}
                   disabled={aiDisabled}
-                  loading={activeField === "stakes"}
+                  loading={fieldStatus("stakes")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("stakes", value)}
                 />
@@ -743,7 +644,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   placeholder="Roboczy finał fabularny lub emocjonalny"
                   rows={4}
                   disabled={aiDisabled}
-                  loading={activeField === "endingDirection"}
+                  loading={fieldStatus("endingDirection")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("endingDirection", value)}
                 />
@@ -755,7 +656,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 placeholder="Akapit rozwijający założenie książki"
                 rows={5}
                 disabled={aiDisabled}
-                loading={activeField === "expandedPremise"}
+                loading={fieldStatus("expandedPremise")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("expandedPremise", value)}
               />
@@ -773,7 +674,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("genre", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
-                  loading={activeField === "genre"}
+                  loading={fieldStatus("genre")}
                 />
                 <MultiChoiceField
                   label="Podgatunek"
@@ -783,7 +684,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("subgenre", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
-                  loading={activeField === "subgenre"}
+                  loading={fieldStatus("subgenre")}
                 />
                 <MultiChoiceField
                   label="Odbiorcy"
@@ -793,7 +694,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("targetAudience", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
-                  loading={activeField === "targetAudience"}
+                  loading={fieldStatus("targetAudience")}
                 />
                 <MultiChoiceField
                   label="Ton"
@@ -803,7 +704,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("tone", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
-                  loading={activeField === "tone"}
+                  loading={fieldStatus("tone")}
                 />
                 <MultiChoiceField
                   label="Punkt widzenia"
@@ -813,7 +714,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("pointOfView", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
-                  loading={activeField === "pointOfView"}
+                  loading={fieldStatus("pointOfView")}
                 />
                 <TextField
                   label="Docelowa liczba słów"
@@ -821,7 +722,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   value={form.targetWordCount}
                   placeholder="np. 85000"
                   disabled={aiDisabled}
-                  loading={activeField === "targetWordCount"}
+                  loading={fieldStatus("targetWordCount")}
                   onGenerate={generateField}
                   onChange={(value) => updateField("targetWordCount", value)}
                 />
@@ -839,7 +740,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 onChange={(value) => updateField("themesJson", value)}
                 onGenerate={generateField}
                 disabled={aiDisabled}
-                loading={activeField === "themesJson"}
+                loading={fieldStatus("themesJson")}
               />
               <TextField
                 label="Granice i tematy niechciane"
@@ -848,7 +749,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 placeholder="Czego unikać w późniejszych promptach"
                 rows={4}
                 disabled={aiDisabled}
-                loading={activeField === "unwantedThemes"}
+                loading={fieldStatus("unwantedThemes")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("unwantedThemes", value)}
               />
@@ -859,7 +760,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 placeholder="Notatki o języku, rytmie, zakazach i preferencjach"
                 rows={5}
                 disabled={aiDisabled}
-                loading={activeField === "styleGuide"}
+                loading={fieldStatus("styleGuide")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("styleGuide", value)}
               />
@@ -876,7 +777,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                     value={form.title}
                     placeholder="Tytuł, który trafi na okładkę"
                     disabled={aiDisabled}
-                    loading={activeField === "title"}
+                    loading={fieldStatus("title")}
                     onGenerate={generateField}
                     onChange={(value) => updateField("title", value)}
                   />
@@ -887,7 +788,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                     placeholder="Jeden tytuł na linię albo po przecinku"
                     rows={5}
                     disabled={aiDisabled}
-                    loading={activeField === "alternativeTitlesJson"}
+                    loading={fieldStatus("alternativeTitlesJson")}
                     onGenerate={generateField}
                     onChange={(value) =>
                       updateField("alternativeTitlesJson", value)
@@ -896,54 +797,62 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 </div>
 
                 <div className="cover-art-panel">
-                  <div className={coverSrc ? "cover-preview has-image" : "cover-preview"}>
-                    {coverSrc ? (
+                  {coverSrc ? (
+                    <button
+                      type="button"
+                      className="cover-preview cover-preview-button has-image"
+                      onClick={() =>
+                        setPreviewImage({
+                          src: coverSrc,
+                          alt: "Okładka robocza"
+                        })
+                      }
+                      title="Otwórz okładkę w pełnym podglądzie"
+                    >
                       <img src={coverSrc} alt="Okładka robocza" />
-                    ) : (
+                    </button>
+                  ) : (
+                    <div className="cover-preview">
                       <div className="cover-placeholder">
                         <ImageIcon size={30} aria-hidden="true" />
                         <span>Brak okładki</span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <button
                     type="button"
                     className="secondary-button cover-generate-button"
                     onClick={generateCover}
                     disabled={
-                      generateCoverMutation.isPending ||
+                      coverPending ||
                       !projectQuery.data ||
                       codexUnavailable
                     }
                     title="Utwórz okładkę na podstawie danych z widoku koncepcji"
                   >
-                    {generateCoverMutation.isPending ? (
+                    {coverRunning ? (
                       <Loader2 size={16} className="spin-icon" />
+                    ) : coverQueued ? (
+                      <Clock3 size={16} />
                     ) : (
                       <Sparkles size={16} />
                     )}
-                    {generateCoverMutation.isPending ? "Tworzę" : "Utwórz okładkę"}
+                    {coverRunning
+                      ? "Tworzę"
+                      : coverQueued
+                        ? "W kolejce"
+                        : "Utwórz okładkę"}
                   </button>
-
-                  {projectQuery.data?.book.coverGeneratedAt ? (
-                    <p className="muted-text">
-                      Wygenerowano: {projectQuery.data.book.coverGeneratedAt}
-                    </p>
-                  ) : null}
 
                   {coverProgressText ? (
                     <div
-                      className={
-                        generateCoverMutation.isPending
-                          ? "cover-progress active"
-                          : "cover-progress"
-                      }
-                      role={generateCoverMutation.isPending ? "status" : undefined}
+                      className={coverPending ? "cover-progress active" : "cover-progress"}
+                      role={coverPending ? "status" : undefined}
                       aria-live="polite"
                     >
                       <span>{coverProgressText}</span>
-                      {generateCoverMutation.isPending ? (
+                      {coverPending ? (
                         <div className="cover-progress-track" aria-hidden="true">
                           <span />
                         </div>
@@ -951,12 +860,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                     </div>
                   ) : null}
 
-                  {coverMessage ? <p className="success-text">{coverMessage}</p> : null}
-                  {generateCoverMutation.isError ? (
-                    <p className="warning-text">Nie udało się utworzyć okładki.</p>
-                  ) : null}
-                  {generateCoverMutation.isError && aiError ? (
-                    <p className="warning-text">{aiError}</p>
+                  {coverTask?.status === "error" ? (
+                    <p className="warning-text">
+                      {coverTask.errorMessage || "Nie udało się utworzyć okładki."}
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -992,9 +899,12 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
         </p>
       ) : null}
 
-      {aiError && !generateCoverMutation.isError ? (
-        <p className="warning-text">{aiError}</p>
-      ) : null}
+      {aiError ? <p className="warning-text">{aiError}</p> : null}
+
+      <CoverImageLightbox
+        image={previewImage}
+        onClose={() => setPreviewImage(null)}
+      />
     </section>
   );
 }
@@ -1007,13 +917,19 @@ function FormSection({ children }: FormSectionProps) {
   return <section className="concept-form-section">{children}</section>;
 }
 
+function normalizeConceptStage(value: string | undefined): ConceptStageKey {
+  return conceptStages.some((stage) => stage.key === value)
+    ? (value as ConceptStageKey)
+    : "idea";
+}
+
 type TextFieldProps = {
   label: string;
   field: ConceptFieldKey;
   value: string;
   placeholder: string;
   disabled: boolean;
-  loading: boolean;
+  loading: AiProposalStatus | null;
   rows?: number;
   onChange: (value: string) => void;
   onGenerate: (field: ConceptFieldKey) => void;
@@ -1068,7 +984,7 @@ type FieldFrameProps = {
   field: ConceptFieldKey;
   children: ReactNode;
   disabled: boolean;
-  loading: boolean;
+  loading: AiProposalStatus | null;
   onGenerate: (field: ConceptFieldKey) => void;
 };
 
@@ -1102,7 +1018,7 @@ function FieldFrame({
 type AiFieldButtonProps = {
   field: ConceptFieldKey;
   disabled: boolean;
-  loading: boolean;
+  loading: AiProposalStatus | null;
   onGenerate: (field: ConceptFieldKey) => void;
 };
 
@@ -1113,18 +1029,33 @@ function AiFieldButton({
   onGenerate
 }: AiFieldButtonProps) {
   const config = conceptFieldConfigs[field];
+  const running = loading === "running";
+  const queued = loading === "queued";
+  const label = running ? "Generuje" : queued ? "W kolejce" : "AI";
 
   return (
     <button
       type="button"
       className="icon-button ai-field-button"
       onClick={() => onGenerate(field)}
-      disabled={disabled}
-      title={`Generuj pole "${config.label}" z AI. Prompt uwzględni pozostałe pola koncepcji.`}
+      disabled={disabled || queued || running}
+      title={
+        queued
+          ? `Pole "${config.label}" czeka w kolejce AI.`
+          : running
+            ? `Pole "${config.label}" jest generowane.`
+            : `Generuj pole "${config.label}" z AI. Prompt uwzględni pozostałe pola koncepcji.`
+      }
       aria-label={`Generuj ${config.label} z AI`}
     >
-      {loading ? <Loader2 size={15} className="spin-icon" /> : <Sparkles size={15} />}
-      <span>{loading ? "Generuje" : "AI"}</span>
+      {running ? (
+        <Loader2 size={15} className="spin-icon" />
+      ) : queued ? (
+        <Clock3 size={15} />
+      ) : (
+        <Sparkles size={15} />
+      )}
+      <span>{label}</span>
     </button>
   );
 }
@@ -1135,7 +1066,7 @@ type MultiChoiceFieldProps = {
   value: string;
   options: ChoiceOption[];
   disabled: boolean;
-  loading: boolean;
+  loading: AiProposalStatus | null;
   onChange: (value: string) => void;
   onGenerate: (field: ConceptFieldKey) => void;
 };
@@ -1295,16 +1226,41 @@ function stageCompletion(
   return { complete, total: stage.fields.length };
 }
 
+function compareCoverTasksForView(
+  left: { status: AiProposalStatus; createdAt: string },
+  right: { status: AiProposalStatus; createdAt: string }
+): number {
+  const statusDiff = coverTaskStatusRank(left.status) - coverTaskStatusRank(right.status);
+  if (statusDiff !== 0) {
+    return statusDiff;
+  }
+
+  return right.createdAt.localeCompare(left.createdAt);
+}
+
+function coverTaskStatusRank(status: AiProposalStatus): number {
+  switch (status) {
+    case "running":
+      return 0;
+    case "queued":
+      return 1;
+    case "error":
+      return 2;
+    case "success":
+      return 3;
+  }
+}
+
 function validateConceptForm(form: ConceptForm): string {
   if (form.targetWordCount.trim() && parseOptionalPositiveInt(form.targetWordCount) === null) {
     return "Docelowa liczba słów musi być dodatnią liczbą albo pozostać pusta.";
   }
 
-  if (form.premise.length > 1200) {
+  if (form.premise.length > conceptFieldMaxResponseCharacters.premise) {
     return "Premise jest zbyt długa; przenieś szczegóły do rozszerzonej premisy.";
   }
 
-  if (form.logline.length > 700) {
+  if (form.logline.length > conceptFieldMaxResponseCharacters.logline) {
     return "Logline jest zbyt długi; powinien zmieścić się w jednym zwartym zdaniu.";
   }
 

@@ -5,16 +5,13 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   checkCodexCli,
   createProject,
-  generateNewProjectTitle,
   getProject,
-  listProjects,
-  runCodexPrompt
+  listProjects
 } from "../../shared/api/commands";
 import { coverImageSource } from "../../shared/api/assets";
 import { formatLocalDateTime } from "../../shared/date";
 import { AiProposalPanel } from "../ai/AiProposalPanel";
 import { CodexStatusPanel } from "../ai/CodexStatusPanel";
-import { parseConceptFieldSuggestion } from "../ai/conceptFieldSuggestion";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
 import {
   buildNewProjectTitlePromptPackage,
@@ -24,6 +21,7 @@ import {
 } from "../ai/promptPackage";
 import {
   NEW_PROJECT_PROPOSAL_ID,
+  pendingProposalStatus,
   useProposalStore
 } from "../ai/proposalStore";
 
@@ -34,15 +32,8 @@ export function DashboardPage() {
   const [proposalProjectId, setProposalProjectId] = useState("");
   const [aiError, setAiError] = useState("");
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
-  const timeoutSeconds = useCodexSettingsStore((state) => state.timeoutSeconds);
-  const model = useCodexSettingsStore((state) => state.model);
-  const reasoningEffort = useCodexSettingsStore(
-    (state) => state.reasoningEffort
-  );
-  const startProposal = useProposalStore((state) => state.startProposal);
-  const finishProposal = useProposalStore((state) => state.finishProposal);
-  const failProposal = useProposalStore((state) => state.failProposal);
-  const activeProposal = useProposalStore((state) => state.activeProposal);
+  const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
+  const proposals = useProposalStore((state) => state.proposals);
 
   const projectsQuery = useQuery({
     queryKey: ["projects"],
@@ -68,65 +59,7 @@ export function DashboardPage() {
     }
   });
 
-  const generateNewProjectTitleMutation = useMutation({
-    mutationFn: async () => {
-      const promptPackage = buildNewProjectTitlePromptPackage(name);
-      const prompt = renderNewProjectTitlePromptPackage(promptPackage);
-      const snapshot = {
-        scope: "newProject" as const,
-        projectId: NEW_PROJECT_PROPOSAL_ID,
-        bookId: NEW_PROJECT_PROPOSAL_ID,
-        field: "workingTitle" as const,
-        action: promptPackage.action,
-        promptPackageId: promptPackage.id,
-        promptPackageJson: promptPackage,
-        prompt
-      };
-
-      startProposal(snapshot);
-
-      const result = await generateNewProjectTitle({
-        action: promptPackage.action,
-        promptPackageId: promptPackage.id,
-        promptPackageJson: promptPackage,
-        prompt,
-        codexPath,
-        timeoutSeconds,
-        model,
-        reasoningEffort
-      });
-
-      if (result.status !== "success" || !result.rawOutput) {
-        throw new GenerationError(
-          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
-          result.rawOutput ?? ""
-        );
-      }
-
-      const parsed = parseConceptFieldSuggestion(result.rawOutput, "workingTitle");
-      return { parsed, result };
-    },
-    onMutate: () => {
-      setProposalProjectId(NEW_PROJECT_PROPOSAL_ID);
-      setAiError("");
-    },
-    onSuccess: ({ parsed, result }) => {
-      finishProposal({
-        aiRunId: result.id,
-        rawOutput: result.rawOutput ?? "",
-        parsed,
-        editableValue: parsed.textValue,
-        durationMs: result.durationMs
-      });
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      const rawOutput = error instanceof GenerationError ? error.rawOutput : "";
-      failProposal(message, rawOutput);
-    }
-  });
-
-  const generateTitleMutation = useMutation({
+  const queueProjectTitleMutation = useMutation({
     mutationFn: async (projectId: string) => {
       const details = await getProject(projectId);
       const promptPackage = buildConceptFieldPromptPackage(
@@ -136,7 +69,7 @@ export function DashboardPage() {
       );
       const prompt = renderPromptPackage(promptPackage);
 
-      startProposal({
+      enqueueProposal({
         projectId,
         bookId: details.book.id,
         field: "workingTitle",
@@ -145,48 +78,15 @@ export function DashboardPage() {
         promptPackageJson: promptPackage,
         prompt
       });
-
-      const result = await runCodexPrompt({
-        projectId,
-        action: promptPackage.action,
-        promptPackageId: promptPackage.id,
-        promptPackageJson: promptPackage,
-        prompt,
-        codexPath,
-        timeoutSeconds,
-        model,
-        reasoningEffort
-      });
-
-      if (result.status !== "success" || !result.rawOutput) {
-        throw new GenerationError(
-          result.errorMessage || "Codex CLI nie zwrócił wyniku.",
-          result.rawOutput ?? ""
-        );
-      }
-
-      const parsed = parseConceptFieldSuggestion(result.rawOutput, "workingTitle");
-      return { parsed, result };
     },
     onMutate: (projectId) => {
       setProposalProjectId(projectId);
       setAiError("");
     },
-    onSuccess: ({ parsed, result }) => {
-      setAiError("");
-      finishProposal({
-        aiRunId: result.id,
-        rawOutput: result.rawOutput ?? "",
-        parsed,
-        editableValue: parsed.textValue,
-        durationMs: result.durationMs
-      });
-    },
+    onSuccess: () => setAiError(""),
     onError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      const rawOutput = error instanceof GenerationError ? error.rawOutput : "";
       setAiError(message);
-      failProposal(message, rawOutput);
     }
   });
 
@@ -198,9 +98,44 @@ export function DashboardPage() {
     createMutation.mutate();
   }
 
+  function enqueueNewProjectTitle() {
+    const promptPackage = buildNewProjectTitlePromptPackage(name);
+    const prompt = renderNewProjectTitlePromptPackage(promptPackage);
+
+    enqueueProposal({
+      scope: "newProject",
+      projectId: NEW_PROJECT_PROPOSAL_ID,
+      bookId: NEW_PROJECT_PROPOSAL_ID,
+      field: "workingTitle",
+      action: promptPackage.action,
+      promptPackageId: promptPackage.id,
+      promptPackageJson: promptPackage,
+      prompt
+    });
+    setProposalProjectId(NEW_PROJECT_PROPOSAL_ID);
+    setAiError("");
+  }
+
   const codexUnavailable = codexStatusQuery.data?.available === false;
+  const newProjectStatus = proposalStatus(NEW_PROJECT_PROPOSAL_ID);
+  const firstVisibleProposal =
+    proposals.find((proposal) => proposal.projectId === NEW_PROJECT_PROPOSAL_ID) ??
+    proposals.find((proposal) => proposal.projectId === proposalProjectId) ??
+    proposals[0];
   const visibleProposalProjectId =
-    activeProposal?.projectId || proposalProjectId || projectsQuery.data?.[0]?.id || "";
+    firstVisibleProposal?.projectId ||
+    proposalProjectId ||
+    projectsQuery.data?.[0]?.id ||
+    "";
+
+  function proposalStatus(projectId: string): "queued" | "running" | null {
+    return pendingProposalStatus(proposals, {
+      projectId,
+      field: "workingTitle",
+      scope:
+        projectId === NEW_PROJECT_PROPOSAL_ID ? "newProject" : "bookConcept"
+    });
+  }
 
   return (
     <main className="dashboard dashboard-with-panel">
@@ -228,15 +163,15 @@ export function DashboardPage() {
                   className="icon-button ai-inline-button"
                   aria-label="Generuj tytuł dla nowego projektu"
                   title="Generuj tytuł dla nowego projektu"
-                  onClick={() => generateNewProjectTitleMutation.mutate()}
+                  onClick={enqueueNewProjectTitle}
                   disabled={
-                    generateNewProjectTitleMutation.isPending ||
+                    Boolean(newProjectStatus) ||
                     createMutation.isPending ||
                     codexUnavailable ||
                     codexStatusQuery.isLoading
                   }
                 >
-                  {generateNewProjectTitleMutation.isPending ? (
+                  {newProjectStatus ? (
                     <Loader2 size={16} className="spin-icon" />
                   ) : (
                     <Sparkles size={16} />
@@ -293,9 +228,11 @@ export function DashboardPage() {
             {projectsQuery.data?.map((project) => {
               const coverSrc = coverImageSource(project.coverImagePath);
               const displayTitle = project.workingTitle || project.name;
+              const projectQueueStatus = proposalStatus(project.id);
               const generating =
-                generateTitleMutation.isPending &&
-                generateTitleMutation.variables === project.id;
+                (queueProjectTitleMutation.isPending &&
+                  queueProjectTitleMutation.variables === project.id) ||
+                Boolean(projectQueueStatus);
 
               return (
                 <article className="project-card-shell" key={project.id}>
@@ -322,7 +259,7 @@ export function DashboardPage() {
                   <button
                     type="button"
                     className="icon-button project-card-ai-button"
-                    onClick={() => generateTitleMutation.mutate(project.id)}
+                    onClick={() => queueProjectTitleMutation.mutate(project.id)}
                     disabled={
                       generating ||
                       codexUnavailable ||
@@ -375,14 +312,4 @@ export function DashboardPage() {
       </aside>
     </main>
   );
-}
-
-class GenerationError extends Error {
-  rawOutput: string;
-
-  constructor(message: string, rawOutput = "") {
-    super(message);
-    this.name = "GenerationError";
-    this.rawOutput = rawOutput;
-  }
 }

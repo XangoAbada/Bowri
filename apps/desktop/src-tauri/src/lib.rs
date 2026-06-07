@@ -214,6 +214,16 @@ pub struct GenerateBookCoverInput {
     pub reasoning_effort: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptGeneratedBookCoverInput {
+    pub book_id: String,
+    pub image_path: String,
+    pub cover_prompt: String,
+    pub cover_negative_prompt: String,
+    pub generated_at: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverGenerationProgress {
@@ -238,6 +248,41 @@ pub struct AiRunResult {
     pub stderr: Option<String>,
     pub error_message: Option<String>,
     pub duration_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiLogEntry {
+    pub id: String,
+    pub project_id: String,
+    pub provider_id: String,
+    pub model: String,
+    pub reasoning_effort: String,
+    pub action: String,
+    pub prompt_package_json: Value,
+    pub prompt: String,
+    pub raw_output: Option<String>,
+    pub status: String,
+    pub error_message: Option<String>,
+    pub created_at: String,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct AiLogEntryRow {
+    id: String,
+    project_id: String,
+    provider_id: String,
+    model: String,
+    reasoning_effort: String,
+    action: String,
+    prompt_package_json: String,
+    prompt: String,
+    raw_output: Option<String>,
+    status: String,
+    error_message: Option<String>,
+    created_at: String,
+    completed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -362,6 +407,58 @@ pub async fn get_project_details(
         .await?;
 
     Ok(ProjectDetails { project, book })
+}
+
+pub async fn list_ai_runs_in_pool(
+    pool: &SqlitePool,
+    project_id: &str,
+) -> Result<Vec<AiLogEntry>, AppError> {
+    let rows = sqlx::query_as::<_, AiLogEntryRow>(
+        r#"
+        SELECT
+          id,
+          project_id,
+          provider_id,
+          model,
+          reasoning_effort,
+          action,
+          prompt_package_json,
+          prompt,
+          raw_output,
+          status,
+          error_message,
+          created_at,
+          completed_at
+        FROM ai_runs
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        "#,
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let prompt_package_json =
+                serde_json::from_str(&row.prompt_package_json).unwrap_or(Value::Null);
+            Ok(AiLogEntry {
+                id: row.id,
+                project_id: row.project_id,
+                provider_id: row.provider_id,
+                model: row.model,
+                reasoning_effort: row.reasoning_effort,
+                action: row.action,
+                prompt_package_json,
+                prompt: row.prompt,
+                raw_output: row.raw_output,
+                status: row.status,
+                error_message: row.error_message,
+                created_at: row.created_at,
+                completed_at: row.completed_at,
+            })
+        })
+        .collect()
 }
 
 pub async fn update_book_concept_in_pool(
@@ -529,14 +626,17 @@ pub async fn generate_book_cover_in_pool(
     sqlx::query(
         r#"
         INSERT INTO ai_runs
-          (id, project_id, provider_id, action, prompt_package_json, status, created_at)
-        VALUES (?, ?, ?, 'generate_cover_image', ?, 'running', ?)
+          (id, project_id, provider_id, model, reasoning_effort, action, prompt_package_json, prompt, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'generate_cover_image', ?, ?, 'running', ?)
         "#,
     )
     .bind(&ai_run_id)
     .bind(&input.project_id)
     .bind(PROVIDER_ID)
+    .bind(input.model.as_deref().unwrap_or(""))
+    .bind(input.reasoning_effort.as_deref().unwrap_or(""))
     .bind(&prompt_package_json)
+    .bind(&input.prompt)
     .bind(&created_at)
     .execute(pool)
     .await?;
@@ -579,6 +679,7 @@ pub async fn generate_book_cover_in_pool(
     };
 
     verify_generated_png_file(&generated_image_path, "Codex CLI generated image").await?;
+    reject_duplicate_existing_cover(&generated_image_path, &details.book.cover_image_path).await?;
 
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
         AppError::Process(format!(
@@ -605,28 +706,18 @@ pub async fn generate_book_cover_in_pool(
     .await?;
 
     let final_image_path_text = final_image_path.to_string_lossy().to_string();
-    let book = update_book_cover_metadata_in_pool(
-        pool,
-        &input.book_id,
-        &final_image_path_text,
-        &input.cover_prompt,
-        &input.cover_negative_prompt,
-        &completed_at,
-    )
-    .await?;
-
     emit_cover_progress(
         app,
         &input,
         &ai_run_id,
-        "saved",
-        "Okladka zapisana.",
+        "final",
+        "Okladka gotowa do akceptacji.",
         None,
         Some(100),
     );
 
     Ok(BookCoverResult {
-        book,
+        book: details.book,
         ai_run: AiRunResult {
             id: ai_run_id,
             provider_id: PROVIDER_ID.into(),
@@ -677,6 +768,16 @@ async fn get_project(
 }
 
 #[tauri::command]
+async fn list_ai_runs(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<AiLogEntry>, String> {
+    list_ai_runs_in_pool(&state.db, &project_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
 async fn update_book_concept(
     state: State<'_, AppState>,
     book_id: String,
@@ -696,6 +797,27 @@ async fn generate_book_cover(
     generate_book_cover_in_pool(&app, &state.db, input)
         .await
         .map_err(command_error)
+}
+
+#[tauri::command]
+async fn accept_generated_book_cover(
+    state: State<'_, AppState>,
+    input: AcceptGeneratedBookCoverInput,
+) -> Result<Book, String> {
+    verify_generated_png_file(Path::new(&input.image_path), "Accepted cover image")
+        .await
+        .map_err(command_error)?;
+
+    update_book_cover_metadata_in_pool(
+        &state.db,
+        &input.book_id,
+        &input.image_path,
+        &input.cover_prompt,
+        &input.cover_negative_prompt,
+        &input.generated_at,
+    )
+    .await
+    .map_err(command_error)
 }
 
 #[tauri::command]
@@ -894,15 +1016,18 @@ pub async fn run_codex_prompt_in_pool(
     sqlx::query(
         r#"
         INSERT INTO ai_runs
-          (id, project_id, provider_id, action, prompt_package_json, status, created_at)
-        VALUES (?, ?, ?, ?, ?, 'running', ?)
+          (id, project_id, provider_id, model, reasoning_effort, action, prompt_package_json, prompt, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running', ?)
         "#,
     )
     .bind(&ai_run_id)
     .bind(&request.project_id)
     .bind(PROVIDER_ID)
+    .bind(request.model.as_deref().unwrap_or(""))
+    .bind(request.reasoning_effort.as_deref().unwrap_or(""))
     .bind(&request.action)
     .bind(&prompt_package_json)
+    .bind(&request.prompt)
     .bind(&created_at)
     .execute(pool)
     .await?;
@@ -1039,6 +1164,14 @@ async fn execute_codex_image_generation(
     let image_path = workspace.join("cover.png");
     let image_path_text = image_path.to_string_lossy().to_string();
     let prompt = request.prompt.replace("{OUTPUT_FILE}", &image_path_text);
+    match tokio::fs::remove_file(&image_path).await {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(AppError::from(error)),
+    }
+    let generation_started_at = SystemTime::now()
+        .checked_sub(Duration::from_secs(2))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
 
     tokio::fs::write(workspace.join("prompt.md"), prompt.as_bytes()).await?;
     tokio::fs::write(
@@ -1052,7 +1185,7 @@ async fn execute_codex_image_generation(
         .clone()
         .unwrap_or_else(|| "codex".to_string());
     let command_spec = resolve_codex_command(&codex_path).await;
-    let instruction = "Run the StoryForge2 cover image prompt from stdin. Use Codex image generation when requested. Prefer the requested output path, but if the image tool saves elsewhere or filesystem copying is blocked, do not retry shell commands; return only the requested JSON with the best available imagePath. StoryForge2 will resolve and copy the final PNG.";
+    let instruction = "Run the StoryForge2 cover image prompt from stdin. Create a brand-new image from scratch with image_generation. Do not edit, extend, inpaint, upscale, vary, reuse, or derive from any previous image. Prefer the requested output path, but if the image tool saves elsewhere or filesystem copying is blocked, do not retry shell commands; return only the requested JSON with the best available fresh imagePath. StoryForge2 will resolve and copy the final PNG.";
 
     emit_cover_progress(
         app,
@@ -1142,9 +1275,9 @@ async fn execute_codex_image_generation(
     .await?;
 
     let actual_image_path_result =
-        resolve_generated_cover_path(&image_path, &stdout, &stderr).await;
+        resolve_generated_cover_path(&image_path, &stdout, &stderr, generation_started_at).await;
 
-    if !output.status.success() && actual_image_path_result.is_err() {
+    if !output.status.success() {
         return Err(AppError::Process(if stderr.trim().is_empty() {
             "Codex CLI zwrĂłciĹ‚ niezerowy status podczas generowania okĹ‚adki.".into()
         } else {
@@ -1205,16 +1338,44 @@ async fn verify_generated_png_file(path: &Path, label: &str) -> Result<(), AppEr
     Ok(())
 }
 
+async fn reject_duplicate_existing_cover(
+    generated_path: &Path,
+    existing_cover_path: &str,
+) -> Result<(), AppError> {
+    let existing_cover_path = existing_cover_path.trim();
+    if existing_cover_path.is_empty() || existing_cover_path.starts_with("data:") {
+        return Ok(());
+    }
+
+    let existing_path = Path::new(existing_cover_path);
+    let (Ok(generated_bytes), Ok(existing_bytes)) = (
+        tokio::fs::read(generated_path).await,
+        tokio::fs::read(existing_path).await,
+    ) else {
+        return Ok(());
+    };
+
+    if !generated_bytes.is_empty() && generated_bytes == existing_bytes {
+        return Err(AppError::Process(
+            "Codex CLI zwrocil obraz identyczny z aktualna okladka. Uruchom ponownie generowanie, aby utworzyc nowa grafike od zera.".into(),
+        ));
+    }
+
+    Ok(())
+}
+
 async fn resolve_generated_cover_path(
     requested_path: &Path,
     stdout: &str,
     stderr: &str,
+    min_modified_at: SystemTime,
 ) -> Result<PathBuf, AppError> {
     resolve_generated_cover_path_from_sources(
         requested_path,
         stdout,
         stderr,
         codex_generated_images_dir(),
+        min_modified_at,
     )
     .await
 }
@@ -1224,8 +1385,9 @@ async fn resolve_generated_cover_path_from_sources(
     stdout: &str,
     stderr: &str,
     generated_images_dir: Option<PathBuf>,
+    min_modified_at: SystemTime,
 ) -> Result<PathBuf, AppError> {
-    if let Some(path) = resolve_existing_png_path(requested_path).await? {
+    if let Some(path) = resolve_fresh_png_path(requested_path, min_modified_at).await? {
         return Ok(path);
     }
 
@@ -1239,14 +1401,20 @@ async fn resolve_generated_cover_path_from_sources(
         } else {
             base_dir.join(candidate)
         };
-        if let Some(path) = resolve_existing_png_path(&resolved).await? {
+        if let Some(path) = resolve_fresh_png_path(&resolved, min_modified_at).await? {
             return Ok(path);
         }
     }
 
     if let Some(generated_images_dir) = generated_images_dir {
         if let Some(path) =
-            latest_codex_generated_image_from_output(stdout, stderr, &generated_images_dir).await?
+            latest_codex_generated_image_from_output(
+                stdout,
+                stderr,
+                &generated_images_dir,
+                min_modified_at,
+            )
+            .await?
         {
             return Ok(path);
         }
@@ -1258,7 +1426,10 @@ async fn resolve_generated_cover_path_from_sources(
     )))
 }
 
-async fn resolve_existing_png_path(path: &Path) -> Result<Option<PathBuf>, AppError> {
+async fn resolve_fresh_png_path(
+    path: &Path,
+    min_modified_at: SystemTime,
+) -> Result<Option<PathBuf>, AppError> {
     let metadata = match tokio::fs::metadata(path).await {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1266,11 +1437,15 @@ async fn resolve_existing_png_path(path: &Path) -> Result<Option<PathBuf>, AppEr
     };
 
     if metadata.is_file() {
+        let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        if modified < min_modified_at {
+            return Ok(None);
+        }
         return Ok(Some(path.to_path_buf()));
     }
 
     if metadata.is_dir() {
-        return newest_png_in_dir(path).await;
+        return newest_png_in_dir_after(path, min_modified_at).await;
     }
 
     Ok(None)
@@ -1280,6 +1455,7 @@ async fn latest_codex_generated_image_from_output(
     stdout: &str,
     stderr: &str,
     generated_images_dir: &Path,
+    min_modified_at: SystemTime,
 ) -> Result<Option<PathBuf>, AppError> {
     let mut session_ids = Vec::new();
     for output in [stdout, stderr] {
@@ -1292,7 +1468,7 @@ async fn latest_codex_generated_image_from_output(
 
     for session_id in session_ids {
         let session_dir = generated_images_dir.join(session_id);
-        if let Some(path) = newest_png_in_dir(&session_dir).await? {
+        if let Some(path) = newest_png_in_dir_after(&session_dir, min_modified_at).await? {
             return Ok(Some(path));
         }
     }
@@ -1317,7 +1493,10 @@ fn is_codex_session_id(value: &str) -> bool {
             .all(|character| character.is_ascii_hexdigit() || character == '-')
 }
 
-async fn newest_png_in_dir(dir: &Path) -> Result<Option<PathBuf>, AppError> {
+async fn newest_png_in_dir_after(
+    dir: &Path,
+    min_modified_at: SystemTime,
+) -> Result<Option<PathBuf>, AppError> {
     let mut entries = match tokio::fs::read_dir(dir).await {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1340,6 +1519,9 @@ async fn newest_png_in_dir(dir: &Path) -> Result<Option<PathBuf>, AppError> {
             .await
             .and_then(|metadata| metadata.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);
+        if modified < min_modified_at {
+            continue;
+        }
         if newest
             .as_ref()
             .is_none_or(|(_, newest_modified)| modified > *newest_modified)
@@ -1662,8 +1844,10 @@ pub fn run() {
             create_project,
             list_projects,
             get_project,
+            list_ai_runs,
             update_book_concept,
             generate_book_cover,
+            accept_generated_book_cover,
             check_codex_cli,
             list_codex_models,
             generate_new_project_title,
@@ -1720,6 +1904,61 @@ mod tests {
         assert_eq!(created.book.working_title, "Nowa powiesc");
         assert_eq!(created.book.cover_image_path, "");
         assert_eq!(listed[0].cover_image_path, "");
+    }
+
+    #[tokio::test]
+    async fn list_ai_runs_returns_prompt_log_entries() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Projekt z logiem".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        let now = Utc::now().to_rfc3339();
+        let prompt_package = serde_json::json!({
+            "context": {
+                "targetField": "premise",
+                "generationMode": "generate"
+            }
+        });
+
+        sqlx::query(
+            r#"
+            INSERT INTO ai_runs
+              (id, project_id, provider_id, model, reasoning_effort, action, prompt_package_json, prompt, raw_output, status, created_at, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', ?, ?)
+            "#,
+        )
+        .bind("run-log-1")
+        .bind(&created.project.id)
+        .bind(PROVIDER_ID)
+        .bind("gpt-5.5")
+        .bind("medium")
+        .bind("generate_premise")
+        .bind(prompt_package.to_string())
+        .bind("# Role\nPrompt testowy")
+        .bind(r#"{"kind":"concept_field_suggestion","value":"Premisa"}"#)
+        .bind(&now)
+        .bind(&now)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let logs = list_ai_runs_in_pool(&pool, &created.project.id)
+            .await
+            .unwrap();
+
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].id, "run-log-1");
+        assert_eq!(logs[0].model, "gpt-5.5");
+        assert_eq!(logs[0].reasoning_effort, "medium");
+        assert_eq!(logs[0].prompt, "# Role\nPrompt testowy");
+        assert_eq!(logs[0].prompt_package_json, prompt_package);
+        assert_eq!(logs[0].raw_output.as_deref(), Some(r#"{"kind":"concept_field_suggestion","value":"Premisa"}"#));
     }
 
     #[tokio::test]
@@ -1780,9 +2019,14 @@ mod tests {
         let requested_path =
             std::env::temp_dir().join(format!("storyforge2-requested-{}.png", Uuid::new_v4()));
 
-        let resolved = resolve_generated_cover_path(&requested_path, &stdout, "")
-            .await
-            .unwrap();
+        let resolved = resolve_generated_cover_path(
+            &requested_path,
+            &stdout,
+            "",
+            SystemTime::UNIX_EPOCH,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(resolved, image_path);
         let _ = tokio::fs::remove_file(resolved).await;
@@ -1804,12 +2048,71 @@ mod tests {
         .to_string();
         let requested_path = run_dir.join("requested.png");
 
-        let resolved = resolve_generated_cover_path(&requested_path, &stdout, "")
-            .await
-            .unwrap();
+        let resolved = resolve_generated_cover_path(
+            &requested_path,
+            &stdout,
+            "",
+            SystemTime::UNIX_EPOCH,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(resolved, image_path);
         let _ = tokio::fs::remove_dir_all(run_dir).await;
+    }
+
+    #[tokio::test]
+    async fn cover_path_ignores_png_created_before_generation_window() {
+        let requested_path =
+            std::env::temp_dir().join(format!("storyforge2-stale-cover-{}.png", Uuid::new_v4()));
+        tokio::fs::write(&requested_path, PNG_SIGNATURE)
+            .await
+            .unwrap();
+
+        let error = resolve_generated_cover_path(
+            &requested_path,
+            "",
+            "",
+            SystemTime::now() + Duration::from_secs(60),
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("nie znaleziono pliku okladki"));
+        let _ = tokio::fs::remove_file(requested_path).await;
+    }
+
+    #[tokio::test]
+    async fn duplicate_existing_cover_is_rejected() {
+        let existing_path =
+            std::env::temp_dir().join(format!("storyforge2-existing-cover-{}.png", Uuid::new_v4()));
+        let generated_path =
+            std::env::temp_dir().join(format!("storyforge2-generated-cover-{}.png", Uuid::new_v4()));
+        tokio::fs::write(&existing_path, PNG_SIGNATURE)
+            .await
+            .unwrap();
+        tokio::fs::write(&generated_path, PNG_SIGNATURE)
+            .await
+            .unwrap();
+        let existing_path_text = existing_path.to_string_lossy().to_string();
+
+        let error = reject_duplicate_existing_cover(&generated_path, &existing_path_text)
+        .await
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("identyczny z aktualna okladka"));
+
+        tokio::fs::write(&generated_path, [PNG_SIGNATURE.as_slice(), b"fresh"].concat())
+            .await
+            .unwrap();
+        reject_duplicate_existing_cover(&generated_path, &existing_path_text)
+            .await
+            .unwrap();
+
+        let _ = tokio::fs::remove_file(existing_path).await;
+        let _ = tokio::fs::remove_file(generated_path).await;
     }
 
     #[tokio::test]
@@ -1839,6 +2142,7 @@ mod tests {
             &stdout,
             &stderr,
             Some(generated_root.clone()),
+            SystemTime::UNIX_EPOCH,
         )
         .await
         .unwrap();
@@ -1869,7 +2173,13 @@ mod tests {
         .to_string();
 
         let resolved =
-            resolve_generated_cover_path_from_sources(&requested_path, &stdout, "", None)
+            resolve_generated_cover_path_from_sources(
+                &requested_path,
+                &stdout,
+                "",
+                None,
+                SystemTime::UNIX_EPOCH,
+            )
                 .await
                 .unwrap();
 

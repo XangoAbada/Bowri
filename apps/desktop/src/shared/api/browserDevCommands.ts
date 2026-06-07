@@ -1,4 +1,6 @@
 import type {
+  AcceptGeneratedBookCoverInput,
+  AiLogEntry,
   AiRunResult,
   Book,
   BookCoverResult,
@@ -18,10 +20,12 @@ const STORAGE_KEY = "storyforge2.browserPreview.projects";
 
 type BrowserPreviewState = {
   projects: ProjectDetails[];
+  aiRuns: AiLogEntry[];
 };
 
 let memoryState: BrowserPreviewState = {
-  projects: []
+  projects: [],
+  aiRuns: []
 };
 
 export function isTauriRuntime(): boolean {
@@ -123,6 +127,12 @@ export async function browserGetProject(
   return normalizeDetails(details);
 }
 
+export async function browserListAiRuns(projectId: string): Promise<AiLogEntry[]> {
+  return readState()
+    .aiRuns.filter((run) => run.projectId === projectId)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
 export async function browserUpdateBookConcept(
   bookId: string,
   input: BookConceptInput
@@ -187,15 +197,35 @@ export async function browserListCodexModels(
 export async function browserRunCodexPrompt(
   request: RunCodexPromptRequest
 ): Promise<AiRunResult> {
+  const now = new Date().toISOString();
+  const id = createId();
+  const errorMessage =
+    "Podgląd Vite nie może uruchomić codex exec. Użyj aplikacji Tauri desktop.";
+
+  appendAiRun({
+    id,
+    projectId: request.projectId,
+    providerId: "codex-cli-bridge",
+    model: request.model ?? "",
+    reasoningEffort: request.reasoningEffort ?? "",
+    action: request.action,
+    promptPackageJson: request.promptPackageJson,
+    prompt: request.prompt,
+    rawOutput: null,
+    status: "error",
+    errorMessage,
+    createdAt: now,
+    completedAt: now
+  });
+
   return {
-    id: createId(),
+    id,
     providerId: "codex-cli-bridge",
     promptPackageId: request.promptPackageId,
     action: request.action,
     status: "error",
     rawOutput: null,
-    errorMessage:
-      "Podgląd Vite nie może uruchomić codex exec. Użyj aplikacji Tauri desktop.",
+    errorMessage,
     durationMs: 0
   };
 }
@@ -257,17 +287,70 @@ export async function browserGenerateBookCover(
   }
 
   const now = new Date().toISOString();
+  const aiRunId = createId();
   const imagePath = createCoverDataUrl(
     details.book.workingTitle || details.project.name,
     input.coverPrompt
   );
 
+  const rawOutput = JSON.stringify({
+    version: 1,
+    kind: "book_cover_image",
+    imagePath,
+    warnings: ["Browser preview generated a local placeholder data URL."]
+  });
+
+  appendAiRun({
+    id: aiRunId,
+    projectId: input.projectId,
+    providerId: "codex-cli-bridge",
+    model: input.model ?? "",
+    reasoningEffort: input.reasoningEffort ?? "",
+    action: "generate_cover_image",
+    promptPackageJson: input.promptPackageJson,
+    prompt: input.prompt,
+    rawOutput,
+    status: "success",
+    errorMessage: null,
+    createdAt: now,
+    completedAt: now
+  });
+
+  return {
+    book: details.book,
+    aiRun: {
+      id: aiRunId,
+      providerId: "codex-cli-bridge",
+      promptPackageId: input.promptPackageId,
+      action: "generate_cover_image",
+      status: "success",
+      rawOutput,
+      durationMs: 0
+    },
+    imagePath,
+    prompt: input.coverPrompt,
+    negativePrompt: input.coverNegativePrompt,
+    generatedAt: now
+  };
+}
+
+export async function browserAcceptGeneratedBookCover(
+  input: AcceptGeneratedBookCoverInput
+): Promise<Book> {
+  const state = readState();
+  const details = state.projects.find(({ book }) => book.id === input.bookId);
+
+  if (!details) {
+    throw new Error("Book not found in browser preview storage.");
+  }
+
+  const now = new Date().toISOString();
   details.book = {
     ...details.book,
-    coverImagePath: imagePath,
+    coverImagePath: input.imagePath,
     coverPrompt: input.coverPrompt,
     coverNegativePrompt: input.coverNegativePrompt,
-    coverGeneratedAt: now,
+    coverGeneratedAt: input.generatedAt,
     updatedAt: now
   };
   details.project = {
@@ -276,28 +359,7 @@ export async function browserGenerateBookCover(
   };
 
   writeState(state);
-
-  return {
-    book: details.book,
-    aiRun: {
-      id: createId(),
-      providerId: "codex-cli-bridge",
-      promptPackageId: input.promptPackageId,
-      action: "generate_cover_image",
-      status: "success",
-      rawOutput: JSON.stringify({
-        version: 1,
-        kind: "book_cover_image",
-        imagePath,
-        warnings: ["Browser preview generated a local placeholder data URL."]
-      }),
-      durationMs: 0
-    },
-    imagePath,
-    prompt: input.coverPrompt,
-    negativePrompt: input.coverNegativePrompt,
-    generatedAt: now
-  };
+  return details.book;
 }
 
 function readState(): BrowserPreviewState {
@@ -308,11 +370,22 @@ function readState(): BrowserPreviewState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { projects: [] };
+      return { projects: [], aiRuns: [] };
     }
 
     const parsed = JSON.parse(raw) as BrowserPreviewState;
-    return Array.isArray(parsed.projects) ? parsed : { projects: [] };
+    return Array.isArray(parsed.projects)
+      ? {
+          projects: parsed.projects,
+          aiRuns: Array.isArray(parsed.aiRuns)
+            ? parsed.aiRuns.map((run) => ({
+                ...run,
+                model: run.model ?? "",
+                reasoningEffort: run.reasoningEffort ?? ""
+              }))
+            : []
+        }
+      : { projects: [], aiRuns: [] };
   } catch {
     return memoryState;
   }
@@ -336,6 +409,12 @@ function definedOnly(input: BookConceptInput): BookConceptInput {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined)
   ) as BookConceptInput;
+}
+
+function appendAiRun(entry: AiLogEntry): void {
+  const state = readState();
+  state.aiRuns.unshift(entry);
+  writeState(state);
 }
 
 function normalizeDetails(details: ProjectDetails): ProjectDetails {

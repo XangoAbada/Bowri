@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
+  browserAcceptGeneratedBookCover,
   browserCheckCodexCli,
   browserListCodexModels,
+  browserListAiRuns,
   browserCreateProject,
   browserGetProject,
   browserListProjects,
@@ -12,7 +14,9 @@ import {
   isTauriRuntime
 } from "./browserDevCommands";
 import type {
+  AcceptGeneratedBookCoverInput,
   AiRunResult,
+  AiLogEntry,
   Book,
   BookCoverResult,
   BookConceptInput,
@@ -48,6 +52,14 @@ export function getProject(projectId: string): Promise<ProjectDetails> {
   }
 
   return invoke("get_project", { projectId });
+}
+
+export function listAiRuns(projectId: string): Promise<AiLogEntry[]> {
+  if (!isTauriRuntime()) {
+    return browserListAiRuns(projectId);
+  }
+
+  return invoke("list_ai_runs", { projectId });
 }
 
 export function updateBookConcept(
@@ -105,4 +117,14 @@ export function generateBookCover(
   }
 
   return invoke("generate_book_cover", { input });
+}
+
+export function acceptGeneratedBookCover(
+  input: AcceptGeneratedBookCoverInput
+): Promise<Book> {
+  if (!isTauriRuntime()) {
+    return browserAcceptGeneratedBookCover(input);
+  }
+
+  return invoke("accept_generated_book_cover", { input });
 }

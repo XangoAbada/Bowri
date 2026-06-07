@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AiProposalPanel } from "../ai/AiProposalPanel";
+import { useProjectNavigationStore } from "../../app/projectNavigationStore";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
-import { useProposalStore } from "../ai/proposalStore";
+import { BOOK_COVER_FIELD, useProposalStore } from "../ai/proposalStore";
 import { BookConceptPage } from "./BookConceptPage";
 import type { AiRunResult, ProjectDetails } from "../../shared/api/types";
 import {
+  acceptGeneratedBookCover,
   checkCodexCli,
   generateBookCover,
   getProject,
@@ -15,6 +17,7 @@ import {
 } from "../../shared/api/commands";
 
 vi.mock("../../shared/api/commands", () => ({
+  acceptGeneratedBookCover: vi.fn(),
   checkCodexCli: vi.fn(),
   generateBookCover: vi.fn(),
   getProject: vi.fn(),
@@ -116,11 +119,7 @@ describe("BookConceptPage AI flow", () => {
     vi.mocked(runCodexPrompt).mockResolvedValue(successfulRun());
     vi.mocked(generateBookCover).mockResolvedValue({
       book: {
-        ...projectDetails.book,
-        coverImagePath: "data:image/png;base64,test",
-        coverPrompt: "cover prompt",
-        coverNegativePrompt: "negative",
-        coverGeneratedAt: "2026-06-05T12:05:00Z"
+        ...projectDetails.book
       },
       aiRun: {
         id: "cover-run-1",
@@ -140,7 +139,18 @@ describe("BookConceptPage AI flow", () => {
       ...projectDetails.book,
       workingTitle: "Siostra z mgły"
     });
-    useProposalStore.setState({ activeProposal: null });
+    vi.mocked(acceptGeneratedBookCover).mockResolvedValue({
+      ...projectDetails.book,
+      coverImagePath: "data:image/png;base64,test",
+      coverPrompt: "cover prompt",
+      coverNegativePrompt: "negative",
+      coverGeneratedAt: "2026-06-05T12:05:00Z"
+    });
+    useProposalStore.setState({ proposals: [], activeProposal: null });
+    useProjectNavigationStore.setState({
+      logReturnLocations: {},
+      viewState: {}
+    });
     useCodexSettingsStore.setState({
       codexPath: "codex",
       model: "gpt-5.5",
@@ -167,7 +177,9 @@ describe("BookConceptPage AI flow", () => {
     await waitFor(() => expect(generateButton).not.toBeDisabled());
     fireEvent.click(generateButton);
 
-    expect(await screen.findByText(/Zadanie jest w kolejce panelu/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/kolejce panelu|Codex CLI generuje/i)
+    ).toBeInTheDocument();
     expect(updateBookConcept).not.toHaveBeenCalled();
 
     resolveRun(successfulRun());
@@ -377,6 +389,92 @@ describe("BookConceptPage AI flow", () => {
     );
   });
 
+  it("restores the concept tab and AI button status from shared project state", async () => {
+    useProjectNavigationStore
+      .getState()
+      .setProjectViewState("project-1", "conceptStage", "readerForm");
+    const proposalId = useProposalStore.getState().enqueueProposal({
+      projectId: "project-1",
+      bookId: "book-1",
+      field: "genre",
+      action: "suggest_genre",
+      promptPackageId: "suggest_genre:test",
+      promptPackageJson: {} as never,
+      prompt: "Prompt"
+    });
+    useProposalStore.getState().startQueuedProposal(proposalId);
+
+    renderWithQueryClient();
+
+    const genreAiButton = await screen.findByRole("button", {
+      name: /Generuj Gatunek z AI/i
+    });
+    expect(screen.getByRole("tab", { name: /Czytelnik i forma/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(genreAiButton).toHaveTextContent("Generuje");
+  });
+
+  it("restores cover generation status from the shared queue state", async () => {
+    useProjectNavigationStore
+      .getState()
+      .setProjectViewState("project-1", "conceptStage", "cover");
+    const proposalId = useProposalStore.getState().enqueueProposal({
+      scope: "bookCover",
+      projectId: "project-1",
+      bookId: "book-1",
+      field: BOOK_COVER_FIELD,
+      action: "generate_cover_image",
+      promptPackageId: "generate_cover_image:test",
+      promptPackageJson: {} as never,
+      prompt: "Prompt",
+      coverPrompt: "Cover prompt",
+      coverNegativePrompt: "No text"
+    });
+    useProposalStore.getState().startQueuedProposal(proposalId);
+    useProposalStore.getState().updateProposalProgress(proposalId, {
+      progressMessage: "Codex CLI generuje okładkę...",
+      partialImageDataUrl: "data:image/png;base64,partial"
+    });
+
+    renderWithQueryClient();
+
+    const coverButton = await screen.findByRole("button", { name: /Tworzę/i });
+    expect(screen.getByRole("tab", { name: /Okładka/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(coverButton).toBeDisabled();
+    expect(screen.getByRole("heading", { name: "Okładka" })).toBeInTheDocument();
+    expect(screen.getByText("Codex CLI generuje okładkę...")).toBeInTheDocument();
+    expect(await screen.findByAltText("Okładka robocza")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,partial"
+    );
+  });
+
+  it("does not show the generated cover date in the cover view", async () => {
+    vi.mocked(getProject).mockResolvedValue({
+      ...projectDetails,
+      book: {
+        ...projectDetails.book,
+        coverImagePath: "data:image/png;base64,test",
+        coverGeneratedAt: "2026-06-07T09:51:58.994717200+00:00"
+      }
+    });
+
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Okładka/i }));
+
+    expect(screen.queryByText(/Wygenerowano:/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/2026-06-07T09:51:58.994717200\+00:00/i)
+    ).not.toBeInTheDocument();
+  });
+
   it("generates a cover from current concept form values", async () => {
     renderWithQueryClient();
 
@@ -404,6 +502,87 @@ describe("BookConceptPage AI flow", () => {
           reasoningEffort: "medium"
         })
       )
+    );
+  });
+
+  it("keeps a generated cover as a proposal until it is accepted", async () => {
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Okładka/i }));
+
+    const coverButton = await screen.findByRole("button", {
+      name: /Utwórz okładkę/i
+    });
+    await waitFor(() => expect(coverButton).not.toBeDisabled());
+    fireEvent.click(coverButton);
+
+    expect(await screen.findByText("Okładka jest gotowa do akceptacji.")).toBeInTheDocument();
+    expect(screen.getByText("Brak okładki")).toBeInTheDocument();
+    expect(acceptGeneratedBookCover).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Podgląd okładki z AI" })
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByAltText("Podgląd okładki z AI")).toHaveAttribute(
+      "src",
+      "data:image/png;base64,test"
+    );
+    fireEvent.click(within(dialog).getByTitle("Zamknij podgląd okładki"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
+
+    await waitFor(() =>
+      expect(acceptGeneratedBookCover).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bookId: "book-1",
+          imagePath: "data:image/png;base64,test",
+          coverPrompt: expect.stringContaining("Stary tytuł"),
+          coverNegativePrompt: expect.stringContaining("watermark"),
+          generatedAt: "2026-06-05T12:05:00Z"
+        })
+      )
+    );
+  });
+
+  it("does not store a local cover file path as a partial preview URL", async () => {
+    const localCoverPath = "C:\\Users\\tester\\AppData\\StoryForge2\\cover.png";
+    vi.mocked(generateBookCover).mockResolvedValueOnce({
+      book: {
+        ...projectDetails.book
+      },
+      aiRun: {
+        id: "cover-run-local",
+        providerId: "codex-cli-bridge",
+        promptPackageId: "generate_cover_image:test",
+        action: "generate_cover_image",
+        status: "success",
+        rawOutput: "{}",
+        durationMs: 12
+      },
+      imagePath: localCoverPath,
+      prompt: "cover prompt",
+      negativePrompt: "negative",
+      generatedAt: "2026-06-05T12:05:00Z"
+    });
+
+    renderWithQueryClient();
+
+    expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Okładka/i }));
+    const coverButton = await screen.findByRole("button", {
+      name: /Utwórz okładkę/i
+    });
+    await waitFor(() => expect(coverButton).not.toBeDisabled());
+    fireEvent.click(coverButton);
+
+    await waitFor(() =>
+      expect(useProposalStore.getState().proposals[0]).toMatchObject({
+        status: "success",
+        coverImagePath: localCoverPath,
+        partialImageDataUrl: null
+      })
     );
   });
 });
