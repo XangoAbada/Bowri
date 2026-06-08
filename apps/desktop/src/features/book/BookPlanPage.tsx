@@ -111,6 +111,7 @@ type SaveStoryStructureWithSkeletonInput = SaveStoryStructureInput & {
 type StructureOption = {
   value: string;
   label: string;
+  icon: typeof Map;
   bestFor: string;
   organizes: string;
   result: string;
@@ -121,6 +122,7 @@ const structureOptions: StructureOption[] = [
   {
     value: "three_act",
     label: "Trzy akty",
+    icon: Link2,
     bestFor: "Uniwersalne powieści, gdy potrzebujesz prostego kręgosłupa historii.",
     organizes: "Ustawia początek, konfrontację i rozwiązanie w czytelnych proporcjach.",
     result: "Doda 3 akty: Początek, Konfrontacja, Rozwiązanie.",
@@ -154,6 +156,7 @@ const structureOptions: StructureOption[] = [
   {
     value: "save_the_cat",
     label: "Save the Cat",
+    icon: BookOpen,
     bestFor: "Historie komercyjne, gatunkowe i mocno rytmiczne.",
     organizes: "Prowadzi przez obietnicę historii, zabawę gatunkiem, kryzys i finał.",
     result: "Doda 3 akty: Setup, Fun and Games / Bad Guys Close In, Finale.",
@@ -187,6 +190,7 @@ const structureOptions: StructureOption[] = [
   {
     value: "heros_journey",
     label: "Hero's Journey",
+    icon: Map,
     bestFor: "Przemianę bohatera, fantasy, przygodę albo opowieść inicjacyjną.",
     organizes: "Dzieli historię na wezwanie, próby i powrót z przemianą.",
     result: "Doda 3 akty: Ordinary World / Call, Trials and Transformation, Return.",
@@ -220,6 +224,7 @@ const structureOptions: StructureOption[] = [
   {
     value: "mystery_outline",
     label: "Mystery outline",
+    icon: Eye,
     bestFor: "Kryminał, thriller śledczy i fabuły oparte na pytaniu: co naprawdę zaszło?",
     organizes: "Porządkuje zbrodnię, śledztwo, fałszywe tropy oraz ujawnienie prawdy.",
     result: "Doda 4 akty: Zbrodnia i pytanie, Śledztwo, Komplikacje i fałszywe tropy, Ujawnienie i konsekwencje.",
@@ -261,6 +266,7 @@ const structureOptions: StructureOption[] = [
   {
     value: "custom",
     label: "Custom",
+    icon: Pencil,
     bestFor: "Eksperymentalną albo autorską konstrukcję bez narzuconych etapów.",
     organizes: "Zostawia pełną swobodę w definiowaniu aktów, beatów i proporcji.",
     result: "Nie doda aktów automatycznie.",
@@ -405,10 +411,6 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onError: showError
   });
 
-  const selectedDetails = selectedItem
-    ? selectedItemDetails(selectedItem, plan)
-    : null;
-
   function showError(error: unknown) {
     setErrorMessage(error instanceof Error ? error.message : String(error));
   }
@@ -511,6 +513,61 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     );
   }
 
+  const wizardContent =
+    activeStep === "structure" ? (
+      <StructureStep
+        bookId={bookId}
+        plan={plan}
+        saving={structureMutation.isPending}
+        onSave={(input) => structureMutation.mutate(input)}
+        onGenerate={(field) => queuePlanGeneration(field)}
+        onActivatePrompt={activatePlanPromptContext}
+      />
+    ) : activeStep === "acts" ? (
+      <ActsStep
+        bookId={bookId}
+        plan={plan}
+        saving={actMutation.isPending}
+        onSave={(input) => actMutation.mutate(input)}
+        onDelete={(item) => deleteMutation.mutate(item)}
+        onSelect={setSelectedItem}
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
+      />
+    ) : activeStep === "beats" ? (
+      <BeatsStep
+        bookId={bookId}
+        plan={plan}
+        saving={beatMutation.isPending}
+        onSave={(input) => beatMutation.mutate(input)}
+        onDelete={(item) => deleteMutation.mutate(item)}
+        onSelect={setSelectedItem}
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
+      />
+    ) : activeStep === "threads" ? (
+      <ThreadsStep
+        bookId={bookId}
+        plan={plan}
+        saving={threadMutation.isPending}
+        onSave={(input) => threadMutation.mutate(input)}
+        onDelete={(item) => deleteMutation.mutate(item)}
+        onSelect={setSelectedItem}
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
+      />
+    ) : (
+      <ChaptersStep
+        bookId={bookId}
+        plan={plan}
+        saving={chapterMutation.isPending}
+        onOpenChapter={openChapterModal}
+        onCreateChapter={openNewChapterModal}
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
+      />
+    );
+
   return (
     <section className="plan-page">
       <header className="plan-page-header">
@@ -522,10 +579,10 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
             podglądu całej konstrukcji.
           </p>
         </div>
-        <div className="plan-header-actions">
+        <div className="plan-header-actions" role="group" aria-label="Tryb planu">
           <button
             type="button"
-            className={mode === "wizard" ? "secondary-button active" : "ghost-button"}
+            className={mode === "wizard" ? "plan-mode-button active" : "plan-mode-button"}
             onClick={() => selectMode("wizard")}
           >
             <LayoutList size={16} />
@@ -533,7 +590,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
           </button>
           <button
             type="button"
-            className={mode === "preview" ? "secondary-button active" : "ghost-button"}
+            className={mode === "preview" ? "plan-mode-button active" : "plan-mode-button"}
             onClick={() => selectMode("preview")}
             disabled={!isPlanReady(plan)}
             title={
@@ -551,94 +608,20 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       {message ? <p className="success-text">{message}</p> : null}
       {errorMessage ? <p className="warning-text">{errorMessage}</p> : null}
 
+      <PlanStageNavigation
+        activeStep={activeStep}
+        onSelectStep={selectStep}
+      />
+
       {mode === "preview" ? (
         <PlanPreview
           plan={plan}
           selectedItem={selectedItem}
           onSelect={setSelectedItem}
         />
-      ) : activeStep === "chapters" ? (
-        <ChaptersStep
-          bookId={bookId}
-          plan={plan}
-          saving={chapterMutation.isPending}
-          onOpenChapter={openChapterModal}
-          onCreateChapter={openNewChapterModal}
-          onGenerate={queuePlanGeneration}
-          onActivatePrompt={activatePlanPromptContext}
-        />
       ) : (
         <div className="plan-workspace">
-          <aside className="plan-stepper" aria-label="Kroki planu">
-            {planSteps.map((step, index) => {
-              const Icon = step.icon;
-              return (
-                <button
-                  type="button"
-                  key={step.key}
-                  className={activeStep === step.key ? "plan-step active" : "plan-step"}
-                  onClick={() => selectStep(step.key)}
-                  aria-current={activeStep === step.key ? "step" : undefined}
-                >
-                  <span>{index + 1}</span>
-                  <Icon size={17} />
-                  {step.label}
-                  <ChevronRight size={15} />
-                </button>
-              );
-            })}
-          </aside>
-
-          <div className="plan-builder">
-            {activeStep === "structure" ? (
-              <StructureStep
-                bookId={bookId}
-                plan={plan}
-                saving={structureMutation.isPending}
-                onSave={(input) => structureMutation.mutate(input)}
-                onGenerate={(field) => queuePlanGeneration(field)}
-                onActivatePrompt={activatePlanPromptContext}
-              />
-            ) : null}
-            {activeStep === "acts" ? (
-              <ActsStep
-                bookId={bookId}
-                plan={plan}
-                saving={actMutation.isPending}
-                onSave={(input) => actMutation.mutate(input)}
-                onDelete={(item) => deleteMutation.mutate(item)}
-                onSelect={setSelectedItem}
-                onGenerate={queuePlanGeneration}
-                onActivatePrompt={activatePlanPromptContext}
-              />
-            ) : null}
-            {activeStep === "beats" ? (
-              <BeatsStep
-                bookId={bookId}
-                plan={plan}
-                saving={beatMutation.isPending}
-                onSave={(input) => beatMutation.mutate(input)}
-                onDelete={(item) => deleteMutation.mutate(item)}
-                onSelect={setSelectedItem}
-                onGenerate={queuePlanGeneration}
-                onActivatePrompt={activatePlanPromptContext}
-              />
-            ) : null}
-            {activeStep === "threads" ? (
-              <ThreadsStep
-                bookId={bookId}
-                plan={plan}
-                saving={threadMutation.isPending}
-                onSave={(input) => threadMutation.mutate(input)}
-                onDelete={(item) => deleteMutation.mutate(item)}
-                onSelect={setSelectedItem}
-                onGenerate={queuePlanGeneration}
-                onActivatePrompt={activatePlanPromptContext}
-              />
-            ) : null}
-          </div>
-
-          <PlanDetailsPanel details={selectedDetails} plan={plan} />
+          <div className="plan-builder">{wizardContent}</div>
         </div>
       )}
       <ChapterEditModal
@@ -674,6 +657,37 @@ type StepProps = {
     targetEntity?: Act | Beat | PlotThread | Chapter
   ) => void;
 };
+
+function PlanStageNavigation({
+  activeStep,
+  onSelectStep
+}: {
+  activeStep: PlanStep;
+  onSelectStep: (step: PlanStep) => void;
+}) {
+  return (
+    <nav className="plan-stage-navigation" aria-label="Kroki planu powieści">
+      <div className="plan-stage-track">
+        {planSteps.map((step, index) => {
+          const active = activeStep === step.key;
+
+          return (
+            <button
+              type="button"
+              key={step.key}
+              className={active ? "plan-stage-step active" : "plan-stage-step"}
+              onClick={() => onSelectStep(step.key)}
+              aria-current={active ? "step" : undefined}
+            >
+              <span className="plan-stage-number">{index + 1}</span>
+              <span className="plan-stage-label">{step.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
 
 function StructureStep({
   bookId,
@@ -733,12 +747,13 @@ function StructureStep({
         />
       }
     >
-      <form className="plan-form" onSubmit={submit}>
+      <form className="plan-form structure-builder-form" onSubmit={submit}>
         <fieldset className="structure-choice-grid">
           <legend>Typ struktury</legend>
           {structureOptions.map((option) => {
             const selected = option.value === structureType;
             const createsActs = plan.acts.length === 0 && option.actTemplates.length > 0;
+            const Icon = option.icon;
 
             return (
               <label
@@ -753,8 +768,11 @@ function StructureStep({
                   onChange={() => setStructureType(option.value)}
                 />
                 <span className="structure-choice-heading">
-                  <strong>{option.label}</strong>
-                  <em>{option.actTemplates.length || "Custom"}</em>
+                  <span className="structure-choice-title">
+                    <Icon size={24} />
+                    <strong>{option.label}</strong>
+                  </span>
+                  <em>{option.actTemplates.length ? `${option.actTemplates.length} akty` : "Dowolna"}</em>
                 </span>
                 <span className="structure-choice-copy">
                   <b>Najlepsze dla</b>
@@ -779,12 +797,24 @@ function StructureStep({
             <h4>{selectedOption.label}</h4>
           </div>
           {selectedOption.actTemplates.length > 0 ? (
-            <ol>
-              {selectedOption.actTemplates.map((act) => (
+            <ol className="structure-act-card-list">
+              {selectedOption.actTemplates.map((act, index) => (
                 <li key={act.name}>
-                  <span style={{ background: act.color }} />
-                  <strong>{act.name}</strong>
-                  <small>{act.startPercent}-{act.endPercent}%</small>
+                  <div className="structure-act-card-heading">
+                    <span style={{ background: act.color }}>{index + 1}</span>
+                    <strong>{act.name}</strong>
+                    <small>{act.startPercent}-{act.endPercent}%</small>
+                  </div>
+                  <div className="structure-act-percent-track" aria-hidden="true">
+                    <span
+                      style={{
+                        marginLeft: `${act.startPercent}%`,
+                        width: `${Math.max(act.endPercent - act.startPercent, 4)}%`,
+                        background: act.color
+                      }}
+                    />
+                  </div>
+                  <p>{act.purpose}</p>
                 </li>
               ))}
             </ol>
@@ -801,28 +831,32 @@ function StructureStep({
                 : "Ten wybór nie doda aktów automatycznie."}
           </p>
         </div>
-        <PlanInlineField
-          label="Opis struktury"
-          value={description}
-          rows={5}
-          field="storyStructureDescription"
-          onChange={setDescription}
-          onGenerate={onGenerate}
-          onActivatePrompt={onActivatePrompt}
-        />
-        <PlanInlineField
-          label="Notatki do planu"
-          value={notes}
-          rows={4}
-          field="storyStructureNotes"
-          onChange={setNotes}
-          onGenerate={onGenerate}
-          onActivatePrompt={onActivatePrompt}
-        />
-        <button type="submit" className="primary-button" disabled={saving}>
-          <Save size={16} />
-          {saving ? "Zapisuję" : "Zapisz strukturę"}
-        </button>
+        <div className="structure-notes-grid">
+          <PlanInlineField
+            label="Opis struktury"
+            value={description}
+            rows={5}
+            field="storyStructureDescription"
+            onChange={setDescription}
+            onGenerate={onGenerate}
+            onActivatePrompt={onActivatePrompt}
+          />
+          <PlanInlineField
+            label="Notatki do planu"
+            value={notes}
+            rows={5}
+            field="storyStructureNotes"
+            onChange={setNotes}
+            onGenerate={onGenerate}
+            onActivatePrompt={onActivatePrompt}
+          />
+        </div>
+        <div className="structure-form-actions">
+          <button type="submit" className="primary-button" disabled={saving}>
+            <Save size={16} />
+            {saving ? "Zapisuję" : "Zapisz strukturę"}
+          </button>
+        </div>
       </form>
     </PlanCard>
   );
