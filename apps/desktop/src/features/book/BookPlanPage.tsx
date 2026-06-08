@@ -1,14 +1,22 @@
 import {
+  BookOpen,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Circle,
   Clock3,
+  ClipboardList,
+  Eye,
   FileText,
   Flag,
   GitBranch,
+  Hash,
   LayoutList,
+  Link2,
   Loader2,
   Map,
   MoreHorizontal,
+  Pencil,
   Plus,
   Route,
   Save,
@@ -1641,6 +1649,7 @@ function ChapterEditModal({
             saving={saving}
             orderIndex={plan.chapters.length}
             initialActId={state.mode === "create" ? state.actId : undefined}
+            onCancel={onClose}
             onSave={onSave}
             onDelete={chapter ? () => onDelete({ type: "chapter", id: chapter.id }) : undefined}
             onGenerate={(field) => onGenerate(field, chapter)}
@@ -1666,6 +1675,7 @@ function ChapterForm({
   initialActId,
   saving,
   onSave,
+  onCancel,
   onDelete,
   onSelect,
   onGenerate,
@@ -1678,6 +1688,7 @@ function ChapterForm({
   initialActId?: string | null;
   saving: boolean;
   onSave: (input: UpsertChapterInput) => void;
+  onCancel: () => void;
   onDelete?: () => void;
   onSelect?: () => void;
   onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
@@ -1754,107 +1765,297 @@ function ChapterForm({
     });
   }
 
+  const selectedAct = plan.acts.find((act) => act.id === actId);
+  const selectedThreads = plan.threads.filter((thread) => threadIds.includes(thread.id));
+  const selectedBeats = plan.beats.filter((beat) => beatIds.includes(beat.id));
+  const targetWords = parseOptionalPositiveInt(targetWordCount);
+  const completionItems = [
+    { label: "Tytuł roboczy", complete: Boolean(workingTitle.trim()) },
+    { label: "Akt", complete: Boolean(actId) },
+    { label: "Streszczenie", complete: Boolean(summary.trim()) },
+    { label: "Cel", complete: Boolean(purpose.trim()) },
+    { label: "Konflikt", complete: Boolean(conflict.trim()) },
+    { label: "Punkt zwrotny", complete: Boolean(turningPoint.trim()) },
+    { label: "Beaty", complete: beatIds.length > 0 },
+    { label: "Wątki", complete: threadIds.length > 0 }
+  ];
+  const completedItems = completionItems.filter((item) => item.complete).length;
+  const completionPercent = Math.round((completedItems / completionItems.length) * 100);
+  const visualStatus =
+    completionPercent >= 88
+      ? "Gotowy do pisania"
+      : completionPercent >= 50
+        ? "W trakcie"
+        : "Szkic";
+  const summaryPreview =
+    summary.trim() ||
+    "Dodaj krótkie streszczenie, aby podgląd rozdziału pomagał ocenić kierunek scen.";
+  const purposePreview =
+    purpose.trim() ||
+    "Określ, co rozdział ma zmienić w historii, wiedzy bohatera albo napięciu fabularnym.";
+  const notesPreview =
+    conflict.trim() || turningPoint.trim()
+      ? [conflict.trim(), turningPoint.trim()].filter(Boolean).join(" ")
+      : "Konflikt i punkt zwrotny utworzą tu szybką notatkę kontrolną.";
+  const openChapterLabel = chapter ? `Otwórz rozdział ${chapter.workingTitle}` : "";
+
   return (
-    <form className="plan-entity-card chapter" onSubmit={submit}>
-      <button
-        type="button"
-        className="plan-link-title"
-        onClick={onSelect}
-        disabled={!chapter}
-        aria-label={chapter ? `Otwórz rozdział ${chapter.workingTitle}` : "Nowy rozdział"}
-      >
-        <FileText size={15} />
-        {chapter ? `Rozdział ${chapter.number}` : "Nowy rozdział"}
-      </button>
-      <div className="plan-form-row">
-        <label className="field-label">
-          Numer
-          <input
-            type="number"
-            min={1}
-            value={number}
-            onChange={(event) => setNumber(Number(event.target.value))}
-          />
-        </label>
-        <label className="field-label">
-          Akt
-          <select value={actId} onChange={(event) => setActId(event.target.value)}>
-            <option value="">Bez aktu</option>
-            {plan.acts.map((act) => (
-              <option value={act.id} key={act.id}>
-                {act.name}
-              </option>
-            ))}
-          </select>
-        </label>
+    <form className="chapter-edit-form" onSubmit={submit}>
+      <div className="chapter-edit-metrics" aria-label="Najważniejsze informacje o rozdziale">
+        <span className="chapter-edit-metric">
+          <BookOpen size={16} />
+          <span>Akt:</span>
+          <strong>{selectedAct?.name ?? "Bez aktu"}</strong>
+        </span>
+        <span className="chapter-edit-metric">
+          <Hash size={16} />
+          <span>Numer:</span>
+          <strong>{number || 1}</strong>
+        </span>
+        <span className="chapter-edit-metric">
+          <Target size={16} />
+          <span>Cel słów:</span>
+          <strong>{targetWords ? targetWords.toLocaleString("pl-PL") : "Brak"}</strong>
+        </span>
+        <span
+          className={
+            completionPercent >= 88
+              ? "chapter-status-pill ready"
+              : completionPercent >= 50
+                ? "chapter-status-pill active"
+                : "chapter-status-pill"
+          }
+        >
+          <Circle size={10} />
+          {visualStatus}
+        </span>
       </div>
-      <label className="field-label">
-        Tytuł roboczy
-        <input
-          value={workingTitle}
-          onChange={(event) => setWorkingTitle(event.target.value)}
-        />
-      </label>
-      <PlanInlineField
-        label="Streszczenie"
-        value={summary}
-        rows={4}
-        field="chapterSummary"
-        entity={chapter}
-        onChange={setSummary}
-        onGenerate={onGenerate}
-        onActivatePrompt={onActivatePrompt}
-      />
-      <PlanInlineField
-        label="Cel"
-        value={purpose}
-        rows={3}
-        field="chapterPurpose"
-        entity={chapter}
-        onChange={setPurpose}
-        onGenerate={onGenerate}
-        onActivatePrompt={onActivatePrompt}
-      />
-      <PlanInlineField
-        label="Konflikt"
-        value={conflict}
-        rows={3}
-        field="chapterConflict"
-        entity={chapter}
-        onChange={setConflict}
-        onGenerate={onGenerate}
-        onActivatePrompt={onActivatePrompt}
-      />
-      <PlanInlineField
-        label="Punkt zwrotny"
-        value={turningPoint}
-        rows={3}
-        field="chapterTurningPoint"
-        entity={chapter}
-        onChange={setTurningPoint}
-        onGenerate={onGenerate}
-        onActivatePrompt={onActivatePrompt}
-      />
-      <label className="field-label">
-        Target word count
-        <input
-          value={targetWordCount}
-          onChange={(event) => setTargetWordCount(event.target.value)}
-        />
-      </label>
-      <RelationPicker
-        label="Beaty"
-        items={plan.beats}
-        selectedIds={beatIds}
-        onChange={setBeatIds}
-      />
-      <RelationPicker
-        label="Wątki"
-        items={plan.threads}
-        selectedIds={threadIds}
-        onChange={setThreadIds}
-      />
-      <EntityActions saving={saving} onDelete={onDelete} />
+
+      <div className="chapter-edit-content-grid">
+        <main className="chapter-edit-main">
+          <section className="chapter-edit-section">
+            <div className="chapter-section-heading">
+              <FileText size={17} />
+              <h4>Podstawy</h4>
+            </div>
+            <div className="chapter-basic-grid">
+              <label className="field-label">
+                Numer
+                <input
+                  type="number"
+                  min={1}
+                  value={number}
+                  onChange={(event) => setNumber(Number(event.target.value))}
+                />
+              </label>
+              <label className="field-label">
+                Akt
+                <select value={actId} onChange={(event) => setActId(event.target.value)}>
+                  <option value="">Bez aktu</option>
+                  {plan.acts.map((act) => (
+                    <option value={act.id} key={act.id}>
+                      {act.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label chapter-title-field">
+                Tytuł roboczy
+                <input
+                  value={workingTitle}
+                  onChange={(event) => setWorkingTitle(event.target.value)}
+                />
+              </label>
+              <label className="field-label">
+                Cel słów
+                <input
+                  inputMode="numeric"
+                  value={targetWordCount}
+                  onChange={(event) => setTargetWordCount(event.target.value)}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="chapter-edit-section">
+            <div className="chapter-section-heading">
+              <LayoutList size={17} />
+              <h4>Treść rozdziału</h4>
+            </div>
+            <div className="chapter-field-stack">
+              <PlanInlineField
+                label="Streszczenie"
+                value={summary}
+                rows={4}
+                field="chapterSummary"
+                entity={chapter}
+                onChange={setSummary}
+                onGenerate={onGenerate}
+                onActivatePrompt={onActivatePrompt}
+              />
+              <PlanInlineField
+                label="Cel"
+                value={purpose}
+                rows={3}
+                field="chapterPurpose"
+                entity={chapter}
+                onChange={setPurpose}
+                onGenerate={onGenerate}
+                onActivatePrompt={onActivatePrompt}
+              />
+              <PlanInlineField
+                label="Konflikt"
+                value={conflict}
+                rows={3}
+                field="chapterConflict"
+                entity={chapter}
+                onChange={setConflict}
+                onGenerate={onGenerate}
+                onActivatePrompt={onActivatePrompt}
+              />
+              <PlanInlineField
+                label="Punkt zwrotny"
+                value={turningPoint}
+                rows={3}
+                field="chapterTurningPoint"
+                entity={chapter}
+                onChange={setTurningPoint}
+                onGenerate={onGenerate}
+                onActivatePrompt={onActivatePrompt}
+              />
+            </div>
+          </section>
+
+          <section className="chapter-edit-section">
+            <div className="chapter-section-heading">
+              <ClipboardList size={17} />
+              <h4>Beaty i znaczniki</h4>
+            </div>
+            <div className="chapter-relation-grid">
+              <RelationPicker
+                label="Beaty"
+                items={plan.beats}
+                selectedIds={beatIds}
+                onChange={setBeatIds}
+              />
+              <RelationPicker
+                label="Wątki"
+                items={plan.threads}
+                selectedIds={threadIds}
+                onChange={setThreadIds}
+              />
+            </div>
+          </section>
+        </main>
+
+        <aside className="chapter-edit-sidebar" aria-label="Podgląd rozdziału">
+          <section className="chapter-side-section">
+            <div className="chapter-side-heading">
+              <Eye size={16} />
+              <h4>Podgląd rozdziału</h4>
+            </div>
+            <p>{summaryPreview}</p>
+          </section>
+          <section className="chapter-side-section">
+            <div className="chapter-side-heading">
+              <Target size={16} />
+              <h4>Rola w akcji</h4>
+            </div>
+            <p>{purposePreview}</p>
+          </section>
+          <section className="chapter-side-section">
+            <div className="chapter-side-heading">
+              <Link2 size={16} />
+              <h4>Powiązane wątki</h4>
+            </div>
+            <div className="chapter-side-chip-list">
+              {selectedThreads.length > 0 ? (
+                selectedThreads.map((thread) => (
+                  <span className="chapter-side-chip thread" key={thread.id}>
+                    {thread.name}
+                  </span>
+                ))
+              ) : (
+                <span className="chapter-side-empty">Brak powiązanych wątków</span>
+              )}
+            </div>
+          </section>
+          <section className="chapter-side-section">
+            <div className="chapter-side-heading">
+              <Route size={16} />
+              <h4>Powiązane beaty</h4>
+            </div>
+            <div className="chapter-side-chip-list">
+              {selectedBeats.length > 0 ? (
+                selectedBeats.map((beat) => (
+                  <span className="chapter-side-chip beat" key={beat.id}>
+                    {beat.name}
+                  </span>
+                ))
+              ) : (
+                <span className="chapter-side-empty">Brak powiązanych beatów</span>
+              )}
+            </div>
+          </section>
+          <section className="chapter-side-section">
+            <div className="chapter-side-heading">
+              <ClipboardList size={16} />
+              <h4>Lista kontrolna</h4>
+            </div>
+            <ul className="chapter-checklist">
+              {completionItems.map((item) => (
+                <li className={item.complete ? "complete" : undefined} key={item.label}>
+                  {item.complete ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="chapter-side-note">{notesPreview}</p>
+            <div className="chapter-progress-row">
+              <span>Postęp rozdziału</span>
+              <strong>{completionPercent}%</strong>
+            </div>
+            <div className="chapter-progress-track" aria-hidden="true">
+              <span style={{ width: `${completionPercent}%` }} />
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <footer className="chapter-edit-footer">
+        <div className="chapter-footer-status">
+          <CheckCircle2 size={16} />
+          <span>
+            {completedItems} / {completionItems.length} elementów planu uzupełnionych
+          </span>
+        </div>
+        <div className="chapter-footer-actions">
+          {onDelete ? (
+            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete}>
+              <Trash2 size={16} />
+              Usuń
+            </button>
+          ) : null}
+          <button type="button" className="ghost-button" onClick={onCancel}>
+            Anuluj
+          </button>
+          <button type="submit" className="primary-button" disabled={saving}>
+            <Save size={16} />
+            {saving ? "Zapisuję" : "Zapisz zmiany"}
+          </button>
+          {onSelect && openChapterLabel ? (
+            <button
+              type="button"
+              className="icon-button"
+              onClick={onSelect}
+              aria-label={openChapterLabel}
+              title={openChapterLabel}
+            >
+              <Pencil size={16} />
+            </button>
+          ) : null}
+        </div>
+      </footer>
     </form>
   );
 }
