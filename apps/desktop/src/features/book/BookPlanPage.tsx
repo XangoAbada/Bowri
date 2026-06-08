@@ -86,6 +86,9 @@ type ChapterModalState =
   | { mode: "create"; actId?: string | null }
   | { mode: "edit"; chapterId: string };
 type BeatSortMode = "order" | "name" | "role";
+type ThreadViewMode = "map" | "list" | "table";
+type ThreadSortMode = "order" | "name" | "status";
+type ThreadEditTarget = "new" | string | null;
 type BeatBoardLane = {
   id: string;
   actId: string | null;
@@ -1445,49 +1448,234 @@ function ThreadsStep({
   onDelete: (item: SelectedPlanItem) => void;
   onSelect: (item: SelectedPlanItem) => void;
 }) {
-  return (
-    <PlanCard
-      title="Wątki"
-      icon={<GitBranch size={18} />}
-      action={
-        <PlanAiActions
-          field="plotThreads"
-          onGenerate={() => onGenerate("plotThreads")}
-          onActivatePrompt={() => onActivatePrompt("plotThreads")}
-        />
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortMode, setSortMode] = useState<ThreadSortMode>("order");
+  const [viewMode, setViewMode] = useState<ThreadViewMode>("map");
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
+    plan.threads[0]?.id ?? null
+  );
+  const [editingThreadId, setEditingThreadId] = useState<ThreadEditTarget>(null);
+  const threadIdsKey = plan.threads.map((thread) => thread.id).join("|");
+
+  useEffect(() => {
+    if (plan.threads.length === 0) {
+      setSelectedThreadId(null);
+      setEditingThreadId((current) => (current === "new" ? current : null));
+      return;
+    }
+
+    if (!selectedThreadId || !plan.threads.some((thread) => thread.id === selectedThreadId)) {
+      setSelectedThreadId(plan.threads[0].id);
+    }
+  }, [plan.threads, selectedThreadId, threadIdsKey]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("pl-PL");
+  const visibleThreads = plan.threads
+    .filter((thread) => {
+      const matchesStatus = statusFilter === "all" || thread.status === statusFilter;
+      const searchable = `${thread.name} ${thread.description} ${threadStatusLabel(thread.status)}`
+        .toLocaleLowerCase("pl-PL");
+
+      return matchesStatus && (!normalizedQuery || searchable.includes(normalizedQuery));
+    })
+    .sort((left, right) => {
+      if (sortMode === "name") {
+        return left.name.localeCompare(right.name, "pl");
       }
-    >
-      <div className="plan-grid-list compact">
-        {plan.threads.map((thread) => (
-          <ThreadForm
-            key={thread.id}
-            bookId={bookId}
-            thread={thread}
-            saving={saving}
-            onSave={onSave}
-            onDelete={() => onDelete({ type: "thread", id: thread.id })}
-            onSelect={() => onSelect({ type: "thread", id: thread.id })}
+
+      if (sortMode === "status") {
+        return threadStatusRank(left.status) - threadStatusRank(right.status);
+      }
+
+      return left.orderIndex - right.orderIndex;
+    });
+  const selectedThread =
+    plan.threads.find((thread) => thread.id === selectedThreadId) ??
+    visibleThreads[0] ??
+    plan.threads[0] ??
+    null;
+  const linkedChapterCount = plan.chapterThreads.filter((relation) =>
+    plan.threads.some((thread) => thread.id === relation.threadId)
+  ).length;
+
+  function selectThread(thread: PlotThread) {
+    setSelectedThreadId(thread.id);
+    setEditingThreadId(null);
+    onSelect({ type: "thread", id: thread.id });
+  }
+
+  function startNewThread() {
+    setSelectedThreadId(null);
+    setEditingThreadId("new");
+  }
+
+  function finishEdit(input: UpsertPlotThreadInput) {
+    onSave(input);
+    setEditingThreadId(null);
+  }
+
+  return (
+    <section className="thread-workspace-shell">
+      <header className="thread-workspace-header">
+        <div>
+          <div className="thread-title-row">
+            <span className="thread-title-icon">
+              <GitBranch size={18} />
+            </span>
+            <h3>Wątki</h3>
+            <span className="thread-count-badge">{plan.threads.length}</span>
+          </div>
+          <p>
+            Zobacz przebieg wątków przez historię, ich pokrycie w rozdziałach i szybkie
+            powiązania z beatami.
+          </p>
+        </div>
+        <div className="thread-header-actions">
+          <PlanAiActions
+            field="plotThreads"
+            onGenerate={() => onGenerate("plotThreads")}
+            onActivatePrompt={() => onActivatePrompt("plotThreads")}
           />
-        ))}
-        <ThreadForm
+          <button type="button" className="primary-button" onClick={startNewThread}>
+            <Plus size={16} />
+            Dodaj wątek
+          </button>
+        </div>
+      </header>
+
+      <div className="thread-toolbar">
+        <label className="thread-search-control">
+          <Search size={16} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Szukaj wątku..."
+          />
+        </label>
+        <label className="thread-select-control">
+          <span>Status</span>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="all">Wszystkie</option>
+            <option value="planned">Planowany</option>
+            <option value="active">Aktywny</option>
+            <option value="resolved">Domknięty</option>
+          </select>
+        </label>
+        <label className="thread-select-control">
+          <span>Sortuj</span>
+          <select
+            value={sortMode}
+            onChange={(event) => setSortMode(event.target.value as ThreadSortMode)}
+          >
+            <option value="order">Kolejność</option>
+            <option value="name">Nazwa</option>
+            <option value="status">Status</option>
+          </select>
+        </label>
+        <div className="thread-view-toggle" role="group" aria-label="Widok wątków">
+          <button
+            type="button"
+            className={viewMode === "map" ? "active" : ""}
+            onClick={() => setViewMode("map")}
+          >
+            <Map size={15} />
+            Mapa
+          </button>
+          <button
+            type="button"
+            className={viewMode === "list" ? "active" : ""}
+            onClick={() => setViewMode("list")}
+          >
+            <LayoutList size={15} />
+            Lista
+          </button>
+          <button
+            type="button"
+            className={viewMode === "table" ? "active" : ""}
+            onClick={() => setViewMode("table")}
+          >
+            <ClipboardList size={15} />
+            Tabela
+          </button>
+        </div>
+      </div>
+
+      <div className="thread-content-grid">
+        <div className="thread-main-panel">
+          <ThreadFlowMap
+            plan={plan}
+            threads={visibleThreads}
+            selectedThreadId={selectedThread?.id ?? null}
+            onSelect={selectThread}
+          />
+
+          <div className="thread-view-panel">
+            <div className="thread-view-summary">
+              <span>{visibleThreads.length} widocznych</span>
+              <span>{linkedChapterCount} powiązań z rozdziałami</span>
+              <span>{plan.beatThreads.length} powiązań z beatami</span>
+            </div>
+
+            {viewMode === "table" ? (
+              <ThreadTable
+                plan={plan}
+                threads={visibleThreads}
+                selectedThreadId={selectedThread?.id ?? null}
+                onSelect={selectThread}
+              />
+            ) : (
+              <div className={viewMode === "list" ? "thread-card-list list" : "thread-card-list"}>
+                {visibleThreads.map((thread) => (
+                  <ThreadSummaryCard
+                    key={thread.id}
+                    plan={plan}
+                    thread={thread}
+                    active={selectedThread?.id === thread.id}
+                    onSelect={() => selectThread(thread)}
+                    onEdit={() => {
+                      setSelectedThreadId(thread.id);
+                      setEditingThreadId(thread.id);
+                    }}
+                  />
+                ))}
+                {visibleThreads.length === 0 ? (
+                  <div className="thread-empty-state">
+                    <GitBranch size={20} />
+                    <strong>Brak wątków dla tych filtrów</strong>
+                    <p>Zmień kryteria albo dodaj nowy wątek fabularny.</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <ThreadDetailsPanel
           bookId={bookId}
-          saving={saving}
+          plan={plan}
+          thread={selectedThread}
+          editingThreadId={editingThreadId}
           orderIndex={plan.threads.length}
-          onSave={onSave}
+          saving={saving}
+          onSave={finishEdit}
+          onDelete={(thread) => onDelete({ type: "thread", id: thread.id })}
+          onEdit={(target) => setEditingThreadId(target)}
+          onCancelEdit={() => setEditingThreadId(null)}
         />
       </div>
-    </PlanCard>
+    </section>
   );
 }
 
-function ThreadForm({
+function ThreadEditor({
   bookId,
   thread,
   orderIndex = 0,
   saving,
   onSave,
   onDelete,
-  onSelect
+  onCancel
 }: {
   bookId: string;
   thread?: PlotThread;
@@ -1495,7 +1683,7 @@ function ThreadForm({
   saving: boolean;
   onSave: (input: UpsertPlotThreadInput) => void;
   onDelete?: () => void;
-  onSelect?: () => void;
+  onCancel?: () => void;
 }) {
   const [name, setName] = useState(thread?.name ?? `Wątek ${orderIndex + 1}`);
   const [description, setDescription] = useState(thread?.description ?? "");
@@ -1529,17 +1717,11 @@ function ThreadForm({
   }
 
   return (
-    <form className="plan-entity-card" onSubmit={submit}>
-      <button
-        type="button"
-        className="plan-link-title"
-        onClick={onSelect}
-        disabled={!thread}
-        aria-label={thread ? `Otwórz wątek ${thread.name}` : "Nowy wątek"}
-      >
+    <form className="thread-editor-form" onSubmit={submit}>
+      <div className="thread-editor-title">
         <span style={{ background: color }} />
-        {thread ? thread.name : "Nowy wątek"}
-      </button>
+        <strong>{thread ? "Edytuj wątek" : "Nowy wątek"}</strong>
+      </div>
       <label className="field-label">
         Nazwa
         <input value={name} onChange={(event) => setName(event.target.value)} />
@@ -1570,8 +1752,400 @@ function ThreadForm({
           />
         </label>
       </div>
-      <EntityActions saving={saving} onDelete={onDelete} />
+      <div className="thread-editor-actions">
+        <EntityActions saving={saving} onDelete={onDelete} />
+        {onCancel ? (
+          <button type="button" className="ghost-button" onClick={onCancel}>
+            Zamknij
+          </button>
+        ) : null}
+      </div>
     </form>
+  );
+}
+
+function ThreadFlowMap({
+  plan,
+  threads,
+  selectedThreadId,
+  onSelect
+}: {
+  plan: BookPlan;
+  threads: PlotThread[];
+  selectedThreadId: string | null;
+  onSelect: (thread: PlotThread) => void;
+}) {
+  if (plan.chapters.length === 0) {
+    return (
+      <section className="thread-map-card">
+        <div className="thread-section-heading">
+          <div>
+            <p className="eyebrow">Mapa powiązań</p>
+            <h4>Dodaj rozdziały, aby zobaczyć przebieg wątków</h4>
+          </div>
+        </div>
+        <p className="muted-text">
+          Mapa powstanie automatycznie z relacji między wątkami i rozdziałami.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="thread-map-card">
+      <div className="thread-section-heading">
+        <div>
+          <p className="eyebrow">Mapa powiązań wątków w całej historii</p>
+          <h4>Przebieg przez rozdziały</h4>
+        </div>
+        <span>{plan.chapters.length} rozdz.</span>
+      </div>
+      <div className="thread-map-legend">
+        {threads.slice(0, 6).map((thread) => (
+          <button
+            type="button"
+            key={thread.id}
+            className={selectedThreadId === thread.id ? "active" : ""}
+            onClick={() => onSelect(thread)}
+          >
+            <span style={{ background: thread.color }} />
+            {thread.name}
+          </button>
+        ))}
+      </div>
+      <div className="thread-map-board">
+        <div
+          className="thread-map-axis"
+          style={{
+            gridTemplateColumns: `minmax(150px, 180px) repeat(${plan.chapters.length}, minmax(48px, 1fr))`
+          }}
+        >
+          <span />
+          {plan.chapters.map((chapter) => (
+            <button
+              type="button"
+              key={chapter.id}
+              title={chapter.workingTitle}
+              aria-label={`Rozdział ${chapter.number}: ${chapter.workingTitle}`}
+            >
+              <strong>{chapter.number}</strong>
+              <small>{plan.acts.find((act) => act.id === chapter.actId)?.name ?? "Bez aktu"}</small>
+            </button>
+          ))}
+        </div>
+        {threads.map((thread) => {
+          const linkedChapterIds = new Set(
+            plan.chapterThreads
+              .filter((relation) => relation.threadId === thread.id)
+              .map((relation) => relation.chapterId)
+          );
+
+          return (
+            <div
+              className={
+                selectedThreadId === thread.id ? "thread-map-track active" : "thread-map-track"
+              }
+              style={{
+                gridTemplateColumns: `minmax(150px, 180px) repeat(${plan.chapters.length}, minmax(48px, 1fr))`
+              }}
+              key={thread.id}
+            >
+              <button type="button" onClick={() => onSelect(thread)}>
+                <span style={{ background: thread.color }} />
+                {thread.name}
+              </button>
+              <div className="thread-map-nodes">
+                {plan.chapters.map((chapter) => {
+                  const linked = linkedChapterIds.has(chapter.id);
+
+                  return (
+                    <button
+                      type="button"
+                      key={chapter.id}
+                      className={linked ? "linked" : ""}
+                      style={linked ? { borderColor: thread.color, background: thread.color } : {}}
+                      onClick={() => onSelect(thread)}
+                      title={`${thread.name}: rozdział ${chapter.number}`}
+                      aria-label={`${thread.name} w rozdziale ${chapter.number}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ThreadSummaryCard({
+  plan,
+  thread,
+  active,
+  onSelect,
+  onEdit
+}: {
+  plan: BookPlan;
+  thread: PlotThread;
+  active: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+}) {
+  const beats = beatsForThread(plan, thread);
+  const chapters = chaptersForThread(plan, thread);
+  const acts = actsForThread(plan, thread);
+  const coverage = threadCoveragePercent(plan, thread);
+
+  return (
+    <article className={active ? "thread-summary-card active" : "thread-summary-card"}>
+      <button type="button" className="thread-summary-hitarea" onClick={onSelect}>
+        <span className="thread-color-dot" style={{ background: thread.color }} />
+        <span>
+          <strong>{thread.name}</strong>
+          <em className={`thread-status-chip ${thread.status}`}>
+            {threadStatusLabel(thread.status)}
+          </em>
+        </span>
+      </button>
+      <p>{thread.description || "Ten wątek nie ma jeszcze opisu."}</p>
+      <div className="thread-card-metrics">
+        <span>
+          <b>Akty</b>
+          {acts.length > 0 ? acts.map((act) => act.name).join(", ") : "Brak"}
+        </span>
+        <span>
+          <b>Beaty</b>
+          {beats.length}
+        </span>
+        <span>
+          <b>Rozdziały</b>
+          {chapterRangeLabel(chapters)}
+        </span>
+      </div>
+      <div className="thread-progress-row">
+        <span>
+          <i style={{ width: `${coverage}%`, background: thread.color }} />
+        </span>
+        <em>{coverage}%</em>
+      </div>
+      <div className="thread-card-tags">
+        {beats.slice(0, 3).map((beat) => (
+          <span key={beat.id}>{beat.name}</span>
+        ))}
+        {beats.length > 3 ? <span>+{beats.length - 3}</span> : null}
+      </div>
+      <button type="button" className="thread-card-edit" onClick={onEdit}>
+        <Pencil size={14} />
+        Edytuj
+      </button>
+    </article>
+  );
+}
+
+function ThreadTable({
+  plan,
+  threads,
+  selectedThreadId,
+  onSelect
+}: {
+  plan: BookPlan;
+  threads: PlotThread[];
+  selectedThreadId: string | null;
+  onSelect: (thread: PlotThread) => void;
+}) {
+  return (
+    <div className="thread-table-wrap">
+      <table className="thread-table">
+        <thead>
+          <tr>
+            <th>Wątek</th>
+            <th>Status</th>
+            <th>Beaty</th>
+            <th>Rozdziały</th>
+            <th>Pokrycie</th>
+          </tr>
+        </thead>
+        <tbody>
+          {threads.map((thread) => {
+            const coverage = threadCoveragePercent(plan, thread);
+
+            return (
+              <tr
+                key={thread.id}
+                className={selectedThreadId === thread.id ? "active" : ""}
+                onClick={() => onSelect(thread)}
+              >
+                <td>
+                  <span style={{ background: thread.color }} />
+                  <strong>{thread.name}</strong>
+                </td>
+                <td>{threadStatusLabel(thread.status)}</td>
+                <td>{beatsForThread(plan, thread).length}</td>
+                <td>{chapterRangeLabel(chaptersForThread(plan, thread))}</td>
+                <td>{coverage}%</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {threads.length === 0 ? (
+        <div className="thread-empty-state table-empty">
+          <GitBranch size={20} />
+          <strong>Brak wątków do pokazania</strong>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ThreadDetailsPanel({
+  bookId,
+  plan,
+  thread,
+  editingThreadId,
+  orderIndex,
+  saving,
+  onSave,
+  onDelete,
+  onEdit,
+  onCancelEdit
+}: {
+  bookId: string;
+  plan: BookPlan;
+  thread: PlotThread | null;
+  editingThreadId: ThreadEditTarget;
+  orderIndex: number;
+  saving: boolean;
+  onSave: (input: UpsertPlotThreadInput) => void;
+  onDelete: (thread: PlotThread) => void;
+  onEdit: (target: ThreadEditTarget) => void;
+  onCancelEdit: () => void;
+}) {
+  const editingThread =
+    editingThreadId && editingThreadId !== "new"
+      ? plan.threads.find((candidate) => candidate.id === editingThreadId)
+      : undefined;
+
+  if (editingThreadId === "new" || editingThread) {
+    return (
+      <aside className="thread-details-panel">
+        <ThreadEditor
+          bookId={bookId}
+          thread={editingThread}
+          orderIndex={orderIndex}
+          saving={saving}
+          onSave={onSave}
+          onDelete={editingThread ? () => onDelete(editingThread) : undefined}
+          onCancel={onCancelEdit}
+        />
+      </aside>
+    );
+  }
+
+  if (!thread) {
+    return (
+      <aside className="thread-details-panel">
+        <div className="thread-detail-empty">
+          <GitBranch size={22} />
+          <strong>Wybierz wątek</strong>
+          <p>Panel pokaże status, powiązania, checklistę i edycję wybranego wątku.</p>
+        </div>
+      </aside>
+    );
+  }
+
+  const beats = beatsForThread(plan, thread);
+  const chapters = chaptersForThread(plan, thread);
+  const acts = actsForThread(plan, thread);
+  const checklist = [
+    { label: "Zdefiniowana rola w historii", complete: Boolean(thread.description.trim()) },
+    { label: "Powiązane akty i beaty", complete: beats.length > 0 || acts.length > 0 },
+    { label: "Powiązane rozdziały", complete: chapters.length > 0 }
+  ];
+
+  return (
+    <aside className="thread-details-panel">
+      <div className="thread-detail-heading">
+        <div>
+          <p className="eyebrow">Szczegóły wątku</p>
+          <h4>
+            <span style={{ background: thread.color }} />
+            {thread.name}
+          </h4>
+        </div>
+        <em className={`thread-status-chip ${thread.status}`}>
+          {threadStatusLabel(thread.status)}
+        </em>
+      </div>
+      <p className="thread-detail-description">
+        {thread.description || "Ten wątek nie ma jeszcze opisu."}
+      </p>
+      <div className="thread-detail-section">
+        <strong>Powiązane akty</strong>
+        <div className="thread-chip-row">
+          {acts.length > 0 ? acts.map((act) => <span key={act.id}>{act.name}</span>) : <em>Brak</em>}
+        </div>
+      </div>
+      <div className="thread-detail-section">
+        <strong>Powiązane beaty</strong>
+        <div className="thread-chip-row">
+          {beats.length > 0 ? (
+            beats.map((beat) => <span key={beat.id}>{beat.name}</span>)
+          ) : (
+            <em>Brak</em>
+          )}
+        </div>
+      </div>
+      <div className="thread-detail-section">
+        <strong>Powiązane rozdziały</strong>
+        <div className="thread-chip-row">
+          {chapters.length > 0 ? (
+            chapters.map((chapter) => (
+              <span key={chapter.id}>
+                {chapter.number}. {chapter.workingTitle}
+              </span>
+            ))
+          ) : (
+            <em>Brak</em>
+          )}
+        </div>
+      </div>
+      <div className="thread-detail-checklist">
+        <strong>Lista kontrolna</strong>
+        {checklist.map((item) => (
+          <label key={item.label}>
+            <input type="checkbox" checked={item.complete} readOnly />
+            {item.complete ? <CheckCircle2 size={15} /> : <Circle size={15} />}
+            <span>{item.label}</span>
+          </label>
+        ))}
+      </div>
+      <div className="thread-plot-meaning">
+        <span>
+          <b>{threadCoveragePercent(plan, thread)}%</b>
+          Pokrycie
+        </span>
+        <span>
+          <b>{beats.length}</b>
+          Beaty
+        </span>
+        <span>
+          <b>{chapters.length}</b>
+          Rozdziały
+        </span>
+      </div>
+      <div className="button-row">
+        <button type="button" className="primary-button" onClick={() => onEdit(thread.id)}>
+          <Pencil size={16} />
+          Edytuj
+        </button>
+        <button type="button" className="ghost-button" onClick={() => onDelete(thread)}>
+          <Trash2 size={16} />
+          Usuń
+        </button>
+      </div>
+    </aside>
   );
 }
 
@@ -2781,6 +3355,82 @@ function threadsForBeat(plan: BookPlan, beat: Beat): PlotThread[] {
   return plan.threads.filter((thread) => threadIds.has(thread.id));
 }
 
+function beatsForThread(plan: BookPlan, thread: PlotThread): Beat[] {
+  const beatIds = new Set(
+    plan.beatThreads
+      .filter((relation) => relation.threadId === thread.id)
+      .map((relation) => relation.beatId)
+  );
+
+  return plan.beats.filter((beat) => beatIds.has(beat.id));
+}
+
+function actsForThread(plan: BookPlan, thread: PlotThread): Act[] {
+  const actIds = new Set<string>();
+
+  for (const beat of beatsForThread(plan, thread)) {
+    if (beat.actId) {
+      actIds.add(beat.actId);
+    }
+  }
+
+  for (const chapter of chaptersForThread(plan, thread)) {
+    if (chapter.actId) {
+      actIds.add(chapter.actId);
+    }
+  }
+
+  return plan.acts.filter((act) => actIds.has(act.id));
+}
+
+function threadCoveragePercent(plan: BookPlan, thread: PlotThread): number {
+  if (plan.chapters.length === 0) {
+    return 0;
+  }
+
+  return Math.round((chaptersForThread(plan, thread).length / plan.chapters.length) * 100);
+}
+
+function chapterRangeLabel(chapters: Chapter[]): string {
+  if (chapters.length === 0) {
+    return "Brak";
+  }
+
+  const numbers = chapters
+    .map((chapter) => chapter.number)
+    .sort((left, right) => left - right);
+
+  if (numbers.length === 1) {
+    return String(numbers[0]);
+  }
+
+  return `${numbers[0]}-${numbers[numbers.length - 1]}`;
+}
+
+function threadStatusLabel(status: string): string {
+  if (status === "active") {
+    return "W toku";
+  }
+
+  if (status === "resolved") {
+    return "Domknięty";
+  }
+
+  return "Planowany";
+}
+
+function threadStatusRank(status: string): number {
+  if (status === "active") {
+    return 1;
+  }
+
+  if (status === "resolved") {
+    return 2;
+  }
+
+  return 0;
+}
+
 function chaptersForBeat(plan: BookPlan, beat: Beat): Chapter[] {
   const chapterIds = new Set(
     plan.chapterBeats
@@ -2826,6 +3476,16 @@ function threadsForChapter(plan: BookPlan, chapter: Chapter): PlotThread[] {
   );
 
   return plan.threads.filter((thread) => threadIds.has(thread.id));
+}
+
+function chaptersForThread(plan: BookPlan, thread: PlotThread): Chapter[] {
+  const chapterIds = new Set(
+    plan.chapterThreads
+      .filter((relation) => relation.threadId === thread.id)
+      .map((relation) => relation.chapterId)
+  );
+
+  return plan.chapters.filter((chapter) => chapterIds.has(chapter.id));
 }
 
 function formatWordCount(value: number | null): string {
