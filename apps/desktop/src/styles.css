@@ -364,18 +364,6 @@ a:focus-visible {
   align-items: center;
 }
 
-.brand-link span {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(247, 239, 226, 0.28);
-  border-radius: 8px;
-  background: #3b3329;
-  color: #f4c36d;
-  font-weight: 900;
-}
-
 .sidebar-nav {
   display: grid;
   align-content: start;
@@ -1589,23 +1577,18 @@ a:focus-visible {
 .brand-link {
   display: grid;
   justify-items: center;
-  min-height: 150px;
-  padding: 0 0 12px;
+  min-height: 104px;
+  padding: 8px 0 10px;
   text-align: center;
-}
-
-.brand-link strong {
-  color: #ffffff;
-  font-size: 19px;
-  font-weight: 800;
+  text-decoration: none;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 100%;
-  height: 136px;
-  overflow: hidden;
+  width: min(100%, 198px);
+  height: 58px;
+  overflow: visible;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -1615,6 +1598,9 @@ a:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter:
+    drop-shadow(0 1px 1px rgba(255, 255, 255, 0.22))
+    drop-shadow(0 12px 22px rgba(10, 17, 15, 0.28));
 }
 
 .sidebar-nav,
@@ -2212,6 +2198,187 @@ button.nav-item {
   background: #ffffff;
 }
 
+/* Dashboard aligned with the concept workspace */
+.dashboard {
+  width: min(1480px, calc(100vw - 76px));
+  padding: 36px 0 32px;
+}
+
+.dashboard-with-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 368px);
+  gap: 28px;
+}
+
+.dashboard-main-column,
+.dashboard-side-panel {
+  gap: 28px;
+}
+
+.dashboard-side-panel {
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  padding-right: 2px;
+}
+
+.dashboard-header {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+  gap: 28px;
+  align-items: end;
+  min-height: 154px;
+  padding: 0 0 4px;
+  border-bottom: 0;
+}
+
+.dashboard-header > div {
+  gap: 10px;
+  max-width: 760px;
+}
+
+.dashboard-header h1 {
+  font-family: "Segoe UI", "Aptos", system-ui, sans-serif;
+  font-size: 44px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.dashboard-header .muted-text {
+  max-width: 660px;
+  color: #24463e;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.new-project-form,
+.project-list-section,
+.dashboard-side-panel .context-section {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 45px rgba(23, 36, 32, 0.04);
+}
+
+.new-project-form {
+  gap: 10px;
+  padding: 18px;
+}
+
+.new-project-form .field-label {
+  color: #5f6d68;
+}
+
+.new-project-title-control {
+  grid-template-columns: auto minmax(0, 1fr) 38px 38px 38px;
+  gap: 8px;
+}
+
+.new-project-title-control input {
+  height: 46px;
+  border-color: #d8ded9;
+  background: #fcfdfc;
+}
+
+.new-project-title-control > svg {
+  color: var(--green);
+}
+
+.project-list-section {
+  gap: 20px;
+  padding: 24px;
+}
+
+.project-list-section .section-title-row > svg,
+.dashboard-side-panel .section-title-row > svg {
+  color: var(--green);
+}
+
+.project-list-section h2,
+.dashboard-side-panel h2 {
+  color: #24322f;
+  font-weight: 850;
+}
+
+.project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
+  gap: 20px;
+}
+
+.project-card-shell {
+  isolation: isolate;
+}
+
+.project-card {
+  border-color: #dfe5e0;
+  background: #ffffff;
+}
+
+.project-card.book-card {
+  box-shadow: 0 14px 36px rgba(23, 36, 32, 0.045);
+}
+
+.project-card:hover {
+  border-color: #9fc9b8;
+  box-shadow: 0 18px 42px rgba(47, 128, 103, 0.13);
+}
+
+.project-cover-art {
+  background:
+    linear-gradient(145deg, rgba(47, 128, 103, 0.16), rgba(155, 106, 47, 0.12)),
+    #f1f4f1;
+}
+
+.project-cover-art .project-card-icon {
+  width: 64px;
+  height: 64px;
+  background: #ffffff;
+  color: var(--green);
+  box-shadow: 0 12px 30px rgba(23, 36, 32, 0.08);
+}
+
+.project-card-copy {
+  gap: 6px;
+  padding: 13px 14px 14px;
+  border-top: 1px solid #edf1ee;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.project-card-copy strong {
+  color: #1d2b28;
+  font-size: 15px;
+  line-height: 1.24;
+}
+
+.project-card-copy small,
+.project-card-copy time {
+  color: #66736e;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.project-card-ai-actions {
+  top: 11px;
+  right: 11px;
+}
+
+.project-card-ai-button,
+.project-card-context-button {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(23, 36, 32, 0.12);
+}
+
+.empty-state {
+  border-color: #cfd8d1;
+  background: #fbfcfb;
+}
+
+.dashboard-side-panel .context-section {
+  padding: 16px;
+}
+
+.dashboard-side-panel .proposal-queue-item,
+.dashboard-side-panel .proposal-option,
+.dashboard-side-panel .prompt-context-source {
+  background: #fcfdfc;
+}
+
 @media (max-width: 1320px) {
   .workspace {
     padding: 28px 24px;
@@ -2235,8 +2402,21 @@ button.nav-item {
 }
 
 @media (max-width: 1120px) {
+  .dashboard {
+    width: min(100% - 48px, 1480px);
+  }
+
   .project-shell {
     grid-template-columns: 190px minmax(0, 1fr) minmax(300px, var(--context-panel-width, 340px));
+  }
+
+  .dashboard-with-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-side-panel {
+    position: static;
+    max-height: none;
   }
 
   .concept-workspace {
@@ -2254,6 +2434,38 @@ button.nav-item {
 }
 
 @media (max-width: 760px) {
+  .dashboard {
+    width: min(100% - 28px, 1480px);
+    padding: 22px 0;
+  }
+
+  .dashboard-header {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .dashboard-header h1 {
+    font-size: 32px;
+  }
+
+  .new-project-form,
+  .project-list-section {
+    padding: 16px;
+  }
+
+  .new-project-title-control {
+    grid-template-columns: minmax(0, 1fr) 38px 38px 38px;
+  }
+
+  .new-project-title-control > svg {
+    display: none;
+  }
+
+  .project-grid {
+    grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
+    gap: 14px;
+  }
+
   .project-shell {
     grid-template-columns: 1fr;
   }
@@ -2266,12 +2478,13 @@ button.nav-item {
   .brand-link {
     min-height: 0;
     justify-items: start;
+    padding: 0;
     text-align: left;
   }
 
   .brand-mark {
-    width: 220px;
-    height: 146px;
+    width: min(190px, 100%);
+    height: 54px;
   }
 
   .brand-mark img {

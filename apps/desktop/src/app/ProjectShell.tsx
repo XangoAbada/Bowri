@@ -31,7 +31,7 @@ import {
   projectLogReturnHref,
   useProjectNavigationStore
 } from "./projectNavigationStore";
-import storyforgeLogo from "../assets/storyforge-logo-source.png";
+import storyforgeLogo from "../assets/storyforge-logo-full.png";
 
 type ProjectShellProps = {
   projectId: string;

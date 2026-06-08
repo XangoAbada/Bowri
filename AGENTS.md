@@ -1,9 +1,9 @@
 # AGENTS.md
 
-## UI Verification
+## Testing Policy
 
-- When testing UI changes with Playwright, inspect the page critically instead of only checking that elements exist. Look for awkward spacing, weak alignment, cramped or wasted space, poor proportions, and visual imbalance.
-- If the user asks for UI changes, verify that the resulting page is aesthetically coherent and well laid out. Suggest or make small follow-up refinements when the screenshot or browser view reveals layout issues.
+- Do not run tests, builds, Playwright checks, or other verification commands. The user is the only person who performs testing and verification.
+- After UI changes, describe what the user should inspect manually, especially awkward spacing, weak alignment, cramped or wasted space, poor proportions, visual imbalance, and overall layout coherence.
 
 ## Commit Hygiene
 
