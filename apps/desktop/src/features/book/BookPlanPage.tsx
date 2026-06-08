@@ -1,4 +1,5 @@
 import {
+  ChevronLeft,
   ChevronRight,
   Clock3,
   FileText,
@@ -13,9 +14,11 @@ import {
   Save,
   Sparkles,
   Target,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAct,
@@ -70,6 +73,9 @@ type SelectedPlanItem =
   | { type: "beat"; id: string }
   | { type: "thread"; id: string }
   | { type: "chapter"; id: string };
+type ChapterModalState =
+  | { mode: "create"; actId?: string | null }
+  | { mode: "edit"; chapterId: string };
 
 const planSteps: Array<{ key: PlanStep; label: string; icon: typeof Map }> = [
   { key: "structure", label: "Struktura", icon: Map },
@@ -274,6 +280,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     (state) => state.closeTarget
   );
   const [selectedItem, setSelectedItem] = useState<SelectedPlanItem | null>(null);
+  const [chapterModal, setChapterModal] = useState<ChapterModalState | null>(null);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -470,6 +477,16 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     );
   }
 
+  function openChapterModal(chapter: Chapter) {
+    setSelectedItem({ type: "chapter", id: chapter.id });
+    setChapterModal({ mode: "edit", chapterId: chapter.id });
+  }
+
+  function openNewChapterModal(actId?: string | null) {
+    setSelectedItem(null);
+    setChapterModal({ mode: "create", actId });
+  }
+
   if (projectQuery.isLoading || planQuery.isLoading) {
     return (
       <section className="plan-page">
@@ -531,6 +548,16 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
           plan={plan}
           selectedItem={selectedItem}
           onSelect={setSelectedItem}
+        />
+      ) : activeStep === "chapters" ? (
+        <ChaptersStep
+          bookId={bookId}
+          plan={plan}
+          saving={chapterMutation.isPending}
+          onOpenChapter={openChapterModal}
+          onCreateChapter={openNewChapterModal}
+          onGenerate={queuePlanGeneration}
+          onActivatePrompt={activatePlanPromptContext}
         />
       ) : (
         <div className="plan-workspace">
@@ -601,23 +628,30 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
                 onActivatePrompt={activatePlanPromptContext}
               />
             ) : null}
-            {activeStep === "chapters" ? (
-              <ChaptersStep
-                bookId={bookId}
-                plan={plan}
-                saving={chapterMutation.isPending}
-                onSave={(input) => chapterMutation.mutate(input)}
-                onDelete={(item) => deleteMutation.mutate(item)}
-                onSelect={setSelectedItem}
-                onGenerate={queuePlanGeneration}
-                onActivatePrompt={activatePlanPromptContext}
-              />
-            ) : null}
           </div>
 
           <PlanDetailsPanel details={selectedDetails} plan={plan} />
         </div>
       )}
+      <ChapterEditModal
+        state={chapterModal}
+        bookId={bookId}
+        plan={plan}
+        saving={chapterMutation.isPending || deleteMutation.isPending}
+        onClose={() => setChapterModal(null)}
+        onSave={(input) =>
+          chapterMutation.mutate(input, {
+            onSuccess: () => setChapterModal(null)
+          })
+        }
+        onDelete={(item) =>
+          deleteMutation.mutate(item, {
+            onSuccess: () => setChapterModal(null)
+          })
+        }
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
+      />
     </section>
   );
 }
@@ -1280,58 +1314,348 @@ function ThreadForm({
 }
 
 function ChaptersStep({
-  bookId,
   plan,
-  saving,
-  onSave,
-  onDelete,
-  onSelect,
+  onOpenChapter,
+  onCreateChapter,
   onGenerate,
   onActivatePrompt
 }: StepProps & {
+  onOpenChapter: (chapter: Chapter) => void;
+  onCreateChapter: (actId?: string | null) => void;
+}) {
+  const chapterActRailRef = useRef<HTMLDivElement>(null);
+  const chapterBoardRef = useRef<HTMLDivElement>(null);
+  const lanes = chapterLanesForPlan(plan);
+  const totalWords = plannedWordsForChapters(plan.chapters);
+
+  function scrollActRail(direction: -1 | 1) {
+    const rail = chapterActRailRef.current;
+    const board = chapterBoardRef.current;
+
+    if (!rail && !board) {
+      return;
+    }
+
+    const source = board ?? rail;
+    const scrollAmount = Math.max((source?.clientWidth ?? 0) - 96, 180);
+
+    scrollElementBy(rail, direction * scrollAmount);
+    scrollElementBy(board, direction * scrollAmount);
+  }
+
+  function scrollToLane(index: number) {
+    const board = chapterBoardRef.current;
+    const rail = chapterActRailRef.current;
+    const target = board?.children[index] as HTMLElement | undefined;
+    const tab = rail?.children[index] as HTMLElement | undefined;
+
+    if (typeof target?.scrollIntoView === "function") {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start"
+      });
+    }
+
+    if (typeof tab?.scrollIntoView === "function") {
+      tab.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start"
+      });
+    }
+  }
+
+  return (
+    <section className="chapter-board-workspace">
+      <div className="chapter-board-shell">
+        <div className="chapter-board-toolbar">
+          <div className="chapter-board-heading">
+            <span className="stage-heading-icon">
+              <FileText size={18} />
+            </span>
+            <div>
+              <p className="eyebrow">Rozdziały</p>
+              <h3>Mapa rozdziałów według aktów</h3>
+              <p>
+                {plan.chapters.length} rozdz. / {totalWords.toLocaleString("pl-PL")} słów
+                planowanych
+              </p>
+            </div>
+          </div>
+          <div className="chapter-board-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => onCreateChapter(plan.acts[0]?.id ?? null)}
+            >
+              <Plus size={16} />
+              Dodaj rozdział
+            </button>
+            <PlanAiActions
+              field="chapterPlan"
+              onGenerate={() => onGenerate("chapterPlan")}
+              onActivatePrompt={() => onActivatePrompt("chapterPlan")}
+            />
+          </div>
+        </div>
+
+        <div className="chapter-act-rail-card">
+          <button
+            type="button"
+            className="chapter-rail-scroll-button previous"
+            onClick={() => scrollActRail(-1)}
+            aria-label="Pokaż wcześniejsze akty"
+            title="Pokaż wcześniejsze akty"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div
+            ref={chapterActRailRef}
+            className="chapter-act-rail"
+            role="tablist"
+            aria-label="Akty w planie rozdziałów"
+          >
+            {lanes.map((lane, index) => (
+              <button
+                key={lane.id}
+                type="button"
+                role="tab"
+                aria-selected="false"
+                className="chapter-act-tab"
+                onClick={() => scrollToLane(index)}
+              >
+                <span className="chapter-act-dot" style={{ background: lane.color }} />
+                <span className="stage-copy">
+                  <strong>{lane.name}</strong>
+                  <span>
+                    {lane.chapters.length} rozdz. /{" "}
+                    {plannedWordsForChapters(lane.chapters).toLocaleString("pl-PL")} słów
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="chapter-rail-scroll-button next"
+            onClick={() => scrollActRail(1)}
+            aria-label="Pokaż kolejne akty"
+            title="Pokaż kolejne akty"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+
+        <div ref={chapterBoardRef} className="chapter-act-columns">
+          {lanes.map((lane) => (
+            <section className="chapter-act-column" key={lane.id}>
+              <div className="chapter-act-column-header">
+                <div>
+                  <span className="chapter-act-dot" style={{ background: lane.color }} />
+                  <h4>{lane.name}</h4>
+                </div>
+                <span>{lane.rangeLabel}</span>
+              </div>
+              <div className="chapter-act-column-stats">
+                <span>{lane.chapters.length} rozdziały</span>
+                <span>
+                  {plannedWordsForChapters(lane.chapters).toLocaleString("pl-PL")} słów
+                </span>
+              </div>
+              <p className="chapter-act-purpose">{lane.purpose || "Bez celu aktu."}</p>
+              <div className="chapter-card-stack">
+                {lane.chapters.length > 0 ? (
+                  lane.chapters.map((chapter) => (
+                    <ChapterBoardCard
+                      key={chapter.id}
+                      chapter={chapter}
+                      plan={plan}
+                      onOpen={() => onOpenChapter(chapter)}
+                    />
+                  ))
+                ) : (
+                  <p className="muted-text chapter-empty-note">
+                    Ten akt nie ma jeszcze rozdziałów.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="ghost-button chapter-column-add"
+                onClick={() => onCreateChapter(lane.actId)}
+              >
+                <Plus size={16} />
+                Dodaj rozdział
+              </button>
+            </section>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChapterBoardCard({
+  chapter,
+  plan,
+  onOpen
+}: {
+  chapter: Chapter;
+  plan: BookPlan;
+  onOpen: () => void;
+}) {
+  const beats = beatsForChapter(plan, chapter);
+  const threads = threadsForChapter(plan, chapter);
+
+  return (
+    <button
+      type="button"
+      className="chapter-board-card"
+      onClick={onOpen}
+      aria-label={`Otwórz rozdział ${chapter.workingTitle}`}
+    >
+      <span className="chapter-card-topline">
+        <span className="chapter-number-badge">{chapter.number}</span>
+        <span>{formatWordCount(chapter.targetWordCount)}</span>
+      </span>
+      <strong>{chapter.workingTitle}</strong>
+      <p>{chapter.summary || "Brak streszczenia rozdziału."}</p>
+      <span className="chapter-card-field">
+        <b>Cel</b>
+        {chapter.purpose || "Brak"}
+      </span>
+      <span className="chapter-card-field">
+        <b>Konflikt</b>
+        {chapter.conflict || "Brak"}
+      </span>
+      <span className="chapter-card-field">
+        <b>Punkt zwrotny</b>
+        {chapter.turningPoint || "Brak"}
+      </span>
+      <span className="chapter-chip-row">
+        {beats.slice(0, 2).map((beat) => (
+          <span className="chapter-chip beat" key={beat.id}>
+            {beat.name}
+          </span>
+        ))}
+        {threads.slice(0, 2).map((thread) => (
+          <span className="chapter-chip thread" key={thread.id}>
+            {thread.name}
+          </span>
+        ))}
+        {beats.length + threads.length > 4 ? (
+          <span className="chapter-chip muted">+{beats.length + threads.length - 4}</span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function ChapterEditModal({
+  state,
+  bookId,
+  plan,
+  saving,
+  onClose,
+  onSave,
+  onDelete,
+  onGenerate,
+  onActivatePrompt
+}: {
+  state: ChapterModalState | null;
+  bookId: string;
+  plan: BookPlan;
+  saving: boolean;
+  onClose: () => void;
   onSave: (input: UpsertChapterInput) => void;
   onDelete: (item: SelectedPlanItem) => void;
-  onSelect: (item: SelectedPlanItem) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onActivatePrompt: (
+    field: PlanFieldKey,
+    targetEntity?: Act | Beat | PlotThread | Chapter
+  ) => void;
 }) {
-  return (
-    <PlanCard
-      title="Rozdziały"
-      icon={<FileText size={18} />}
-      action={
-        <PlanAiActions
-          field="chapterPlan"
-          onGenerate={() => onGenerate("chapterPlan")}
-          onActivatePrompt={() => onActivatePrompt("chapterPlan")}
-        />
+  const chapter =
+    state?.mode === "edit"
+      ? plan.chapters.find((candidate) => candidate.id === state.chapterId)
+      : undefined;
+
+  useEffect(() => {
+    if (!state) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
       }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [state, onClose]);
+
+  if (!state) {
+    return null;
+  }
+
+  const modalTitle =
+    state.mode === "edit" && chapter
+      ? `Rozdział ${chapter.number}: ${chapter.workingTitle}`
+      : "Nowy rozdział";
+  const modal = (
+    <div
+      className="chapter-edit-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chapter-edit-title"
     >
-      <div className="plan-grid-list">
-        {plan.chapters.map((chapter) => (
+      <button
+        type="button"
+        className="chapter-edit-backdrop"
+        onClick={onClose}
+        aria-label="Zamknij edycję rozdziału"
+      />
+      <div className="chapter-edit-shell">
+        <header className="chapter-edit-header">
+          <div>
+            <p className="eyebrow">Edycja rozdziału</p>
+            <h3 id="chapter-edit-title">{modalTitle}</h3>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Zamknij edycję rozdziału"
+            title="Zamknij edycję rozdziału"
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <div className="chapter-edit-body">
           <ChapterForm
-            key={chapter.id}
             bookId={bookId}
             chapter={chapter}
             plan={plan}
             saving={saving}
+            orderIndex={plan.chapters.length}
+            initialActId={state.mode === "create" ? state.actId : undefined}
             onSave={onSave}
-            onDelete={() => onDelete({ type: "chapter", id: chapter.id })}
-            onSelect={() => onSelect({ type: "chapter", id: chapter.id })}
+            onDelete={chapter ? () => onDelete({ type: "chapter", id: chapter.id }) : undefined}
             onGenerate={(field) => onGenerate(field, chapter)}
             onActivatePrompt={(field) => onActivatePrompt(field, chapter)}
           />
-        ))}
-        <ChapterForm
-          bookId={bookId}
-          plan={plan}
-          saving={saving}
-          orderIndex={plan.chapters.length}
-          onSave={onSave}
-          onGenerate={onGenerate}
-          onActivatePrompt={onActivatePrompt}
-        />
+        </div>
       </div>
-    </PlanCard>
+    </div>
   );
+
+  if (typeof document === "undefined") {
+    return modal;
+  }
+
+  return createPortal(modal, document.body);
 }
 
 function ChapterForm({
@@ -1339,6 +1663,7 @@ function ChapterForm({
   chapter,
   plan,
   orderIndex = 0,
+  initialActId,
   saving,
   onSave,
   onDelete,
@@ -1350,6 +1675,7 @@ function ChapterForm({
   chapter?: Chapter;
   plan: BookPlan;
   orderIndex?: number;
+  initialActId?: string | null;
   saving: boolean;
   onSave: (input: UpsertChapterInput) => void;
   onDelete?: () => void;
@@ -1366,6 +1692,7 @@ function ChapterForm({
   const chapterBeatIds = plan.chapterBeats
     .filter((item) => item.chapterId === chapter?.id)
     .map((item) => item.beatId);
+  const defaultActId = defaultChapterActId(initialActId, plan);
   const [number, setNumber] = useState(chapter?.number ?? orderIndex + 1);
   const [workingTitle, setWorkingTitle] = useState(
     chapter?.workingTitle ?? `Rozdział ${orderIndex + 1}`
@@ -1377,7 +1704,7 @@ function ChapterForm({
   const [targetWordCount, setTargetWordCount] = useState(
     chapter?.targetWordCount?.toString() ?? ""
   );
-  const [actId, setActId] = useState(chapter?.actId ?? plan.acts[0]?.id ?? "");
+  const [actId, setActId] = useState(chapter?.actId ?? defaultActId);
   const [threadIds, setThreadIds] = useState(chapterThreadIds);
   const [beatIds, setBeatIds] = useState(chapterBeatIds);
 
@@ -1389,7 +1716,7 @@ function ChapterForm({
     setConflict(chapter?.conflict ?? "");
     setTurningPoint(chapter?.turningPoint ?? "");
     setTargetWordCount(chapter?.targetWordCount?.toString() ?? "");
-    setActId(chapter?.actId ?? plan.acts[0]?.id ?? "");
+    setActId(chapter?.actId ?? defaultChapterActId(initialActId, plan));
     setThreadIds(chapterThreadIds);
     setBeatIds(chapterBeatIds);
   }, [
@@ -1401,7 +1728,8 @@ function ChapterForm({
     chapter?.turningPoint,
     chapter?.targetWordCount,
     chapter?.actId,
-    plan.acts,
+    plan,
+    initialActId,
     chapterThreadIds.join("|"),
     chapterBeatIds.join("|"),
     orderIndex
@@ -1923,6 +2251,92 @@ function PlanStat({
   );
 }
 
+type ChapterLane = {
+  id: string;
+  actId: string | null;
+  name: string;
+  color: string;
+  purpose: string;
+  rangeLabel: string;
+  chapters: Chapter[];
+};
+
+function chapterLanesForPlan(plan: BookPlan): ChapterLane[] {
+  const lanes: ChapterLane[] = plan.acts.map((act) => ({
+    id: act.id,
+    actId: act.id,
+    name: act.name,
+    color: act.color,
+    purpose: act.purpose,
+    rangeLabel: `${act.startPercent}-${act.endPercent}%`,
+    chapters: chaptersForAct(plan, act.id)
+  }));
+  const unassigned = chaptersWithoutAct(plan);
+
+  if (unassigned.length > 0 || lanes.length === 0) {
+    lanes.push({
+      id: "without-act",
+      actId: null,
+      name: "Bez aktu",
+      color: "#8a9791",
+      purpose: "Rozdziały czekające na przypisanie do aktu.",
+      rangeLabel: "Poza aktami",
+      chapters: unassigned
+    });
+  }
+
+  return lanes;
+}
+
+function plannedWordsForChapters(chapters: Chapter[]): number {
+  return chapters.reduce((sum, chapter) => sum + (chapter.targetWordCount ?? 0), 0);
+}
+
+function scrollElementBy(element: HTMLElement | null, left: number) {
+  if (!element) {
+    return;
+  }
+
+  if (typeof element.scrollBy === "function") {
+    element.scrollBy({ left, behavior: "smooth" });
+    return;
+  }
+
+  element.scrollLeft += left;
+}
+
+function beatsForChapter(plan: BookPlan, chapter: Chapter): Beat[] {
+  const beatIds = new Set(
+    plan.chapterBeats
+      .filter((relation) => relation.chapterId === chapter.id)
+      .map((relation) => relation.beatId)
+  );
+
+  return plan.beats.filter((beat) => beatIds.has(beat.id));
+}
+
+function threadsForChapter(plan: BookPlan, chapter: Chapter): PlotThread[] {
+  const threadIds = new Set(
+    plan.chapterThreads
+      .filter((relation) => relation.chapterId === chapter.id)
+      .map((relation) => relation.threadId)
+  );
+
+  return plan.threads.filter((thread) => threadIds.has(thread.id));
+}
+
+function formatWordCount(value: number | null): string {
+  return value ? `${value.toLocaleString("pl-PL")} słów` : "Brak celu";
+}
+
+function defaultChapterActId(initialActId: string | null | undefined, plan: BookPlan): string {
+  if (initialActId !== undefined) {
+    return initialActId ?? "";
+  }
+
+  return plan.acts[0]?.id ?? "";
+}
+
 function selectedItemDetails(item: SelectedPlanItem | null, plan: BookPlan) {
   if (!item) {
     return null;
@@ -1996,6 +2410,10 @@ function selectedItemDetails(item: SelectedPlanItem | null, plan: BookPlan) {
 
 function chaptersForAct(plan: BookPlan, actId: string): Chapter[] {
   return plan.chapters.filter((chapter) => chapter.actId === actId);
+}
+
+function chaptersWithoutAct(plan: BookPlan): Chapter[] {
+  return plan.chapters.filter((chapter) => !chapter.actId);
 }
 
 function emptyPlan(): BookPlan {
