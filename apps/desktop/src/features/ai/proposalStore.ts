@@ -8,19 +8,33 @@ import type {
   NewProjectTitlePromptPackage,
   PromptPackage
 } from "./promptPackage";
+import type { PlanFieldKey, PlanPromptPackage } from "./planPromptPackage";
 
 export type AiProposalStatus = "queued" | "running" | "success" | "error";
 export type PendingAiProposalStatus = Extract<
   AiProposalStatus,
   "queued" | "running"
 > | null;
-export type AiProposalScope = "bookConcept" | "newProject" | "bookCover";
+export type AiProposalScope =
+  | "bookConcept"
+  | "newProject"
+  | "bookCover"
+  | "bookPlan";
 export const BOOK_COVER_FIELD = "__book_cover__";
 export const NEW_PROJECT_PROPOSAL_ID = "__new_project__";
-export type AiTaskFieldKey = ConceptFieldKey | typeof BOOK_COVER_FIELD;
+export type AiTaskFieldKey = ConceptFieldKey | PlanFieldKey | typeof BOOK_COVER_FIELD;
 export type ParsedAiProposal =
   | NormalizedConceptFieldSuggestion
-  | NormalizedPremiseDevelopment;
+  | NormalizedPremiseDevelopment
+  | NormalizedPlanSuggestion;
+
+export type NormalizedPlanSuggestion = {
+  kind: "book_plan_suggestion";
+  summary: string;
+  textValue: string;
+  value: unknown;
+  warnings: string[];
+};
 
 export type AiPromptSnapshot = {
   scope?: AiProposalScope;
@@ -32,7 +46,8 @@ export type AiPromptSnapshot = {
   promptPackageJson:
     | PromptPackage
     | NewProjectTitlePromptPackage
-    | CoverPromptPackage;
+    | CoverPromptPackage
+    | PlanPromptPackage;
   prompt: string;
   coverPrompt?: string;
   coverNegativePrompt?: string;

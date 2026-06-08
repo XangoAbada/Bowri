@@ -2,7 +2,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, Sqlite, SqlitePool, Transaction};
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -296,6 +296,190 @@ pub struct BookCoverResult {
     pub generated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryStructure {
+    pub id: String,
+    pub book_id: String,
+    pub structure_type: String,
+    pub description: String,
+    pub notes: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Act {
+    pub id: String,
+    pub book_id: String,
+    pub name: String,
+    pub purpose: String,
+    pub summary: String,
+    pub start_percent: i64,
+    pub end_percent: i64,
+    pub order_index: i64,
+    pub color: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Beat {
+    pub id: String,
+    pub book_id: String,
+    pub act_id: Option<String>,
+    pub name: String,
+    pub description: String,
+    pub role: String,
+    pub order_index: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct PlotThread {
+    pub id: String,
+    pub book_id: String,
+    pub name: String,
+    pub description: String,
+    pub color: String,
+    pub status: String,
+    pub order_index: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Chapter {
+    pub id: String,
+    pub book_id: String,
+    pub act_id: Option<String>,
+    pub number: i64,
+    pub working_title: String,
+    pub summary: String,
+    pub purpose: String,
+    pub conflict: String,
+    pub turning_point: String,
+    pub target_word_count: Option<i64>,
+    pub order_index: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterThread {
+    pub chapter_id: String,
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BeatThread {
+    pub beat_id: String,
+    pub thread_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterBeat {
+    pub chapter_id: String,
+    pub beat_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookPlan {
+    pub structure: Option<StoryStructure>,
+    pub acts: Vec<Act>,
+    pub beats: Vec<Beat>,
+    pub threads: Vec<PlotThread>,
+    pub chapters: Vec<Chapter>,
+    pub chapter_threads: Vec<ChapterThread>,
+    pub beat_threads: Vec<BeatThread>,
+    pub chapter_beats: Vec<ChapterBeat>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveStoryStructureInput {
+    pub id: Option<String>,
+    pub book_id: String,
+    pub structure_type: String,
+    pub description: String,
+    pub notes: String,
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertActInput {
+    pub id: Option<String>,
+    pub book_id: String,
+    pub name: String,
+    pub purpose: String,
+    pub summary: String,
+    pub start_percent: i64,
+    pub end_percent: i64,
+    pub order_index: i64,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertBeatInput {
+    pub id: Option<String>,
+    pub book_id: String,
+    pub act_id: Option<String>,
+    pub name: String,
+    pub description: String,
+    pub role: String,
+    pub order_index: i64,
+    pub thread_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertPlotThreadInput {
+    pub id: Option<String>,
+    pub book_id: String,
+    pub name: String,
+    pub description: String,
+    pub color: String,
+    pub status: String,
+    pub order_index: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertChapterInput {
+    pub id: Option<String>,
+    pub book_id: String,
+    pub act_id: Option<String>,
+    pub number: i64,
+    pub working_title: String,
+    pub summary: String,
+    pub purpose: String,
+    pub conflict: String,
+    pub turning_point: String,
+    pub target_word_count: Option<i64>,
+    pub order_index: i64,
+    pub thread_ids: Vec<String>,
+    pub beat_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderPlanItemsInput {
+    pub item_type: String,
+    pub ordered_ids: Vec<String>,
+}
+
 pub async fn init_database(app_data_dir: PathBuf) -> Result<SqlitePool, AppError> {
     tokio::fs::create_dir_all(&app_data_dir).await?;
     let database_path = app_data_dir.join("storyforge2.sqlite");
@@ -407,6 +591,481 @@ pub async fn get_project_details(
         .await?;
 
     Ok(ProjectDetails { project, book })
+}
+
+pub async fn get_book_plan_in_pool(pool: &SqlitePool, book_id: &str) -> Result<BookPlan, AppError> {
+    let structure = sqlx::query_as::<_, StoryStructure>(
+        "SELECT * FROM story_structures WHERE book_id = ?",
+    )
+    .bind(book_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let acts = sqlx::query_as::<_, Act>(
+        "SELECT * FROM acts WHERE book_id = ? ORDER BY order_index, created_at",
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    let beats = sqlx::query_as::<_, Beat>(
+        "SELECT * FROM beats WHERE book_id = ? ORDER BY order_index, created_at",
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    let threads = sqlx::query_as::<_, PlotThread>(
+        "SELECT * FROM plot_threads WHERE book_id = ? ORDER BY order_index, created_at",
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    let chapters = sqlx::query_as::<_, Chapter>(
+        "SELECT * FROM chapters WHERE book_id = ? ORDER BY order_index, number, created_at",
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    let chapter_threads = sqlx::query_as::<_, ChapterThread>(
+        r#"
+        SELECT ct.chapter_id, ct.thread_id
+        FROM chapter_threads ct
+        INNER JOIN chapters c ON c.id = ct.chapter_id
+        WHERE c.book_id = ?
+        ORDER BY c.order_index
+        "#,
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    let beat_threads = sqlx::query_as::<_, BeatThread>(
+        r#"
+        SELECT bt.beat_id, bt.thread_id
+        FROM beat_threads bt
+        INNER JOIN beats b ON b.id = bt.beat_id
+        WHERE b.book_id = ?
+        ORDER BY b.order_index
+        "#,
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    let chapter_beats = sqlx::query_as::<_, ChapterBeat>(
+        r#"
+        SELECT cb.chapter_id, cb.beat_id
+        FROM chapter_beats cb
+        INNER JOIN chapters c ON c.id = cb.chapter_id
+        WHERE c.book_id = ?
+        ORDER BY c.order_index
+        "#,
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(BookPlan {
+        structure,
+        acts,
+        beats,
+        threads,
+        chapters,
+        chapter_threads,
+        beat_threads,
+        chapter_beats,
+    })
+}
+
+pub async fn save_story_structure_in_pool(
+    pool: &SqlitePool,
+    input: SaveStoryStructureInput,
+) -> Result<StoryStructure, AppError> {
+    if input.structure_type.trim().is_empty() {
+        return Err(AppError::Process("Typ struktury nie moze byc pusty.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let status = input.status.unwrap_or_else(|| "draft".into());
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO story_structures
+          (id, book_id, structure_type, description, notes, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(book_id) DO UPDATE SET
+          structure_type = excluded.structure_type,
+          description = excluded.description,
+          notes = excluded.notes,
+          status = excluded.status,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.book_id)
+    .bind(input.structure_type.trim())
+    .bind(input.description)
+    .bind(input.notes)
+    .bind(status)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, StoryStructure>("SELECT * FROM story_structures WHERE book_id = ?")
+        .bind(&input.book_id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn upsert_act_in_pool(
+    pool: &SqlitePool,
+    input: UpsertActInput,
+) -> Result<Act, AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Process("Nazwa aktu nie moze byc pusta.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO acts
+          (id, book_id, name, purpose, summary, start_percent, end_percent, order_index, color, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          purpose = excluded.purpose,
+          summary = excluded.summary,
+          start_percent = excluded.start_percent,
+          end_percent = excluded.end_percent,
+          order_index = excluded.order_index,
+          color = excluded.color,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.book_id)
+    .bind(input.name)
+    .bind(input.purpose)
+    .bind(input.summary)
+    .bind(input.start_percent)
+    .bind(input.end_percent)
+    .bind(input.order_index)
+    .bind(input.color)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, Act>("SELECT * FROM acts WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn upsert_beat_in_pool(
+    pool: &SqlitePool,
+    input: UpsertBeatInput,
+) -> Result<Beat, AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Process("Nazwa beatu nie moze byc pusta.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO beats
+          (id, book_id, act_id, name, description, role, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          act_id = excluded.act_id,
+          name = excluded.name,
+          description = excluded.description,
+          role = excluded.role,
+          order_index = excluded.order_index,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.book_id)
+    .bind(input.act_id)
+    .bind(input.name)
+    .bind(input.description)
+    .bind(input.role)
+    .bind(input.order_index)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query("DELETE FROM beat_threads WHERE beat_id = ?")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+    for thread_id in unique_ids(input.thread_ids) {
+        sqlx::query("INSERT OR IGNORE INTO beat_threads (beat_id, thread_id) VALUES (?, ?)")
+            .bind(&id)
+            .bind(thread_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, Beat>("SELECT * FROM beats WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn upsert_plot_thread_in_pool(
+    pool: &SqlitePool,
+    input: UpsertPlotThreadInput,
+) -> Result<PlotThread, AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Process("Nazwa watku nie moze byc pusta.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO plot_threads
+          (id, book_id, name, description, color, status, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          color = excluded.color,
+          status = excluded.status,
+          order_index = excluded.order_index,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.book_id)
+    .bind(input.name)
+    .bind(input.description)
+    .bind(input.color)
+    .bind(input.status)
+    .bind(input.order_index)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, PlotThread>("SELECT * FROM plot_threads WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn upsert_chapter_in_pool(
+    pool: &SqlitePool,
+    input: UpsertChapterInput,
+) -> Result<Chapter, AppError> {
+    if input.working_title.trim().is_empty() {
+        return Err(AppError::Process("Tytul rozdzialu nie moze byc pusty.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO chapters
+          (id, book_id, act_id, number, working_title, summary, purpose, conflict, turning_point, target_word_count, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          act_id = excluded.act_id,
+          number = excluded.number,
+          working_title = excluded.working_title,
+          summary = excluded.summary,
+          purpose = excluded.purpose,
+          conflict = excluded.conflict,
+          turning_point = excluded.turning_point,
+          target_word_count = excluded.target_word_count,
+          order_index = excluded.order_index,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.book_id)
+    .bind(input.act_id)
+    .bind(input.number)
+    .bind(input.working_title)
+    .bind(input.summary)
+    .bind(input.purpose)
+    .bind(input.conflict)
+    .bind(input.turning_point)
+    .bind(input.target_word_count)
+    .bind(input.order_index)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query("DELETE FROM chapter_threads WHERE chapter_id = ?")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+    for thread_id in unique_ids(input.thread_ids) {
+        sqlx::query("INSERT OR IGNORE INTO chapter_threads (chapter_id, thread_id) VALUES (?, ?)")
+            .bind(&id)
+            .bind(thread_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::query("DELETE FROM chapter_beats WHERE chapter_id = ?")
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+    for beat_id in unique_ids(input.beat_ids) {
+        sqlx::query("INSERT OR IGNORE INTO chapter_beats (chapter_id, beat_id) VALUES (?, ?)")
+            .bind(&id)
+            .bind(beat_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, Chapter>("SELECT * FROM chapters WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn delete_act_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
+    delete_plan_item_in_pool(pool, "acts", id).await
+}
+
+pub async fn delete_beat_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
+    delete_plan_item_in_pool(pool, "beats", id).await
+}
+
+pub async fn delete_plot_thread_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
+    delete_plan_item_in_pool(pool, "plot_threads", id).await
+}
+
+pub async fn delete_chapter_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
+    delete_plan_item_in_pool(pool, "chapters", id).await
+}
+
+pub async fn reorder_plan_items_in_pool(
+    pool: &SqlitePool,
+    input: ReorderPlanItemsInput,
+) -> Result<(), AppError> {
+    let table = plan_table_for_item_type(&input.item_type)?;
+    let now = Utc::now().to_rfc3339();
+    let mut tx = pool.begin().await?;
+
+    for (index, id) in input.ordered_ids.iter().enumerate() {
+        let sql = format!("UPDATE {table} SET order_index = ?, updated_at = ? WHERE id = ?");
+        sqlx::query(&sql)
+            .bind(index as i64)
+            .bind(&now)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn delete_plan_item_in_pool(
+    pool: &SqlitePool,
+    table: &str,
+    id: &str,
+) -> Result<(), AppError> {
+    let sql = format!("DELETE FROM {table} WHERE id = ?");
+    sqlx::query(&sql).bind(id).execute(pool).await?;
+    Ok(())
+}
+
+fn plan_table_for_item_type(item_type: &str) -> Result<&'static str, AppError> {
+    match item_type {
+        "act" | "acts" => Ok("acts"),
+        "beat" | "beats" => Ok("beats"),
+        "thread" | "threads" | "plotThread" | "plotThreads" => Ok("plot_threads"),
+        "chapter" | "chapters" => Ok("chapters"),
+        _ => Err(AppError::Process("Nieznany typ elementu planu.".into())),
+    }
+}
+
+async fn touch_project_for_book(
+    tx: &mut Transaction<'_, Sqlite>,
+    book_id: &str,
+    updated_at: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        r#"
+        UPDATE books
+        SET updated_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(updated_at)
+    .bind(book_id)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE projects
+        SET updated_at = ?
+        WHERE id = (SELECT project_id FROM books WHERE id = ?)
+        "#,
+    )
+    .bind(updated_at)
+    .bind(book_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+fn unique_ids(ids: Vec<String>) -> Vec<String> {
+    let mut unique = Vec::new();
+    for id in ids {
+        let trimmed = id.trim();
+        if !trimmed.is_empty() && !unique.iter().any(|item: &String| item == trimmed) {
+            unique.push(trimmed.to_string());
+        }
+    }
+    unique
 }
 
 pub async fn list_ai_runs_in_pool(
@@ -764,6 +1423,93 @@ async fn get_project(
     project_id: String,
 ) -> Result<ProjectDetails, String> {
     get_project_details(&state.db, &project_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn get_book_plan(state: State<'_, AppState>, book_id: String) -> Result<BookPlan, String> {
+    get_book_plan_in_pool(&state.db, &book_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn save_story_structure(
+    state: State<'_, AppState>,
+    input: SaveStoryStructureInput,
+) -> Result<StoryStructure, String> {
+    save_story_structure_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_act(state: State<'_, AppState>, input: UpsertActInput) -> Result<Act, String> {
+    upsert_act_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_act(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_act_in_pool(&state.db, &id).await.map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_beat(state: State<'_, AppState>, input: UpsertBeatInput) -> Result<Beat, String> {
+    upsert_beat_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_beat(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_beat_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_plot_thread(
+    state: State<'_, AppState>,
+    input: UpsertPlotThreadInput,
+) -> Result<PlotThread, String> {
+    upsert_plot_thread_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_plot_thread(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_plot_thread_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_chapter(
+    state: State<'_, AppState>,
+    input: UpsertChapterInput,
+) -> Result<Chapter, String> {
+    upsert_chapter_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_chapter(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_chapter_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn reorder_plan_items(
+    state: State<'_, AppState>,
+    input: ReorderPlanItemsInput,
+) -> Result<(), String> {
+    reorder_plan_items_in_pool(&state.db, input)
         .await
         .map_err(command_error)
 }
@@ -1901,6 +2647,17 @@ pub fn run() {
             create_project,
             list_projects,
             get_project,
+            get_book_plan,
+            save_story_structure,
+            upsert_act,
+            delete_act,
+            upsert_beat,
+            delete_beat,
+            upsert_plot_thread,
+            delete_plot_thread,
+            upsert_chapter,
+            delete_chapter,
+            reorder_plan_items,
             list_ai_runs,
             update_book_concept,
             generate_book_cover,
@@ -1940,6 +2697,33 @@ mod tests {
         .unwrap();
 
         assert_eq!(table_count.0, 4);
+    }
+
+    #[tokio::test]
+    async fn migration_creates_plan_tables() {
+        let pool = test_pool().await;
+        let table_count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name IN (
+                'story_structures',
+                'acts',
+                'beats',
+                'plot_threads',
+                'chapters',
+                'chapter_threads',
+                'beat_threads',
+                'chapter_beats'
+              )
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(table_count.0, 8);
     }
 
     #[tokio::test]
@@ -2055,6 +2839,198 @@ mod tests {
             Some(generated_at.as_str())
         );
         assert_eq!(listed[0].cover_image_path, "C:\\covers\\cover.png");
+    }
+
+    #[tokio::test]
+    async fn book_plan_persists_entities_and_relations() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Planowana ksiazka".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let structure = save_story_structure_in_pool(
+            &pool,
+            SaveStoryStructureInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                structure_type: "three_act".into(),
+                description: "Trzy akty".into(),
+                notes: "Robocze notatki".into(),
+                status: Some("draft".into()),
+            },
+        )
+        .await
+        .unwrap();
+        let act = upsert_act_in_pool(
+            &pool,
+            UpsertActInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                name: "Akt I".into(),
+                purpose: "Ustawienie historii".into(),
+                summary: "Poczatek".into(),
+                start_percent: 0,
+                end_percent: 25,
+                order_index: 0,
+                color: "#3f8f6b".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let thread = upsert_plot_thread_in_pool(
+            &pool,
+            UpsertPlotThreadInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                name: "Glowny watek".into(),
+                description: "Droga bohatera".into(),
+                color: "#3f8f6b".into(),
+                status: "planned".into(),
+                order_index: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let beat = upsert_beat_in_pool(
+            &pool,
+            UpsertBeatInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                act_id: Some(act.id.clone()),
+                name: "Incydent".into(),
+                description: "Bohater zostaje wezwany".into(),
+                role: "inciting_incident".into(),
+                order_index: 0,
+                thread_ids: vec![thread.id.clone()],
+            },
+        )
+        .await
+        .unwrap();
+        let chapter = upsert_chapter_in_pool(
+            &pool,
+            UpsertChapterInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                act_id: Some(act.id.clone()),
+                number: 1,
+                working_title: "Nowy dzien".into(),
+                summary: "Otwarcie".into(),
+                purpose: "Pokazac brak".into(),
+                conflict: "Bohater kontra rutyna".into(),
+                turning_point: "Decyzja".into(),
+                target_word_count: Some(2500),
+                order_index: 0,
+                thread_ids: vec![thread.id.clone()],
+                beat_ids: vec![beat.id.clone()],
+            },
+        )
+        .await
+        .unwrap();
+
+        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        assert_eq!(plan.structure.unwrap().id, structure.id);
+        assert_eq!(plan.acts[0].id, act.id);
+        assert_eq!(plan.beats[0].id, beat.id);
+        assert_eq!(plan.threads[0].id, thread.id);
+        assert_eq!(plan.chapters[0].id, chapter.id);
+        assert_eq!(plan.chapter_threads[0].thread_id, thread.id);
+        assert_eq!(plan.beat_threads[0].thread_id, thread.id);
+        assert_eq!(plan.chapter_beats[0].beat_id, beat.id);
+    }
+
+    #[tokio::test]
+    async fn deleting_plan_entities_cascades_join_rows() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Kasowanie relacji".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        let thread = upsert_plot_thread_in_pool(
+            &pool,
+            UpsertPlotThreadInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                name: "Watek".into(),
+                description: "".into(),
+                color: "#3f8f6b".into(),
+                status: "planned".into(),
+                order_index: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let beat = upsert_beat_in_pool(
+            &pool,
+            UpsertBeatInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                act_id: None,
+                name: "Beat".into(),
+                description: "".into(),
+                role: "".into(),
+                order_index: 0,
+                thread_ids: vec![thread.id.clone()],
+            },
+        )
+        .await
+        .unwrap();
+        let chapter = upsert_chapter_in_pool(
+            &pool,
+            UpsertChapterInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                act_id: None,
+                number: 1,
+                working_title: "Rozdzial".into(),
+                summary: "".into(),
+                purpose: "".into(),
+                conflict: "".into(),
+                turning_point: "".into(),
+                target_word_count: None,
+                order_index: 0,
+                thread_ids: vec![thread.id.clone()],
+                beat_ids: vec![beat.id.clone()],
+            },
+        )
+        .await
+        .unwrap();
+
+        delete_chapter_in_pool(&pool, &chapter.id).await.unwrap();
+        let chapter_thread_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM chapter_threads")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let chapter_beat_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM chapter_beats")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(chapter_thread_count.0, 0);
+        assert_eq!(chapter_beat_count.0, 0);
+
+        delete_beat_in_pool(&pool, &beat.id).await.unwrap();
+        let beat_thread_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM beat_threads")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(beat_thread_count.0, 0);
+
+        delete_plot_thread_in_pool(&pool, &thread.id).await.unwrap();
+        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        assert!(plan.threads.is_empty());
     }
 
     #[test]

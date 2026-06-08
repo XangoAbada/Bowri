@@ -57,6 +57,160 @@ export type ProjectDetails = {
   book: Book;
 };
 
+export type StoryStructure = {
+  id: string;
+  bookId: string;
+  structureType: string;
+  description: string;
+  notes: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Act = {
+  id: string;
+  bookId: string;
+  name: string;
+  purpose: string;
+  summary: string;
+  startPercent: number;
+  endPercent: number;
+  orderIndex: number;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Beat = {
+  id: string;
+  bookId: string;
+  actId: string | null;
+  name: string;
+  description: string;
+  role: string;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlotThread = {
+  id: string;
+  bookId: string;
+  name: string;
+  description: string;
+  color: string;
+  status: string;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Chapter = {
+  id: string;
+  bookId: string;
+  actId: string | null;
+  number: number;
+  workingTitle: string;
+  summary: string;
+  purpose: string;
+  conflict: string;
+  turningPoint: string;
+  targetWordCount: number | null;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ChapterThread = {
+  chapterId: string;
+  threadId: string;
+};
+
+export type BeatThread = {
+  beatId: string;
+  threadId: string;
+};
+
+export type ChapterBeat = {
+  chapterId: string;
+  beatId: string;
+};
+
+export type BookPlan = {
+  structure: StoryStructure | null;
+  acts: Act[];
+  beats: Beat[];
+  threads: PlotThread[];
+  chapters: Chapter[];
+  chapterThreads: ChapterThread[];
+  beatThreads: BeatThread[];
+  chapterBeats: ChapterBeat[];
+};
+
+export type SaveStoryStructureInput = {
+  id?: string;
+  bookId: string;
+  structureType: string;
+  description: string;
+  notes: string;
+  status?: string;
+};
+
+export type UpsertActInput = {
+  id?: string;
+  bookId: string;
+  name: string;
+  purpose: string;
+  summary: string;
+  startPercent: number;
+  endPercent: number;
+  orderIndex: number;
+  color: string;
+};
+
+export type UpsertBeatInput = {
+  id?: string;
+  bookId: string;
+  actId?: string | null;
+  name: string;
+  description: string;
+  role: string;
+  orderIndex: number;
+  threadIds: string[];
+};
+
+export type UpsertPlotThreadInput = {
+  id?: string;
+  bookId: string;
+  name: string;
+  description: string;
+  color: string;
+  status: string;
+  orderIndex: number;
+};
+
+export type UpsertChapterInput = {
+  id?: string;
+  bookId: string;
+  actId?: string | null;
+  number: number;
+  workingTitle: string;
+  summary: string;
+  purpose: string;
+  conflict: string;
+  turningPoint: string;
+  targetWordCount?: number | null;
+  orderIndex: number;
+  threadIds: string[];
+  beatIds: string[];
+};
+
+export type ReorderPlanItemsInput = {
+  itemType: "acts" | "beats" | "threads" | "chapters";
+  orderedIds: string[];
+};
+
 export type CreateProjectInput = {
   name: string;
   language?: string;
@@ -111,7 +265,15 @@ export type AIAction =
   | "suggest_unwanted_themes"
   | "generate_alternative_titles"
   | "generate_style_guide"
-  | "generate_cover_image";
+  | "generate_cover_image"
+  | "suggest_story_structure"
+  | "generate_acts"
+  | "generate_act_field"
+  | "generate_beat_sheet"
+  | "generate_plot_threads"
+  | "generate_chapter_plan"
+  | "generate_chapter_field"
+  | "find_plan_gaps";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 

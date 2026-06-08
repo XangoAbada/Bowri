@@ -1,19 +1,31 @@
 import type {
   AcceptGeneratedBookCoverInput,
+  Act,
   AiLogEntry,
   AiRunResult,
+  Beat,
   Book,
   BookCoverResult,
   BookConceptInput,
+  BookPlan,
+  Chapter,
   CodexCliStatus,
   CodexModelCatalog,
   CreateProjectInput,
   GenerateBookCoverInput,
   GenerateNewProjectTitleRequest,
+  PlotThread,
   Project,
   ProjectDetails,
   ProjectSummary,
-  RunCodexPromptRequest
+  ReorderPlanItemsInput,
+  RunCodexPromptRequest,
+  SaveStoryStructureInput,
+  StoryStructure,
+  UpsertActInput,
+  UpsertBeatInput,
+  UpsertChapterInput,
+  UpsertPlotThreadInput
 } from "./types";
 
 const STORAGE_KEY = "storyforge2.browserPreview.projects";
@@ -21,11 +33,13 @@ const STORAGE_KEY = "storyforge2.browserPreview.projects";
 type BrowserPreviewState = {
   projects: ProjectDetails[];
   aiRuns: AiLogEntry[];
+  plans: Record<string, BookPlan>;
 };
 
 let memoryState: BrowserPreviewState = {
   projects: [],
-  aiRuns: []
+  aiRuns: [],
+  plans: {}
 };
 
 export function isTauriRuntime(): boolean {
@@ -125,6 +139,230 @@ export async function browserGetProject(
   }
 
   return normalizeDetails(details);
+}
+
+export async function browserGetBookPlan(bookId: string): Promise<BookPlan> {
+  const state = readState();
+  return normalizePlan(state.plans[bookId]);
+}
+
+export async function browserSaveStoryStructure(
+  input: SaveStoryStructureInput
+): Promise<StoryStructure> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+  const structure: StoryStructure = {
+    id: input.id ?? plan.structure?.id ?? createId(),
+    bookId: input.bookId,
+    structureType: input.structureType,
+    description: input.description,
+    notes: input.notes,
+    status: input.status ?? plan.structure?.status ?? "draft",
+    createdAt: plan.structure?.createdAt ?? now,
+    updatedAt: now
+  };
+  plan.structure = structure;
+  touchBook(state, input.bookId, now);
+  writeState(state);
+  return structure;
+}
+
+export async function browserUpsertAct(input: UpsertActInput): Promise<Act> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+  const existing = input.id
+    ? plan.acts.find((item) => item.id === input.id)
+    : undefined;
+  const act: Act = {
+    id: existing?.id ?? input.id ?? createId(),
+    bookId: input.bookId,
+    name: input.name,
+    purpose: input.purpose,
+    summary: input.summary,
+    startPercent: input.startPercent,
+    endPercent: input.endPercent,
+    orderIndex: input.orderIndex,
+    color: input.color,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  plan.acts = upsertById(plan.acts, act);
+  touchBook(state, input.bookId, now);
+  writeState(state);
+  return act;
+}
+
+export async function browserDeleteAct(id: string): Promise<void> {
+  const state = readState();
+  for (const plan of Object.values(state.plans)) {
+    plan.acts = plan.acts.filter((item) => item.id !== id);
+    plan.beats = plan.beats.map((item) =>
+      item.actId === id ? { ...item, actId: null } : item
+    );
+    plan.chapters = plan.chapters.map((item) =>
+      item.actId === id ? { ...item, actId: null } : item
+    );
+  }
+  writeState(state);
+}
+
+export async function browserUpsertBeat(input: UpsertBeatInput): Promise<Beat> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+  const existing = input.id
+    ? plan.beats.find((item) => item.id === input.id)
+    : undefined;
+  const beat: Beat = {
+    id: existing?.id ?? input.id ?? createId(),
+    bookId: input.bookId,
+    actId: input.actId ?? null,
+    name: input.name,
+    description: input.description,
+    role: input.role,
+    orderIndex: input.orderIndex,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  plan.beats = upsertById(plan.beats, beat);
+  plan.beatThreads = [
+    ...plan.beatThreads.filter((item) => item.beatId !== beat.id),
+    ...uniqueIds(input.threadIds).map((threadId) => ({
+      beatId: beat.id,
+      threadId
+    }))
+  ];
+  touchBook(state, input.bookId, now);
+  writeState(state);
+  return beat;
+}
+
+export async function browserDeleteBeat(id: string): Promise<void> {
+  const state = readState();
+  for (const plan of Object.values(state.plans)) {
+    plan.beats = plan.beats.filter((item) => item.id !== id);
+    plan.beatThreads = plan.beatThreads.filter((item) => item.beatId !== id);
+    plan.chapterBeats = plan.chapterBeats.filter((item) => item.beatId !== id);
+  }
+  writeState(state);
+}
+
+export async function browserUpsertPlotThread(
+  input: UpsertPlotThreadInput
+): Promise<PlotThread> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+  const existing = input.id
+    ? plan.threads.find((item) => item.id === input.id)
+    : undefined;
+  const thread: PlotThread = {
+    id: existing?.id ?? input.id ?? createId(),
+    bookId: input.bookId,
+    name: input.name,
+    description: input.description,
+    color: input.color,
+    status: input.status,
+    orderIndex: input.orderIndex,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  plan.threads = upsertById(plan.threads, thread);
+  touchBook(state, input.bookId, now);
+  writeState(state);
+  return thread;
+}
+
+export async function browserDeletePlotThread(id: string): Promise<void> {
+  const state = readState();
+  for (const plan of Object.values(state.plans)) {
+    plan.threads = plan.threads.filter((item) => item.id !== id);
+    plan.beatThreads = plan.beatThreads.filter((item) => item.threadId !== id);
+    plan.chapterThreads = plan.chapterThreads.filter((item) => item.threadId !== id);
+  }
+  writeState(state);
+}
+
+export async function browserUpsertChapter(
+  input: UpsertChapterInput
+): Promise<Chapter> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+  const existing = input.id
+    ? plan.chapters.find((item) => item.id === input.id)
+    : undefined;
+  const chapter: Chapter = {
+    id: existing?.id ?? input.id ?? createId(),
+    bookId: input.bookId,
+    actId: input.actId ?? null,
+    number: input.number,
+    workingTitle: input.workingTitle,
+    summary: input.summary,
+    purpose: input.purpose,
+    conflict: input.conflict,
+    turningPoint: input.turningPoint,
+    targetWordCount: input.targetWordCount ?? null,
+    orderIndex: input.orderIndex,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  plan.chapters = upsertById(plan.chapters, chapter);
+  plan.chapterThreads = [
+    ...plan.chapterThreads.filter((item) => item.chapterId !== chapter.id),
+    ...uniqueIds(input.threadIds).map((threadId) => ({
+      chapterId: chapter.id,
+      threadId
+    }))
+  ];
+  plan.chapterBeats = [
+    ...plan.chapterBeats.filter((item) => item.chapterId !== chapter.id),
+    ...uniqueIds(input.beatIds).map((beatId) => ({
+      chapterId: chapter.id,
+      beatId
+    }))
+  ];
+  touchBook(state, input.bookId, now);
+  writeState(state);
+  return chapter;
+}
+
+export async function browserDeleteChapter(id: string): Promise<void> {
+  const state = readState();
+  for (const plan of Object.values(state.plans)) {
+    plan.chapters = plan.chapters.filter((item) => item.id !== id);
+    plan.chapterThreads = plan.chapterThreads.filter((item) => item.chapterId !== id);
+    plan.chapterBeats = plan.chapterBeats.filter((item) => item.chapterId !== id);
+  }
+  writeState(state);
+}
+
+export async function browserReorderPlanItems(
+  input: ReorderPlanItemsInput
+): Promise<void> {
+  const state = readState();
+  const ids = new Map(input.orderedIds.map((id, index) => [id, index]));
+  for (const plan of Object.values(state.plans)) {
+    if (input.itemType === "acts") {
+      plan.acts = plan.acts.map((item) => reorderItem(item, ids));
+    }
+    if (input.itemType === "beats") {
+      plan.beats = plan.beats.map((item) => reorderItem(item, ids));
+    }
+    if (input.itemType === "threads") {
+      plan.threads = plan.threads.map((item) => reorderItem(item, ids));
+    }
+    if (input.itemType === "chapters") {
+      plan.chapters = plan.chapters.map((item) => reorderItem(item, ids));
+    }
+  }
+  writeState(state);
 }
 
 export async function browserListAiRuns(projectId: string): Promise<AiLogEntry[]> {
@@ -370,7 +608,7 @@ function readState(): BrowserPreviewState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { projects: [], aiRuns: [] };
+      return { projects: [], aiRuns: [], plans: {} };
     }
 
     const parsed = JSON.parse(raw) as BrowserPreviewState;
@@ -383,9 +621,10 @@ function readState(): BrowserPreviewState {
                 model: run.model ?? "",
                 reasoningEffort: run.reasoningEffort ?? ""
               }))
-            : []
+            : [],
+          plans: normalizePlans(parsed.plans)
         }
-      : { projects: [], aiRuns: [] };
+      : { projects: [], aiRuns: [], plans: {} };
   } catch {
     return memoryState;
   }
@@ -415,6 +654,70 @@ function appendAiRun(entry: AiLogEntry): void {
   const state = readState();
   state.aiRuns.unshift(entry);
   writeState(state);
+}
+
+function ensurePlan(state: BrowserPreviewState, bookId: string): BookPlan {
+  const plan = normalizePlan(state.plans[bookId]);
+  state.plans[bookId] = plan;
+  return plan;
+}
+
+function normalizePlans(plans: BrowserPreviewState["plans"] | undefined): Record<string, BookPlan> {
+  if (!plans || typeof plans !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(plans).map(([bookId, plan]) => [bookId, normalizePlan(plan)])
+  );
+}
+
+function normalizePlan(plan: Partial<BookPlan> | undefined): BookPlan {
+  return {
+    structure: plan?.structure ?? null,
+    acts: Array.isArray(plan?.acts) ? plan.acts : [],
+    beats: Array.isArray(plan?.beats) ? plan.beats : [],
+    threads: Array.isArray(plan?.threads) ? plan.threads : [],
+    chapters: Array.isArray(plan?.chapters) ? plan.chapters : [],
+    chapterThreads: Array.isArray(plan?.chapterThreads) ? plan.chapterThreads : [],
+    beatThreads: Array.isArray(plan?.beatThreads) ? plan.beatThreads : [],
+    chapterBeats: Array.isArray(plan?.chapterBeats) ? plan.chapterBeats : []
+  };
+}
+
+function upsertById<Item extends { id: string }>(items: Item[], nextItem: Item): Item[] {
+  const index = items.findIndex((item) => item.id === nextItem.id);
+  if (index === -1) {
+    return [...items, nextItem];
+  }
+
+  return items.map((item) => (item.id === nextItem.id ? nextItem : item));
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+}
+
+function reorderItem<Item extends { id: string; orderIndex: number }>(
+  item: Item,
+  orderedIds: Map<string, number>
+): Item {
+  const orderIndex = orderedIds.get(item.id);
+  return orderIndex === undefined ? item : { ...item, orderIndex };
+}
+
+function touchBook(
+  state: BrowserPreviewState,
+  bookId: string,
+  updatedAt: string
+): void {
+  const details = state.projects.find(({ book }) => book.id === bookId);
+  if (!details) {
+    return;
+  }
+
+  details.book = { ...details.book, updatedAt };
+  details.project = { ...details.project, updatedAt };
 }
 
 function normalizeDetails(details: ProjectDetails): ProjectDetails {

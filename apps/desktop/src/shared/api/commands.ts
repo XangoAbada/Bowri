@@ -5,9 +5,20 @@ import {
   browserListCodexModels,
   browserListAiRuns,
   browserCreateProject,
+  browserDeleteAct,
+  browserDeleteBeat,
+  browserDeleteChapter,
+  browserDeletePlotThread,
+  browserGetBookPlan,
   browserGetProject,
   browserListProjects,
+  browserReorderPlanItems,
   browserRunCodexPrompt,
+  browserSaveStoryStructure,
+  browserUpsertAct,
+  browserUpsertBeat,
+  browserUpsertChapter,
+  browserUpsertPlotThread,
   browserUpdateBookConcept,
   browserGenerateBookCover,
   browserGenerateNewProjectTitle,
@@ -17,17 +28,29 @@ import type {
   AcceptGeneratedBookCoverInput,
   AiRunResult,
   AiLogEntry,
+  Act,
+  Beat,
   Book,
   BookCoverResult,
   BookConceptInput,
+  BookPlan,
+  Chapter,
   CodexCliStatus,
   CodexModelCatalog,
   CreateProjectInput,
   GenerateBookCoverInput,
   GenerateNewProjectTitleRequest,
+  PlotThread,
   ProjectDetails,
   ProjectSummary,
-  RunCodexPromptRequest
+  ReorderPlanItemsInput,
+  RunCodexPromptRequest,
+  SaveStoryStructureInput,
+  StoryStructure,
+  UpsertActInput,
+  UpsertBeatInput,
+  UpsertChapterInput,
+  UpsertPlotThreadInput
 } from "./types";
 
 export function createProject(input: CreateProjectInput): Promise<ProjectDetails> {
@@ -52,6 +75,98 @@ export function getProject(projectId: string): Promise<ProjectDetails> {
   }
 
   return invoke("get_project", { projectId });
+}
+
+export function getBookPlan(bookId: string): Promise<BookPlan> {
+  if (!isTauriRuntime()) {
+    return browserGetBookPlan(bookId);
+  }
+
+  return invoke("get_book_plan", { bookId });
+}
+
+export function saveStoryStructure(
+  input: SaveStoryStructureInput
+): Promise<StoryStructure> {
+  if (!isTauriRuntime()) {
+    return browserSaveStoryStructure(input);
+  }
+
+  return invoke("save_story_structure", { input });
+}
+
+export function upsertAct(input: UpsertActInput): Promise<Act> {
+  if (!isTauriRuntime()) {
+    return browserUpsertAct(input);
+  }
+
+  return invoke("upsert_act", { input });
+}
+
+export function deleteAct(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteAct(id);
+  }
+
+  return invoke("delete_act", { id });
+}
+
+export function upsertBeat(input: UpsertBeatInput): Promise<Beat> {
+  if (!isTauriRuntime()) {
+    return browserUpsertBeat(input);
+  }
+
+  return invoke("upsert_beat", { input });
+}
+
+export function deleteBeat(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteBeat(id);
+  }
+
+  return invoke("delete_beat", { id });
+}
+
+export function upsertPlotThread(
+  input: UpsertPlotThreadInput
+): Promise<PlotThread> {
+  if (!isTauriRuntime()) {
+    return browserUpsertPlotThread(input);
+  }
+
+  return invoke("upsert_plot_thread", { input });
+}
+
+export function deletePlotThread(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeletePlotThread(id);
+  }
+
+  return invoke("delete_plot_thread", { id });
+}
+
+export function upsertChapter(input: UpsertChapterInput): Promise<Chapter> {
+  if (!isTauriRuntime()) {
+    return browserUpsertChapter(input);
+  }
+
+  return invoke("upsert_chapter", { input });
+}
+
+export function deleteChapter(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteChapter(id);
+  }
+
+  return invoke("delete_chapter", { id });
+}
+
+export function reorderPlanItems(input: ReorderPlanItemsInput): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserReorderPlanItems(input);
+  }
+
+  return invoke("reorder_plan_items", { input });
 }
 
 export function listAiRuns(projectId: string): Promise<AiLogEntry[]> {

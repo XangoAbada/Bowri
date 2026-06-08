@@ -35,12 +35,11 @@ import storyforgeLogo from "../assets/storyforge-logo-full.png";
 
 type ProjectShellProps = {
   projectId: string;
-  activeSection: "concept" | "ai" | "aiLog";
+  activeSection: "concept" | "plan" | "ai" | "aiLog";
   children: ReactNode;
 };
 
 const disabledSections = [
-  { label: "Plan", icon: Map },
   { label: "Postacie", icon: Users },
   { label: "Świat", icon: Boxes },
   { label: "Rozdziały", icon: FileText },
@@ -109,9 +108,11 @@ export function ProjectShell({
   const subtitle =
     activeSection === "concept"
       ? "Faza 2: Koncepcja książki"
-      : activeSection === "aiLog"
-        ? "Log AI"
-        : "Ustawienia AI";
+      : activeSection === "plan"
+        ? "Faza 3: Plan powieści"
+        : activeSection === "aiLog"
+          ? "Log AI"
+          : "Ustawienia AI";
 
   const modelOptions = useMemo(() => {
     const catalogModels = modelQuery.data?.models ?? [];
@@ -217,6 +218,15 @@ export function ProjectShell({
           >
             <Lightbulb size={18} />
             Koncepcja
+          </Link>
+
+          <Link
+            to="/projects/$projectId/plan"
+            params={{ projectId }}
+            className={activeSection === "plan" ? "nav-item active" : "nav-item"}
+          >
+            <Map size={18} />
+            Plan
           </Link>
 
           {disabledSections.map(({ label, icon: Icon }) => (

@@ -6,6 +6,11 @@ import {
   type PromptContextControl,
   type PromptContextSource
 } from "./promptPackage";
+import {
+  planFieldConfigs,
+  planPromptContextSources,
+  type PlanFieldKey
+} from "./planPromptPackage";
 
 export type AiPromptContextTarget = {
   targetId: string;
@@ -205,6 +210,37 @@ export function createConceptPromptContextTarget(
     projectId,
     title: config.label,
     subtitle: "Pole koncepcji",
+    sources,
+    defaultSources: sources,
+    submitLabel: options.submitLabel,
+    submitDisabled: options.submitDisabled,
+    submitDisabledReason: options.submitDisabledReason,
+    onSubmit: options.onSubmit
+  };
+}
+
+export function planPromptContextTargetId(
+  projectId: string,
+  field: PlanFieldKey,
+  targetEntityId?: string
+): string {
+  return `project:${projectId}:book-plan:${field}:${targetEntityId ?? "global"}`;
+}
+
+export function createPlanPromptContextTarget(
+  projectId: string,
+  field: PlanFieldKey,
+  targetEntityId: string | undefined,
+  options: PromptContextTargetOptions = {}
+): AiPromptContextTarget {
+  const config = planFieldConfigs[field];
+  const sources = planPromptContextSources(field);
+
+  return {
+    targetId: planPromptContextTargetId(projectId, field, targetEntityId),
+    projectId,
+    title: config.label,
+    subtitle: "Pole planu",
     sources,
     defaultSources: sources,
     submitLabel: options.submitLabel,

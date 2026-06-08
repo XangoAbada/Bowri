@@ -23,6 +23,7 @@ import {
   ConceptFieldKey,
   longConceptFields
 } from "./promptPackage";
+import { planFieldConfigs, PlanFieldKey } from "./planPromptPackage";
 import {
   ActiveAiProposal,
   BOOK_COVER_FIELD,
@@ -91,6 +92,10 @@ export function AiProposalPanel({
           coverNegativePrompt: proposal.coverNegativePrompt ?? "",
           generatedAt: proposal.coverGeneratedAt
         });
+      }
+
+      if (proposal.scope === "bookPlan") {
+        throw new Error("Propozycje planu zastosuj w widoku Plan.");
       }
 
       if (isPremiseDevelopment(proposal.parsed)) {
@@ -207,9 +212,12 @@ function ProposalQueueItem({
   onToggleField
 }: ProposalQueueItemProps) {
   const coverProposal = isBookCoverProposal(proposal);
+  const planProposal = proposal.scope === "bookPlan";
   const label = coverProposal
     ? "Okładka"
-    : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
+    : planProposal
+      ? planFieldConfigs[proposal.field as PlanFieldKey]?.label ?? "Plan"
+      : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
   const running = proposal.status === "running";
   const queued = proposal.status === "queued";
   const success = proposal.status === "success";
@@ -220,14 +228,17 @@ function ProposalQueueItem({
   const structured = premiseProposal !== null;
   const proposalRows =
     !coverProposal &&
+    !planProposal &&
     (longConceptFields.includes(proposal.field as ConceptFieldKey) || structured)
       ? 8
       : 3;
   const canAccept = coverProposal
     ? Boolean((proposal.coverImagePath || proposal.editableValue).trim())
-    : structured
-    ? hasSelectedEditableField(proposal)
-    : proposal.editableValue.trim().length > 0;
+    : planProposal
+      ? false
+      : structured
+        ? hasSelectedEditableField(proposal)
+        : proposal.editableValue.trim().length > 0;
 
   return (
     <article className={`proposal-queue-item ${proposal.status}`}>
@@ -238,7 +249,9 @@ function ProposalQueueItem({
               ? "Okładka"
               : proposal.scope === "newProject"
                 ? "Nowy projekt"
-                : "Pole"}
+                : planProposal
+                  ? "Plan"
+                  : "Pole"}
           </p>
           <h3>{label}</h3>
         </div>
@@ -340,14 +353,23 @@ function ProposalQueueItem({
 
       {success && !structured && !coverProposal ? (
         <label className="field-label">
-          Propozycja do akceptacji
+          {planProposal
+            ? "Propozycja do zastosowania w widoku Plan"
+            : "Propozycja do akceptacji"}
           <textarea
             value={proposal.editableValue}
             onChange={(event) => onEditableValueChange(event.target.value)}
-            rows={proposalRows}
+            rows={planProposal ? 8 : proposalRows}
             title={`Możesz poprawić propozycję dla pola ${label} przed zapisem.`}
           />
         </label>
+      ) : null}
+
+      {planProposal && success ? (
+        <p className="muted-text">
+          Zastosuj te dane z sekcji propozycji w widoku Plan, aby utworzyć albo
+          uzupełnić encje planu.
+        </p>
       ) : null}
 
       {proposal.parsed && "rationale" in proposal.parsed && proposal.parsed.rationale ? (
@@ -625,11 +647,54 @@ export function parseProposalResult(
   expectedField: ConceptFieldKey,
   action: string
 ): ParsedAiProposal {
+  if (isPlanAction(action)) {
+    return parsePlanSuggestion(rawOutput);
+  }
+
   if (action === "expand_premise") {
     return parsePremiseDevelopment(rawOutput);
   }
 
   return parseConceptFieldSuggestion(rawOutput, expectedField);
+}
+
+function parsePlanSuggestion(rawOutput: string): ParsedAiProposal {
+  const parsed = JSON.parse(rawOutput) as unknown;
+  const value =
+    parsed && typeof parsed === "object"
+      ? parsed
+      : {
+          version: 1,
+          kind: "book_plan_suggestion",
+          value: String(parsed ?? "")
+        };
+  const record = value as {
+    summary?: unknown;
+    warnings?: unknown;
+  };
+
+  return {
+    kind: "book_plan_suggestion",
+    summary: typeof record.summary === "string" ? record.summary : "Propozycja planu",
+    textValue: JSON.stringify(value, null, 2),
+    value,
+    warnings: Array.isArray(record.warnings)
+      ? record.warnings.filter((item): item is string => typeof item === "string")
+      : []
+  };
+}
+
+function isPlanAction(action: string): boolean {
+  return [
+    "suggest_story_structure",
+    "generate_acts",
+    "generate_act_field",
+    "generate_beat_sheet",
+    "generate_plot_threads",
+    "generate_chapter_plan",
+    "generate_chapter_field",
+    "find_plan_gaps"
+  ].includes(action);
 }
 
 export function editableFieldsFromParsed(
