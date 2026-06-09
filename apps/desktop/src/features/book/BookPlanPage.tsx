@@ -37,6 +37,7 @@ import {
   deletePlotThread,
   getBookPlan,
   getProject,
+  moveBeatToChapter,
   saveStoryStructure,
   upsertAct,
   upsertBeat,
@@ -48,6 +49,7 @@ import type {
   Beat,
   BookPlan,
   Chapter,
+  MoveBeatToChapterInput,
   PlotThread,
   SaveStoryStructureInput,
   UpsertActInput,
@@ -86,6 +88,9 @@ type SelectedPlanItem =
 type ChapterModalState =
   | { mode: "create"; actId?: string | null }
   | { mode: "edit"; chapterId: string };
+type BeatModalState =
+  | { mode: "create"; chapterId?: string | null }
+  | { mode: "edit"; beatId: string };
 type ChapterRelationKind = "threads" | "beats";
 type BeatSortMode = "order" | "name" | "role";
 type ThreadViewMode = "map" | "list" | "table";
@@ -93,11 +98,17 @@ type ThreadSortMode = "order" | "name" | "status";
 type ThreadEditTarget = "new" | string | null;
 type BeatBoardLane = {
   id: string;
-  actId: string | null;
+  actId?: string | null;
+  chapterId?: string;
+  number?: number;
   name: string;
   color: string;
-  rangeLabel: string;
+  rangeLabel?: string;
+  summary?: string;
   beats: Beat[];
+};
+type BeatSaveInput = UpsertBeatInput & {
+  chapterId?: string | null;
 };
 
 const planSteps: Array<{ key: PlanStep; label: string; icon: typeof Map }> = [
@@ -310,6 +321,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   );
   const [selectedItem, setSelectedItem] = useState<SelectedPlanItem | null>(null);
   const [chapterModal, setChapterModal] = useState<ChapterModalState | null>(null);
+  const [beatModal, setBeatModal] = useState<BeatModalState | null>(null);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -377,10 +389,32 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onError: showError
   });
   const beatMutation = useMutation({
-    mutationFn: (input: UpsertBeatInput) => upsertBeat(input),
+    mutationFn: async (input: BeatSaveInput) => {
+      const { chapterId, ...beatInput } = input;
+      const beat = await upsertBeat(beatInput);
+
+      if (chapterId !== undefined) {
+        await moveBeatToChapter({
+          bookId: beat.bookId,
+          beatId: beat.id,
+          chapterId,
+          orderIndex: beat.orderIndex
+        });
+      }
+
+      return beat;
+    },
     onSuccess: async (beat) => {
       setSelectedItem({ type: "beat", id: beat.id });
       setMessage("Zapisano beat.");
+      await invalidatePlan();
+    },
+    onError: showError
+  });
+  const beatMoveMutation = useMutation({
+    mutationFn: (input: MoveBeatToChapterInput) => moveBeatToChapter(input),
+    onSuccess: async () => {
+      setMessage("Przeniesiono beat.");
       await invalidatePlan();
     },
     onError: showError
@@ -524,6 +558,16 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     setChapterModal({ mode: "create", actId });
   }
 
+  function openBeatModal(beat: Beat) {
+    setSelectedItem({ type: "beat", id: beat.id });
+    setBeatModal({ mode: "edit", beatId: beat.id });
+  }
+
+  function openNewBeatModal(chapterId?: string | null) {
+    setSelectedItem(null);
+    setBeatModal({ mode: "create", chapterId });
+  }
+
   if (projectQuery.isLoading || planQuery.isLoading) {
     return (
       <section className="plan-page">
@@ -577,10 +621,12 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       <BeatsStep
         bookId={bookId}
         plan={plan}
-        saving={beatMutation.isPending}
+        saving={beatMutation.isPending || beatMoveMutation.isPending}
         onSave={(input) => beatMutation.mutate(input)}
+        onMoveBeat={(input) => beatMoveMutation.mutate(input)}
         onDelete={(item) => deleteMutation.mutate(item)}
-        onSelect={setSelectedItem}
+        onOpenBeat={openBeatModal}
+        onCreateBeat={openNewBeatModal}
         onGenerate={queuePlanGeneration}
         onActivatePrompt={activatePlanPromptContext}
       />
@@ -671,6 +717,23 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         }
         onGenerate={queuePlanGeneration}
         onActivatePrompt={activatePlanPromptContext}
+      />
+      <BeatEditModal
+        state={beatModal}
+        bookId={bookId}
+        plan={plan}
+        saving={beatMutation.isPending || deleteMutation.isPending}
+        onClose={() => setBeatModal(null)}
+        onSave={(input) =>
+          beatMutation.mutate(input, {
+            onSuccess: () => setBeatModal(null)
+          })
+        }
+        onDelete={(item) =>
+          deleteMutation.mutate(item, {
+            onSuccess: () => setBeatModal(null)
+          })
+        }
       />
     </section>
   );
@@ -1081,7 +1144,7 @@ function ActForm({
   );
 }
 
-function BeatsStep({
+function LegacyBeatsStep({
   bookId,
   plan,
   saving,
@@ -1112,11 +1175,8 @@ function BeatsStep({
       const searchable = `${beat.name} ${beat.description} ${beat.role} ${threadNames}`
         .toLocaleLowerCase("pl-PL");
       const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
-      const matchesAct =
-        actFilter === "all" ||
-        (actFilter === "none" ? !beat.actId : beat.actId === actFilter);
-      const matchesThread =
-        threadFilter === "all" || threadIds.includes(threadFilter);
+      const matchesAct = true;
+      const matchesThread = true;
 
       return matchesSearch && matchesAct && matchesThread;
     })
@@ -1224,7 +1284,7 @@ function BeatsStep({
 
         {addingBeat ? (
           <div className="beat-board-new-form">
-            <BeatForm
+            <LegacyBeatForm
               bookId={bookId}
               plan={plan}
               saving={saving}
@@ -1304,7 +1364,7 @@ function BeatsStep({
                         </span>
                       </button>
                       {expanded ? (
-                        <BeatForm
+                        <LegacyBeatForm
                           bookId={bookId}
                           beat={beat}
                           plan={plan}
@@ -1328,7 +1388,7 @@ function BeatsStep({
   );
 }
 
-function BeatForm({
+function LegacyBeatForm({
   bookId,
   beat,
   plan,
@@ -1351,26 +1411,24 @@ function BeatForm({
   onCancel?: () => void;
   formClassName?: string;
 }) {
-  const beatThreadIds = plan.beatThreads
-    .filter((item) => item.beatId === beat?.id)
-    .map((item) => item.threadId);
+  const beatThreadIds: string[] = [];
   const [name, setName] = useState(beat?.name ?? `Beat ${orderIndex + 1}`);
   const [description, setDescription] = useState(beat?.description ?? "");
   const [role, setRole] = useState(beat?.role ?? "");
-  const [actId, setActId] = useState(beat?.actId ?? plan.acts[0]?.id ?? "");
+  const [actId, setActId] = useState("");
   const [threadIds, setThreadIds] = useState(beatThreadIds);
 
   useEffect(() => {
     setName(beat?.name ?? `Beat ${orderIndex + 1}`);
     setDescription(beat?.description ?? "");
     setRole(beat?.role ?? "");
-    setActId(beat?.actId ?? plan.acts[0]?.id ?? "");
+    setActId("");
     setThreadIds(beatThreadIds);
   }, [
     beat?.name,
     beat?.description,
     beat?.role,
-    beat?.actId,
+    beat?.id,
     plan.acts,
     beatThreadIds.join("|"),
     orderIndex
@@ -1381,12 +1439,10 @@ function BeatForm({
     onSave({
       id: beat?.id,
       bookId,
-      actId: actId || null,
       name,
       description,
       role,
       orderIndex: beat?.orderIndex ?? orderIndex,
-      threadIds
     });
   }
 
@@ -1448,6 +1504,768 @@ function BeatForm({
       </div>
     </form>
   );
+}
+
+function BeatsStep({
+  bookId,
+  plan,
+  saving,
+  onSave,
+  onMoveBeat,
+  onDelete,
+  onOpenBeat,
+  onCreateBeat,
+  onGenerate,
+  onActivatePrompt
+}: StepProps & {
+  onSave: (input: BeatSaveInput) => void;
+  onMoveBeat: (input: MoveBeatToChapterInput) => void;
+  onDelete: (item: SelectedPlanItem) => void;
+  onOpenBeat: (beat: Beat) => void;
+  onCreateBeat: (chapterId?: string | null) => void;
+}) {
+  const beatChapterRailRef = useRef<HTMLDivElement>(null);
+  const beatBoardRef = useRef<HTMLDivElement>(null);
+  const beatDragRef = useRef<BeatPointerDrag | null>(null);
+  const suppressBeatOpenRef = useRef(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<BeatSortMode>("order");
+  const [beatDrag, setBeatDrag] = useState<BeatPointerDrag | null>(null);
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase("pl-PL");
+  const visibleBeats = plan.beats
+    .filter((beat) => {
+      const chapter = chapterForBeat(plan, beat);
+      const searchable = `${beat.name} ${beat.description} ${beat.role} ${chapter?.workingTitle ?? ""}`
+        .toLocaleLowerCase("pl-PL");
+      return !normalizedSearch || searchable.includes(normalizedSearch);
+    })
+    .sort((first, second) => {
+      if (sortMode === "name") {
+        return first.name.localeCompare(second.name, "pl-PL");
+      }
+      if (sortMode === "role") {
+        return (
+          first.role.localeCompare(second.role, "pl-PL") ||
+          first.orderIndex - second.orderIndex
+        );
+      }
+      return first.orderIndex - second.orderIndex;
+    });
+  const lanes = beatChapterLanesForPlan(plan, visibleBeats);
+  const unassignedBeats = beatsWithoutChapter(plan, visibleBeats);
+  const draggedBeatId = beatDrag?.beatId ?? null;
+  const dropTarget = beatDrag?.dropTarget ?? null;
+
+  function scrollChapterRail(direction: -1 | 1) {
+    const rail = beatChapterRailRef.current;
+    const board = beatBoardRef.current;
+
+    if (!rail && !board) {
+      return;
+    }
+
+    const source = board ?? rail;
+    const scrollAmount = Math.max((source?.clientWidth ?? 0) - 96, 180);
+
+    scrollElementBy(rail, direction * scrollAmount);
+    scrollElementBy(board, direction * scrollAmount);
+  }
+
+  function scrollToLane(index: number) {
+    const board = beatBoardRef.current;
+    const rail = beatChapterRailRef.current;
+    const target = board?.children[index] as HTMLElement | undefined;
+    const tab = rail?.children[index] as HTMLElement | undefined;
+
+    target?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+    tab?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  }
+
+  function handleBeatPointerDown(event: PointerEvent<HTMLElement>, beatId: string) {
+    if (saving || event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const drag: BeatPointerDrag = {
+      beatId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      isDragging: false,
+      dropTarget: null
+    };
+    beatDragRef.current = drag;
+    setBeatDrag(drag);
+  }
+
+  function handleBeatPointerMove(event: PointerEvent<HTMLElement>) {
+    const drag = beatDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || saving) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    const isDragging = drag.isDragging || distance >= beatDragActivationDistance;
+    const nextDrag: BeatPointerDrag = {
+      ...drag,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      isDragging,
+      dropTarget: isDragging ? beatDropTargetFromPoint(event.clientX, event.clientY) : null
+    };
+    beatDragRef.current = nextDrag;
+    setBeatDrag(nextDrag);
+  }
+
+  function handleBeatPointerUp(event: PointerEvent<HTMLElement>) {
+    const drag = beatDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (drag.isDragging && drag.dropTarget) {
+      onMoveBeat({
+        bookId,
+        beatId: drag.beatId,
+        chapterId: drag.dropTarget.chapterId,
+        orderIndex: beatOrderIndexAfterDrop(
+          plan,
+          lanes,
+          unassignedBeats,
+          drag.beatId,
+          drag.dropTarget
+        )
+      });
+      suppressBeatOpenRef.current = true;
+    }
+
+    clearBeatDrag();
+  }
+
+  function handleBeatPointerCancel(event: PointerEvent<HTMLElement>) {
+    if (beatDragRef.current?.pointerId === event.pointerId) {
+      clearBeatDrag();
+    }
+  }
+
+  function clearBeatDrag() {
+    beatDragRef.current = null;
+    setBeatDrag(null);
+  }
+
+  useEffect(() => {
+    if (!beatDrag) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        clearBeatDrag();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [beatDrag]);
+
+  return (
+    <section className="chapter-board-workspace beat-chapter-workspace">
+      <div className="chapter-board-shell beat-chapter-shell">
+        <div className="chapter-board-toolbar">
+          <div className="chapter-board-heading">
+            <span className="stage-heading-icon">
+              <Target size={18} />
+            </span>
+            <div>
+              <p className="eyebrow">Beaty</p>
+              <h3>Mapa beatów według rozdziałów</h3>
+              <p>{visibleBeats.length} / {plan.beats.length} beatów w widoku</p>
+            </div>
+          </div>
+          <div className="chapter-board-actions beat-board-actions">
+            <label className="beat-board-search">
+              <Search size={16} />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Szukaj beatu..."
+                aria-label="Szukaj beatu"
+              />
+            </label>
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as BeatSortMode)}
+              aria-label="Sortuj beaty"
+            >
+              <option value="order">Sortuj: Kolejność</option>
+              <option value="name">Sortuj: Nazwa</option>
+              <option value="role">Sortuj: Rola</option>
+            </select>
+            <button type="button" className="primary-button" onClick={() => onCreateBeat(null)}>
+              <Plus size={16} />
+              Dodaj beat
+            </button>
+            <PlanAiActions
+              field="beatSheet"
+              onGenerate={() => onGenerate("beatSheet")}
+              onActivatePrompt={() => onActivatePrompt("beatSheet")}
+            />
+          </div>
+        </div>
+
+        <section
+          className={
+            dropTarget?.chapterId === null
+              ? "beat-unassigned-section drop-active"
+              : "beat-unassigned-section"
+          }
+          data-drop-zone="beat-lane"
+          data-lane-id={withoutChapterBeatLaneId}
+          data-chapter-id=""
+        >
+          <div className="beat-unassigned-header">
+            <div>
+              <span className="chapter-act-dot" />
+              <h4>Nieprzypisane beaty</h4>
+            </div>
+            <span>{unassignedBeats.length} beatów</span>
+          </div>
+          <div className="beat-card-stack">
+            {unassignedBeats.length > 0 ? (
+              unassignedBeats.map((beat) => (
+                <BeatBoardCard
+                  key={beat.id}
+                  beat={beat}
+                  chapter={null}
+                  dragging={draggedBeatId === beat.id}
+                  dropPosition={dropTarget?.beatId === beat.id ? dropTarget.position : null}
+                  dragDisabled={saving}
+                  onPointerDown={(event) => handleBeatPointerDown(event, beat.id)}
+                  onPointerMove={handleBeatPointerMove}
+                  onPointerUp={handleBeatPointerUp}
+                  onPointerCancel={handleBeatPointerCancel}
+                  onLostPointerCapture={() => clearBeatDrag()}
+                  onHandleClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onOpen={() => onOpenBeat(beat)}
+                  onSuppressOpen={() => {
+                    if (!suppressBeatOpenRef.current) {
+                      return false;
+                    }
+
+                    suppressBeatOpenRef.current = false;
+                    return true;
+                  }}
+                />
+              ))
+            ) : (
+              <p className="muted-text chapter-empty-note">
+                Wszystkie widoczne beaty są przypisane do rozdziałów.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <div className="chapter-act-rail-card">
+          <button
+            type="button"
+            className="chapter-rail-scroll-button previous"
+            onClick={() => scrollChapterRail(-1)}
+            aria-label="Pokaż wcześniejsze rozdziały"
+            title="Pokaż wcześniejsze rozdziały"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div
+            ref={beatChapterRailRef}
+            className="chapter-act-rail"
+            role="tablist"
+            aria-label="Rozdziały w planie beatów"
+          >
+            {lanes.map((lane, index) => (
+              <button
+                key={lane.id}
+                type="button"
+                role="tab"
+                aria-selected="false"
+                className="chapter-act-tab"
+                onClick={() => scrollToLane(index)}
+              >
+                <span className="chapter-act-dot" style={{ background: lane.color }} />
+                <span className="stage-copy">
+                  <strong>
+                    {lane.number}. {lane.name}
+                  </strong>
+                  <span>{lane.beats.length} beatów</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="chapter-rail-scroll-button next"
+            onClick={() => scrollChapterRail(1)}
+            aria-label="Pokaż kolejne rozdziały"
+            title="Pokaż kolejne rozdziały"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+
+        <div ref={beatBoardRef} className="chapter-act-columns beat-chapter-columns">
+          {lanes.map((lane) => {
+            const chapterId = lane.chapterId ?? "";
+            const chapter = plan.chapters.find((item) => item.id === chapterId) ?? null;
+
+            return (
+              <section
+                className={
+                  dropTarget?.chapterId === chapterId
+                    ? "chapter-act-column beat-chapter-column drop-active"
+                    : "chapter-act-column beat-chapter-column"
+                }
+                key={lane.id}
+                data-chapter-id={chapterId}
+                data-drop-zone="beat-lane"
+                data-lane-id={lane.id}
+              >
+                <div className="chapter-act-column-header">
+                  <div>
+                    <span className="chapter-act-dot" style={{ background: lane.color }} />
+                    <h4>
+                      {lane.number}. {lane.name}
+                    </h4>
+                  </div>
+                  <span>{lane.beats.length} beatów</span>
+                </div>
+                <p className="chapter-act-purpose">
+                  {lane.summary || "Rozdział bez streszczenia."}
+                </p>
+                <div className="beat-card-stack">
+                  {lane.beats.length > 0 ? (
+                    lane.beats.map((beat) => (
+                      <BeatBoardCard
+                        key={beat.id}
+                        beat={beat}
+                        chapter={chapter}
+                        dragging={draggedBeatId === beat.id}
+                        dropPosition={dropTarget?.beatId === beat.id ? dropTarget.position : null}
+                        dragDisabled={saving}
+                        onPointerDown={(event) => handleBeatPointerDown(event, beat.id)}
+                        onPointerMove={handleBeatPointerMove}
+                        onPointerUp={handleBeatPointerUp}
+                        onPointerCancel={handleBeatPointerCancel}
+                        onLostPointerCapture={() => clearBeatDrag()}
+                        onHandleClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onOpen={() => onOpenBeat(beat)}
+                        onSuppressOpen={() => {
+                          if (!suppressBeatOpenRef.current) {
+                            return false;
+                          }
+
+                          suppressBeatOpenRef.current = false;
+                          return true;
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <p
+                      className={
+                        dropTarget?.chapterId === chapterId
+                          ? "muted-text chapter-empty-note drop-active"
+                          : "muted-text chapter-empty-note"
+                      }
+                    >
+                      Ten rozdział nie ma jeszcze beatów.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button chapter-column-add"
+                  onClick={() => onCreateBeat(chapterId)}
+                >
+                  <Plus size={16} />
+                  Dodaj beat
+                </button>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BeatBoardCard({
+  beat,
+  chapter,
+  dragging,
+  dropPosition,
+  dragDisabled,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onLostPointerCapture,
+  onHandleClick,
+  onSuppressOpen,
+  onOpen
+}: {
+  beat: Beat;
+  chapter: Chapter | null;
+  dragging: boolean;
+  dropPosition: BeatDropTarget["position"] | null;
+  dragDisabled: boolean;
+  onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+  onPointerMove: (event: PointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLElement>) => void;
+  onPointerCancel: (event: PointerEvent<HTMLElement>) => void;
+  onLostPointerCapture: () => void;
+  onHandleClick: (event: MouseEvent<HTMLElement>) => void;
+  onSuppressOpen: () => boolean;
+  onOpen: () => void;
+}) {
+  const className = [
+    "chapter-board-card",
+    "beat-board-card",
+    dragging ? "dragging" : "",
+    dropPosition === "before" ? "drop-before" : "",
+    dropPosition === "after" ? "drop-after" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      className={className}
+      data-beat-id={beat.id}
+      onClick={() => {
+        if (onSuppressOpen()) {
+          return;
+        }
+
+        onOpen();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      aria-label={`Otwórz beat ${beat.name}`}
+    >
+      <span className="chapter-card-topline">
+        <span className="chapter-number-badge beat-number-badge">
+          {beat.orderIndex + 1}
+        </span>
+        <span
+          className="chapter-drag-handle"
+          aria-hidden="true"
+          data-drag-handle="beat"
+          onClick={onHandleClick}
+          onPointerCancel={onPointerCancel}
+          onPointerDown={dragDisabled ? undefined : onPointerDown}
+          onPointerMove={dragDisabled ? undefined : onPointerMove}
+          onPointerUp={dragDisabled ? undefined : onPointerUp}
+          onLostPointerCapture={onLostPointerCapture}
+        >
+          <GripVertical size={15} />
+        </span>
+        <span>{chapter ? `Rozdz. ${chapter.number}` : "Nieprzypisany"}</span>
+      </span>
+      <strong>{beat.name}</strong>
+      <p>{beat.description || "Brak opisu beatu."}</p>
+      <span className="chapter-card-field">
+        <b>Rola</b>
+        {beat.role || "Brak"}
+      </span>
+    </article>
+  );
+}
+
+function BeatForm({
+  bookId,
+  beat,
+  plan,
+  orderIndex = 0,
+  initialChapterId,
+  saving,
+  onSave,
+  onDelete,
+  onCancel
+}: {
+  bookId: string;
+  beat?: Beat;
+  plan: BookPlan;
+  orderIndex?: number;
+  initialChapterId?: string | null;
+  saving: boolean;
+  onSave: (input: BeatSaveInput) => void;
+  onDelete?: () => void;
+  onCancel?: () => void;
+}) {
+  const assignedChapterId = beat ? chapterIdForBeat(plan, beat.id) : initialChapterId ?? null;
+  const [name, setName] = useState(beat?.name ?? `Beat ${orderIndex + 1}`);
+  const [description, setDescription] = useState(beat?.description ?? "");
+  const [role, setRole] = useState(beat?.role ?? "");
+  const [chapterId, setChapterId] = useState(assignedChapterId ?? "");
+
+  useEffect(() => {
+    setName(beat?.name ?? `Beat ${orderIndex + 1}`);
+    setDescription(beat?.description ?? "");
+    setRole(beat?.role ?? "");
+    setChapterId(assignedChapterId ?? "");
+  }, [beat?.name, beat?.description, beat?.role, assignedChapterId, orderIndex]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    onSave({
+      id: beat?.id,
+      bookId,
+      name,
+      description,
+      role,
+      orderIndex: beat?.orderIndex ?? orderIndex,
+      chapterId: chapterId || null
+    });
+  }
+
+  const selectedChapter = plan.chapters.find((chapter) => chapter.id === chapterId);
+  const completionItems = [
+    { label: "Nazwa", complete: Boolean(name.trim()) },
+    { label: "Rola", complete: Boolean(role.trim()) },
+    { label: "Opis", complete: Boolean(description.trim()) },
+    { label: "Rozdział", complete: Boolean(chapterId) }
+  ];
+  const completedItems = completionItems.filter((item) => item.complete).length;
+  const completionPercent = Math.round((completedItems / completionItems.length) * 100);
+
+  return (
+    <form className="chapter-edit-form beat-edit-form" onSubmit={submit}>
+      <div className="chapter-edit-metrics" aria-label="Najważniejsze informacje o beacie">
+        <span className="chapter-edit-metric">
+          <Target size={16} />
+          <span>Rola:</span>
+          <strong>{role || "Bez roli"}</strong>
+        </span>
+        <span className="chapter-edit-metric">
+          <FileText size={16} />
+          <span>Rozdział:</span>
+          <strong>
+            {selectedChapter
+              ? `${dynamicChapterNumber(plan, selectedChapter.id)}. ${selectedChapter.workingTitle}`
+              : "Nieprzypisany"}
+          </strong>
+        </span>
+        <span
+          className={
+            completionPercent >= 100
+              ? "chapter-status-pill ready"
+              : completionPercent >= 50
+                ? "chapter-status-pill active"
+                : "chapter-status-pill"
+          }
+        >
+          <Circle size={10} />
+          {completionPercent >= 100 ? "Gotowy" : completionPercent >= 50 ? "W trakcie" : "Szkic"}
+        </span>
+      </div>
+
+      <div className="chapter-edit-content-grid beat-edit-content-grid">
+        <main className="chapter-edit-main">
+          <section className="chapter-edit-section">
+            <div className="chapter-section-heading">
+              <LayoutList size={17} />
+              <h4>Treść beatu</h4>
+            </div>
+            <div className="chapter-field-stack">
+              <label className="field-label">
+                Nazwa
+                <input value={name} onChange={(event) => setName(event.target.value)} />
+              </label>
+              <label className="field-label">
+                Rola
+                <input value={role} onChange={(event) => setRole(event.target.value)} />
+              </label>
+              <label className="field-label">
+                Opis
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={6}
+                />
+              </label>
+            </div>
+          </section>
+        </main>
+
+        <aside className="chapter-edit-sidebar" aria-label="Przypisanie beatu">
+          <section className="chapter-side-section beat-chapter-picker-section">
+            <div className="chapter-side-heading">
+              <Route size={16} />
+              <h4>Rozdział</h4>
+            </div>
+            <label className="field-label">
+              Przypisz do
+              <select value={chapterId} onChange={(event) => setChapterId(event.target.value)}>
+                <option value="">Nieprzypisany</option>
+                {orderedChaptersForPlan(plan).map((chapter) => (
+                  <option value={chapter.id} key={chapter.id}>
+                    {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p>
+              Beat może być przypisany tylko do jednego rozdziału. Zmiana tutaj przeniesie go z
+              poprzedniego miejsca.
+            </p>
+          </section>
+        </aside>
+      </div>
+
+      <footer className="chapter-edit-footer">
+        <div className="chapter-footer-status">
+          <CheckCircle2 size={16} />
+          <span>
+            {completedItems} / {completionItems.length} elementy beatu uzupełnione
+          </span>
+        </div>
+        <div className="chapter-footer-actions">
+          {onDelete ? (
+            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete}>
+              <Trash2 size={16} />
+              Usuń
+            </button>
+          ) : null}
+          {onCancel ? (
+            <button type="button" className="ghost-button" onClick={onCancel}>
+              Anuluj
+            </button>
+          ) : null}
+          <button type="submit" className="primary-button" disabled={saving}>
+            <Save size={16} />
+            {saving ? "Zapisuję" : "Zapisz zmiany"}
+          </button>
+        </div>
+      </footer>
+    </form>
+  );
+}
+
+function BeatEditModal({
+  state,
+  bookId,
+  plan,
+  saving,
+  onClose,
+  onSave,
+  onDelete
+}: {
+  state: BeatModalState | null;
+  bookId: string;
+  plan: BookPlan;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (input: BeatSaveInput) => void;
+  onDelete: (item: SelectedPlanItem) => void;
+}) {
+  const beat =
+    state?.mode === "edit"
+      ? plan.beats.find((candidate) => candidate.id === state.beatId)
+      : undefined;
+
+  useEffect(() => {
+    if (!state) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [state, onClose]);
+
+  if (!state) {
+    return null;
+  }
+
+  const modalTitle = state.mode === "edit" && beat ? beat.name : "Nowy beat";
+  const modal = (
+    <div
+      className="chapter-edit-modal beat-edit-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="beat-edit-title"
+    >
+      <button
+        type="button"
+        className="chapter-edit-backdrop"
+        onClick={onClose}
+        aria-label="Zamknij edycję beatu"
+      />
+      <div className="chapter-edit-shell beat-edit-shell">
+        <header className="chapter-edit-header">
+          <div>
+            <p className="eyebrow">Edycja beatu</p>
+            <h3 id="beat-edit-title">{modalTitle}</h3>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Zamknij edycję beatu"
+            title="Zamknij edycję beatu"
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <div className="chapter-edit-body">
+          <BeatForm
+            bookId={bookId}
+            beat={beat}
+            plan={plan}
+            saving={saving}
+            orderIndex={plan.beats.length}
+            initialChapterId={state.mode === "create" ? state.chapterId : undefined}
+            onCancel={onClose}
+            onSave={onSave}
+            onDelete={beat ? () => onDelete({ type: "beat", id: beat.id }) : undefined}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (typeof document === "undefined") {
+    return modal;
+  }
+
+  return createPortal(modal, document.body);
 }
 
 function ThreadsStep({
@@ -1630,7 +2448,7 @@ function ThreadsStep({
             <div className="thread-view-summary">
               <span>{visibleThreads.length} widocznych</span>
               <span>{linkedChapterCount} powiązań z rozdziałami</span>
-              <span>{plan.beatThreads.length} powiązań z beatami</span>
+              <span>{plan.chapterBeats.length} powiązań z beatami</span>
             </div>
 
             {viewMode === "table" ? (
@@ -3748,6 +4566,21 @@ type ChapterLane = {
   rangeLabel: string;
   chapters: Chapter[];
 };
+type BeatDropTarget = {
+  chapterId: string | null;
+  beatId?: string;
+  position: "before" | "after" | "end";
+};
+type BeatPointerDrag = {
+  beatId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  isDragging: boolean;
+  dropTarget: BeatDropTarget | null;
+};
 type ChapterDropTarget = {
   actId: string | null;
   chapterId?: string;
@@ -3765,7 +4598,9 @@ type ChapterPointerDrag = {
 };
 
 const withoutActLaneId = "without-act";
+const withoutChapterBeatLaneId = "without-chapter";
 const chapterDragActivationDistance = 6;
+const beatDragActivationDistance = 6;
 
 function orderedChaptersForPlan(plan: BookPlan): Chapter[] {
   const originalIndex = new globalThis.Map(
@@ -3831,12 +4666,97 @@ function chapterDropTargetFromPoint(clientX: number, clientY: number): ChapterDr
   };
 }
 
+function beatDropTargetFromPoint(clientX: number, clientY: number): BeatDropTarget | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const element = document.elementFromPoint(clientX, clientY);
+  if (!element) {
+    return null;
+  }
+
+  const beatElement = element.closest<HTMLElement>("[data-beat-id]");
+  if (beatElement) {
+    const laneElement = beatElement.closest<HTMLElement>('[data-drop-zone="beat-lane"]');
+    const bounds = beatElement.getBoundingClientRect();
+    return {
+      chapterId: chapterIdFromBeatLaneElement(laneElement),
+      beatId: beatElement.dataset.beatId,
+      position: clientY < bounds.top + bounds.height / 2 ? "before" : "after"
+    };
+  }
+
+  const laneElement = element.closest<HTMLElement>('[data-drop-zone="beat-lane"]');
+  if (!laneElement) {
+    return null;
+  }
+
+  return {
+    chapterId: chapterIdFromBeatLaneElement(laneElement),
+    position: "end"
+  };
+}
+
 function actIdFromLaneElement(element: HTMLElement | null): string | null {
   if (!element || element.dataset.laneId === withoutActLaneId) {
     return null;
   }
 
   return element.dataset.actId || null;
+}
+
+function chapterIdFromBeatLaneElement(element: HTMLElement | null): string | null {
+  if (!element || element.dataset.laneId === withoutChapterBeatLaneId) {
+    return null;
+  }
+
+  return element.dataset.chapterId || null;
+}
+
+function beatOrderIndexAfterDrop(
+  plan: BookPlan,
+  lanes: BeatBoardLane[],
+  unassignedBeats: Beat[],
+  draggedBeatId: string,
+  target: BeatDropTarget
+): number {
+  const draggedBeat = plan.beats.find((beat) => beat.id === draggedBeatId);
+  if (!draggedBeat || target.beatId === draggedBeatId) {
+    return draggedBeat?.orderIndex ?? 0;
+  }
+
+  const laneKeys = [
+    ...lanes.map((lane) => lane.chapterId ?? ""),
+    withoutChapterBeatLaneId
+  ];
+  const laneMap = new globalThis.Map<string, Beat[]>(
+    lanes.map((lane) => [
+      lane.chapterId ?? "",
+      lane.beats.filter((beat) => beat.id !== draggedBeatId)
+    ])
+  );
+  laneMap.set(
+    withoutChapterBeatLaneId,
+    unassignedBeats.filter((beat) => beat.id !== draggedBeatId)
+  );
+
+  const targetKey = target.chapterId ?? withoutChapterBeatLaneId;
+  const targetBeats = laneMap.get(targetKey) ?? [];
+
+  if (!target.beatId || target.position === "end") {
+    targetBeats.push(draggedBeat);
+  } else {
+    const targetIndex = targetBeats.findIndex((beat) => beat.id === target.beatId);
+    const insertIndex =
+      targetIndex === -1 ? targetBeats.length : targetIndex + (target.position === "after" ? 1 : 0);
+    targetBeats.splice(insertIndex, 0, draggedBeat);
+  }
+
+  laneMap.set(targetKey, targetBeats);
+  const reordered = laneKeys.flatMap((key) => laneMap.get(key) ?? []);
+  const index = reordered.findIndex((beat) => beat.id === draggedBeatId);
+  return index === -1 ? draggedBeat.orderIndex : index;
 }
 
 function reorderedChaptersAfterDrop(
@@ -3970,62 +4890,63 @@ function chapterLanesForPlan(plan: BookPlan): ChapterLane[] {
   return lanes;
 }
 
+function beatChapterLanesForPlan(plan: BookPlan, beats: Beat[]): BeatBoardLane[] {
+  const beatIds = new Set(beats.map((beat) => beat.id));
+
+  return orderedChaptersForPlan(plan).map((chapter) => {
+    const act = plan.acts.find((item) => item.id === chapter.actId);
+    return {
+      id: chapter.id,
+      chapterId: chapter.id,
+      number: dynamicChapterNumber(plan, chapter.id),
+      name: chapter.workingTitle,
+      color: act?.color ?? "#3f8f6b",
+      summary: chapter.summary,
+      beats: beatsForChapter(plan, chapter).filter((beat) => beatIds.has(beat.id))
+    };
+  });
+}
+
+function chapterIdForBeat(plan: BookPlan, beatId: string): string | null {
+  return plan.chapterBeats.find((relation) => relation.beatId === beatId)?.chapterId ?? null;
+}
+
+function chapterForBeat(plan: BookPlan, beat: Beat): Chapter | null {
+  const chapterId = chapterIdForBeat(plan, beat.id);
+  return chapterId ? plan.chapters.find((chapter) => chapter.id === chapterId) ?? null : null;
+}
+
+function beatsWithoutChapter(plan: BookPlan, beats: Beat[]): Beat[] {
+  return beats.filter((beat) => !chapterIdForBeat(plan, beat.id));
+}
+
 function beatBoardLanesForPlan(plan: BookPlan, beats: Beat[]): BeatBoardLane[] {
-  const actIds = new Set(plan.acts.map((act) => act.id));
-  const lanes: BeatBoardLane[] = plan.acts.map((act) => ({
-    id: act.id,
-    actId: act.id,
-    name: act.name,
-    color: act.color,
-    rangeLabel: `${act.startPercent}-${act.endPercent}%`,
-    beats: beats.filter((beat) => beat.actId === act.id)
-  }));
-  const unassignedBeats = beats.filter((beat) => !beat.actId || !actIds.has(beat.actId));
-
-  if (unassignedBeats.length > 0 || lanes.length === 0) {
-    lanes.push({
-      id: "without-act",
-      actId: null,
-      name: "Bez aktu",
-      color: "#8a9791",
-      rangeLabel: "Poza aktami",
-      beats: unassignedBeats
-    });
-  }
-
-  return lanes;
+  return beatChapterLanesForPlan(plan, beats);
 }
 
 function beatThreadIdsForBeat(plan: BookPlan, beatId: string): string[] {
-  return plan.beatThreads
-    .filter((relation) => relation.beatId === beatId)
-    .map((relation) => relation.threadId);
+  return [];
 }
 
 function threadsForBeat(plan: BookPlan, beat: Beat): PlotThread[] {
-  const threadIds = new Set(beatThreadIdsForBeat(plan, beat.id));
-
-  return plan.threads.filter((thread) => threadIds.has(thread.id));
+  const chapter = chapterForBeat(plan, beat);
+  return chapter ? threadsForChapter(plan, chapter) : [];
 }
 
 function beatsForThread(plan: BookPlan, thread: PlotThread): Beat[] {
-  const beatIds = new Set(
-    plan.beatThreads
-      .filter((relation) => relation.threadId === thread.id)
-      .map((relation) => relation.beatId)
-  );
+  const beatIds = new Set<string>();
+
+  for (const chapter of chaptersForThread(plan, thread)) {
+    for (const beat of beatsForChapter(plan, chapter)) {
+      beatIds.add(beat.id);
+    }
+  }
 
   return plan.beats.filter((beat) => beatIds.has(beat.id));
 }
 
 function actsForThread(plan: BookPlan, thread: PlotThread): Act[] {
   const actIds = new Set<string>();
-
-  for (const beat of beatsForThread(plan, thread)) {
-    if (beat.actId) {
-      actIds.add(beat.actId);
-    }
-  }
 
   for (const chapter of chaptersForThread(plan, thread)) {
     if (chapter.actId) {
@@ -4182,13 +5103,19 @@ function selectedItemDetails(item: SelectedPlanItem | null, plan: BookPlan) {
 
   if (item.type === "beat") {
     const beat = plan.beats.find((candidate) => candidate.id === item.id);
+    const chapter = beat ? chapterForBeat(plan, beat) : null;
     return beat
       ? {
           title: beat.name,
           description: beat.description,
           meta: [
             { label: "Rola", value: beat.role || "Brak" },
-            { label: "Akt", value: plan.acts.find((act) => act.id === beat.actId)?.name ?? "Brak" }
+            {
+              label: "Rozdział",
+              value: chapter
+                ? `${dynamicChapterNumber(plan, chapter.id)}. ${chapter.workingTitle}`
+                : "Brak"
+            }
           ]
         }
       : null;
@@ -4248,7 +5175,6 @@ function emptyPlan(): BookPlan {
     threads: [],
     chapters: [],
     chapterThreads: [],
-    beatThreads: [],
     chapterBeats: []
   };
 }

@@ -12,6 +12,7 @@ import {
   browserGetBookPlan,
   browserGetProject,
   browserListProjects,
+  browserMoveBeatToChapter,
   browserReorderPlanItems,
   browserRunCodexPrompt,
   browserSaveStoryStructure,
@@ -40,6 +41,7 @@ import type {
   CreateProjectInput,
   GenerateBookCoverInput,
   GenerateNewProjectTitleRequest,
+  MoveBeatToChapterInput,
   PlotThread,
   ProjectDetails,
   ProjectSummary,
@@ -125,6 +127,14 @@ export function deleteBeat(id: string): Promise<void> {
   }
 
   return invoke("delete_beat", { id });
+}
+
+export function moveBeatToChapter(input: MoveBeatToChapterInput): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserMoveBeatToChapter(input);
+  }
+
+  return invoke("move_beat_to_chapter", { input });
 }
 
 export function upsertPlotThread(

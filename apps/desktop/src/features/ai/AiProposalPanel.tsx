@@ -9,6 +9,7 @@ import {
   generateBookCover,
   generateNewProjectTitle,
   getBookPlan,
+  moveBeatToChapter,
   runCodexPrompt,
   saveStoryStructure,
   upsertAct,
@@ -119,6 +120,7 @@ export function AiProposalPanel({
             saveStructure: saveStoryStructure,
             saveAct: upsertAct,
             saveBeat: upsertBeat,
+            moveBeatToChapter,
             saveThread: upsertPlotThread,
             saveChapter: upsertChapter
           }

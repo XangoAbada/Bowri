@@ -14,6 +14,7 @@ import type {
   CreateProjectInput,
   GenerateBookCoverInput,
   GenerateNewProjectTitleRequest,
+  MoveBeatToChapterInput,
   PlotThread,
   Project,
   ProjectDetails,
@@ -199,9 +200,6 @@ export async function browserDeleteAct(id: string): Promise<void> {
   const state = readState();
   for (const plan of Object.values(state.plans)) {
     plan.acts = plan.acts.filter((item) => item.id !== id);
-    plan.beats = plan.beats.map((item) =>
-      item.actId === id ? { ...item, actId: null } : item
-    );
     plan.chapters = plan.chapters.map((item) =>
       item.actId === id ? { ...item, actId: null } : item
     );
@@ -219,7 +217,6 @@ export async function browserUpsertBeat(input: UpsertBeatInput): Promise<Beat> {
   const beat: Beat = {
     id: existing?.id ?? input.id ?? createId(),
     bookId: input.bookId,
-    actId: input.actId ?? null,
     name: input.name,
     description: input.description,
     role: input.role,
@@ -229,23 +226,47 @@ export async function browserUpsertBeat(input: UpsertBeatInput): Promise<Beat> {
   };
 
   plan.beats = upsertById(plan.beats, beat);
-  plan.beatThreads = [
-    ...plan.beatThreads.filter((item) => item.beatId !== beat.id),
-    ...uniqueIds(input.threadIds).map((threadId) => ({
-      beatId: beat.id,
-      threadId
-    }))
-  ];
   touchBook(state, input.bookId, now);
   writeState(state);
   return beat;
+}
+
+export async function browserMoveBeatToChapter(
+  input: MoveBeatToChapterInput
+): Promise<void> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+  const beat = plan.beats.find((item) => item.id === input.beatId);
+
+  if (!beat) {
+    throw new Error("Nie znaleziono beatu.");
+  }
+
+  if (
+    input.chapterId &&
+    !plan.chapters.some((chapter) => chapter.id === input.chapterId)
+  ) {
+    throw new Error("Nie znaleziono rozdziału.");
+  }
+
+  plan.beats = plan.beats.map((item) =>
+    item.id === input.beatId
+      ? { ...item, orderIndex: input.orderIndex, updatedAt: now }
+      : item
+  );
+  plan.chapterBeats = [
+    ...plan.chapterBeats.filter((item) => item.beatId !== input.beatId),
+    ...(input.chapterId ? [{ chapterId: input.chapterId, beatId: input.beatId }] : [])
+  ];
+  touchBook(state, input.bookId, now);
+  writeState(state);
 }
 
 export async function browserDeleteBeat(id: string): Promise<void> {
   const state = readState();
   for (const plan of Object.values(state.plans)) {
     plan.beats = plan.beats.filter((item) => item.id !== id);
-    plan.beatThreads = plan.beatThreads.filter((item) => item.beatId !== id);
     plan.chapterBeats = plan.chapterBeats.filter((item) => item.beatId !== id);
   }
   writeState(state);
@@ -282,7 +303,6 @@ export async function browserDeletePlotThread(id: string): Promise<void> {
   const state = readState();
   for (const plan of Object.values(state.plans)) {
     plan.threads = plan.threads.filter((item) => item.id !== id);
-    plan.beatThreads = plan.beatThreads.filter((item) => item.threadId !== id);
     plan.chapterThreads = plan.chapterThreads.filter((item) => item.threadId !== id);
   }
   writeState(state);
@@ -321,9 +341,13 @@ export async function browserUpsertChapter(
       threadId
     }))
   ];
+  const beatIds = uniqueIds(input.beatIds);
+  const beatIdSet = new Set(beatIds);
   plan.chapterBeats = [
-    ...plan.chapterBeats.filter((item) => item.chapterId !== chapter.id),
-    ...uniqueIds(input.beatIds).map((beatId) => ({
+    ...plan.chapterBeats.filter(
+      (item) => item.chapterId !== chapter.id && !beatIdSet.has(item.beatId)
+    ),
+    ...beatIds.map((beatId) => ({
       chapterId: chapter.id,
       beatId
     }))
@@ -680,7 +704,6 @@ function normalizePlan(plan: Partial<BookPlan> | undefined): BookPlan {
     threads: Array.isArray(plan?.threads) ? plan.threads : [],
     chapters: Array.isArray(plan?.chapters) ? plan.chapters : [],
     chapterThreads: Array.isArray(plan?.chapterThreads) ? plan.chapterThreads : [],
-    beatThreads: Array.isArray(plan?.beatThreads) ? plan.beatThreads : [],
     chapterBeats: Array.isArray(plan?.chapterBeats) ? plan.chapterBeats : []
   };
 }

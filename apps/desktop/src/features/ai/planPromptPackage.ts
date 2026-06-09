@@ -76,7 +76,6 @@ export type PlanPromptPackage = {
       threads: PlotThread[];
       chapters: Chapter[];
       chapterThreads: BookPlan["chapterThreads"];
-      beatThreads: BookPlan["beatThreads"];
       chapterBeats: BookPlan["chapterBeats"];
     };
     generationMode: "generate" | "expand";
@@ -148,7 +147,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_beat_sheet",
     targetKind: "beat",
     userInstruction:
-      "Wygeneruj tylko beat sheet przypisany do aktow i watkow. Nie generuj struktury, aktow, watkow ani rozdzialow."
+      "Wygeneruj tylko beat sheet przypisany do istniejacych rozdzialow. Nie generuj struktury, aktow, watkow ani rozdzialow."
   },
   plotThreads: {
     key: "plotThreads",
@@ -261,7 +260,6 @@ export function buildPlanPromptPackage(
         threads: plan.threads,
         chapters: plan.chapters,
         chapterThreads: plan.chapterThreads,
-        beatThreads: plan.beatThreads,
         chapterBeats: plan.chapterBeats
       },
       generationMode,
@@ -432,9 +430,6 @@ function renderPlanContext(
     !contextControl || isContextKeyIncluded("chapters", contextControl)
       ? `Relacje rozdzialow z watkami: ${JSON.stringify(plan.chapterThreads)}`
       : "",
-    !contextControl || isContextKeyIncluded("beats", contextControl)
-      ? `Relacje beatow z watkami: ${JSON.stringify(plan.beatThreads)}`
-      : "",
     !contextControl || isContextKeyIncluded("chapters", contextControl)
       ? `Relacje rozdzialow z beatami: ${JSON.stringify(plan.chapterBeats)}`
       : ""
@@ -554,8 +549,7 @@ function planSuggestionSchema(field: PlanFieldKey): unknown {
           name: "string",
           description: "string",
           role: "string",
-          actNameOrId: "string",
-          threadNamesOrIds: ["string"]
+          chapterNameOrId: "string"
         }
       ]
     };

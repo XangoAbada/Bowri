@@ -2,6 +2,7 @@ import type {
   Beat,
   BookPlan,
   Chapter,
+  MoveBeatToChapterInput,
   SaveStoryStructureInput,
   UpsertActInput,
   UpsertBeatInput,
@@ -17,7 +18,8 @@ export type ApplyPlanContext = {
   plan: BookPlan;
   saveStructure: (input: SaveStoryStructureInput) => Promise<unknown>;
   saveAct: (input: UpsertActInput) => Promise<unknown>;
-  saveBeat: (input: UpsertBeatInput) => Promise<unknown>;
+  saveBeat: (input: UpsertBeatInput) => Promise<Beat>;
+  moveBeatToChapter: (input: MoveBeatToChapterInput) => Promise<unknown>;
   saveThread: (input: UpsertPlotThreadInput) => Promise<unknown>;
   saveChapter: (input: UpsertChapterInput) => Promise<unknown>;
 };
@@ -151,16 +153,26 @@ async function applyBeats(record: Record<string, unknown>, context: ApplyPlanCon
       continue;
     }
     const beat = item as Record<string, unknown>;
-    const actId = findByNameOrId(context.plan.acts, textValue(beat.actNameOrId))?.id ?? null;
-    await context.saveBeat({
+    const savedBeat = await context.saveBeat({
       bookId: context.bookId,
-      actId,
       name: textValue(beat.name) || `Beat ${index + 1}`,
       description: textValue(beat.description),
       role: textValue(beat.role),
-      threadIds: namesToIds(context.plan.threads, beat.threadNamesOrIds),
       orderIndex: context.plan.beats.length + index
     });
+    const chapterId =
+      findByNameOrId(context.plan.chapters, textValue(beat.chapterNameOrId))?.id ??
+      namesToIds(context.plan.chapters, beat.chapterNamesOrIds)[0] ??
+      null;
+
+    if (chapterId) {
+      await context.moveBeatToChapter({
+        bookId: context.bookId,
+        beatId: savedBeat.id,
+        chapterId,
+        orderIndex: savedBeat.orderIndex
+      });
+    }
   }
 }
 

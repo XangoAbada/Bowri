@@ -330,7 +330,6 @@ pub struct Act {
 pub struct Beat {
     pub id: String,
     pub book_id: String,
-    pub act_id: Option<String>,
     pub name: String,
     pub description: String,
     pub role: String,
@@ -380,13 +379,6 @@ pub struct ChapterThread {
 
 #[derive(Debug, Clone, Serialize, FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct BeatThread {
-    pub beat_id: String,
-    pub thread_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, FromRow)]
-#[serde(rename_all = "camelCase")]
 pub struct ChapterBeat {
     pub chapter_id: String,
     pub beat_id: String,
@@ -401,7 +393,6 @@ pub struct BookPlan {
     pub threads: Vec<PlotThread>,
     pub chapters: Vec<Chapter>,
     pub chapter_threads: Vec<ChapterThread>,
-    pub beat_threads: Vec<BeatThread>,
     pub chapter_beats: Vec<ChapterBeat>,
 }
 
@@ -435,12 +426,19 @@ pub struct UpsertActInput {
 pub struct UpsertBeatInput {
     pub id: Option<String>,
     pub book_id: String,
-    pub act_id: Option<String>,
     pub name: String,
     pub description: String,
     pub role: String,
     pub order_index: i64,
-    pub thread_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveBeatToChapterInput {
+    pub book_id: String,
+    pub beat_id: String,
+    pub chapter_id: Option<String>,
+    pub order_index: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -642,19 +640,6 @@ pub async fn get_book_plan_in_pool(pool: &SqlitePool, book_id: &str) -> Result<B
     .fetch_all(pool)
     .await?;
 
-    let beat_threads = sqlx::query_as::<_, BeatThread>(
-        r#"
-        SELECT bt.beat_id, bt.thread_id
-        FROM beat_threads bt
-        INNER JOIN beats b ON b.id = bt.beat_id
-        WHERE b.book_id = ?
-        ORDER BY b.order_index
-        "#,
-    )
-    .bind(book_id)
-    .fetch_all(pool)
-    .await?;
-
     let chapter_beats = sqlx::query_as::<_, ChapterBeat>(
         r#"
         SELECT cb.chapter_id, cb.beat_id
@@ -675,7 +660,6 @@ pub async fn get_book_plan_in_pool(pool: &SqlitePool, book_id: &str) -> Result<B
         threads,
         chapters,
         chapter_threads,
-        beat_threads,
         chapter_beats,
     })
 }
@@ -794,10 +778,9 @@ pub async fn upsert_beat_in_pool(
     sqlx::query(
         r#"
         INSERT INTO beats
-          (id, book_id, act_id, name, description, role, order_index, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, book_id, name, description, role, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
-          act_id = excluded.act_id,
           name = excluded.name,
           description = excluded.description,
           role = excluded.role,
@@ -807,7 +790,6 @@ pub async fn upsert_beat_in_pool(
     )
     .bind(&id)
     .bind(&input.book_id)
-    .bind(input.act_id)
     .bind(input.name)
     .bind(input.description)
     .bind(input.role)
@@ -817,18 +799,6 @@ pub async fn upsert_beat_in_pool(
     .execute(&mut *tx)
     .await?;
 
-    sqlx::query("DELETE FROM beat_threads WHERE beat_id = ?")
-        .bind(&id)
-        .execute(&mut *tx)
-        .await?;
-    for thread_id in unique_ids(input.thread_ids) {
-        sqlx::query("INSERT OR IGNORE INTO beat_threads (beat_id, thread_id) VALUES (?, ?)")
-            .bind(&id)
-            .bind(thread_id)
-            .execute(&mut *tx)
-            .await?;
-    }
-
     touch_project_for_book(&mut tx, &input.book_id, &now).await?;
     tx.commit().await?;
 
@@ -837,6 +807,60 @@ pub async fn upsert_beat_in_pool(
         .fetch_one(pool)
         .await
         .map_err(AppError::from)
+}
+
+pub async fn move_beat_to_chapter_in_pool(
+    pool: &SqlitePool,
+    input: MoveBeatToChapterInput,
+) -> Result<(), AppError> {
+    let now = Utc::now().to_rfc3339();
+    let mut tx = pool.begin().await?;
+
+    let beat_exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM beats WHERE id = ? AND book_id = ?")
+            .bind(&input.beat_id)
+            .bind(&input.book_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if beat_exists.0 == 0 {
+        return Err(AppError::Process("Nie znaleziono beatu.".into()));
+    }
+
+    if let Some(chapter_id) = &input.chapter_id {
+        let chapter_exists: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ?")
+                .bind(chapter_id)
+                .bind(&input.book_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        if chapter_exists.0 == 0 {
+            return Err(AppError::Process("Nie znaleziono rozdzialu.".into()));
+        }
+    }
+
+    sqlx::query("DELETE FROM chapter_beats WHERE beat_id = ?")
+        .bind(&input.beat_id)
+        .execute(&mut *tx)
+        .await?;
+
+    if let Some(chapter_id) = &input.chapter_id {
+        sqlx::query("INSERT OR IGNORE INTO chapter_beats (chapter_id, beat_id) VALUES (?, ?)")
+            .bind(chapter_id)
+            .bind(&input.beat_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::query("UPDATE beats SET order_index = ?, updated_at = ? WHERE id = ?")
+        .bind(input.order_index)
+        .bind(&now)
+        .bind(&input.beat_id)
+        .execute(&mut *tx)
+        .await?;
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 pub async fn upsert_plot_thread_in_pool(
@@ -949,7 +973,14 @@ pub async fn upsert_chapter_in_pool(
         .bind(&id)
         .execute(&mut *tx)
         .await?;
-    for beat_id in unique_ids(input.beat_ids) {
+    let beat_ids = unique_ids(input.beat_ids);
+    for beat_id in &beat_ids {
+        sqlx::query("DELETE FROM chapter_beats WHERE beat_id = ?")
+            .bind(beat_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    for beat_id in beat_ids {
         sqlx::query("INSERT OR IGNORE INTO chapter_beats (chapter_id, beat_id) VALUES (?, ?)")
             .bind(&id)
             .bind(beat_id)
@@ -1466,6 +1497,16 @@ async fn upsert_beat(state: State<'_, AppState>, input: UpsertBeatInput) -> Resu
 #[tauri::command]
 async fn delete_beat(state: State<'_, AppState>, id: String) -> Result<(), String> {
     delete_beat_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn move_beat_to_chapter(
+    state: State<'_, AppState>,
+    input: MoveBeatToChapterInput,
+) -> Result<(), String> {
+    move_beat_to_chapter_in_pool(&state.db, input)
         .await
         .map_err(command_error)
 }
@@ -2653,6 +2694,7 @@ pub fn run() {
             delete_act,
             upsert_beat,
             delete_beat,
+            move_beat_to_chapter,
             upsert_plot_thread,
             delete_plot_thread,
             upsert_chapter,
@@ -2714,7 +2756,6 @@ mod tests {
                 'plot_threads',
                 'chapters',
                 'chapter_threads',
-                'beat_threads',
                 'chapter_beats'
               )
             "#,
@@ -2723,7 +2764,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(table_count.0, 8);
+        assert_eq!(table_count.0, 7);
     }
 
     #[tokio::test]
@@ -2902,12 +2943,10 @@ mod tests {
             UpsertBeatInput {
                 id: None,
                 book_id: created.book.id.clone(),
-                act_id: Some(act.id.clone()),
                 name: "Incydent".into(),
                 description: "Bohater zostaje wezwany".into(),
                 role: "inciting_incident".into(),
                 order_index: 0,
-                thread_ids: vec![thread.id.clone()],
             },
         )
         .await
@@ -2940,8 +2979,109 @@ mod tests {
         assert_eq!(plan.threads[0].id, thread.id);
         assert_eq!(plan.chapters[0].id, chapter.id);
         assert_eq!(plan.chapter_threads[0].thread_id, thread.id);
-        assert_eq!(plan.beat_threads[0].thread_id, thread.id);
         assert_eq!(plan.chapter_beats[0].beat_id, beat.id);
+    }
+
+    #[tokio::test]
+    async fn moving_beat_to_chapter_replaces_previous_assignment() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Przenoszenie beatow".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        let beat = upsert_beat_in_pool(
+            &pool,
+            UpsertBeatInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                name: "Beat".into(),
+                description: "".into(),
+                role: "".into(),
+                order_index: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let first_chapter = upsert_chapter_in_pool(
+            &pool,
+            UpsertChapterInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                act_id: None,
+                number: 1,
+                working_title: "Pierwszy".into(),
+                summary: "".into(),
+                purpose: "".into(),
+                conflict: "".into(),
+                turning_point: "".into(),
+                target_word_count: None,
+                order_index: 0,
+                thread_ids: vec![],
+                beat_ids: vec![beat.id.clone()],
+            },
+        )
+        .await
+        .unwrap();
+        let second_chapter = upsert_chapter_in_pool(
+            &pool,
+            UpsertChapterInput {
+                id: None,
+                book_id: created.book.id.clone(),
+                act_id: None,
+                number: 2,
+                working_title: "Drugi".into(),
+                summary: "".into(),
+                purpose: "".into(),
+                conflict: "".into(),
+                turning_point: "".into(),
+                target_word_count: None,
+                order_index: 1,
+                thread_ids: vec![],
+                beat_ids: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+        move_beat_to_chapter_in_pool(
+            &pool,
+            MoveBeatToChapterInput {
+                book_id: created.book.id.clone(),
+                beat_id: beat.id.clone(),
+                chapter_id: Some(second_chapter.id.clone()),
+                order_index: 7,
+            },
+        )
+        .await
+        .unwrap();
+
+        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        assert_eq!(plan.beats[0].order_index, 7);
+        assert_eq!(plan.chapter_beats.len(), 1);
+        assert_eq!(plan.chapter_beats[0].beat_id, beat.id);
+        assert_eq!(plan.chapter_beats[0].chapter_id, second_chapter.id);
+        assert_ne!(plan.chapter_beats[0].chapter_id, first_chapter.id);
+
+        move_beat_to_chapter_in_pool(
+            &pool,
+            MoveBeatToChapterInput {
+                book_id: created.book.id.clone(),
+                beat_id: beat.id.clone(),
+                chapter_id: None,
+                order_index: 8,
+            },
+        )
+        .await
+        .unwrap();
+
+        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        assert!(plan.chapter_beats.is_empty());
+        assert_eq!(plan.beats[0].order_index, 8);
     }
 
     #[tokio::test]
@@ -2975,12 +3115,10 @@ mod tests {
             UpsertBeatInput {
                 id: None,
                 book_id: created.book.id.clone(),
-                act_id: None,
                 name: "Beat".into(),
                 description: "".into(),
                 role: "".into(),
                 order_index: 0,
-                thread_ids: vec![thread.id.clone()],
             },
         )
         .await
@@ -3021,13 +3159,6 @@ mod tests {
         assert_eq!(chapter_beat_count.0, 0);
 
         delete_beat_in_pool(&pool, &beat.id).await.unwrap();
-        let beat_thread_count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM beat_threads")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        assert_eq!(beat_thread_count.0, 0);
-
         delete_plot_thread_in_pool(&pool, &thread.id).await.unwrap();
         let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
         assert!(plan.threads.is_empty());

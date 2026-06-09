@@ -85,7 +85,6 @@ export type Act = {
 export type Beat = {
   id: string;
   bookId: string;
-  actId: string | null;
   name: string;
   description: string;
   role: string;
@@ -127,11 +126,6 @@ export type ChapterThread = {
   threadId: string;
 };
 
-export type BeatThread = {
-  beatId: string;
-  threadId: string;
-};
-
 export type ChapterBeat = {
   chapterId: string;
   beatId: string;
@@ -144,7 +138,6 @@ export type BookPlan = {
   threads: PlotThread[];
   chapters: Chapter[];
   chapterThreads: ChapterThread[];
-  beatThreads: BeatThread[];
   chapterBeats: ChapterBeat[];
 };
 
@@ -172,12 +165,17 @@ export type UpsertActInput = {
 export type UpsertBeatInput = {
   id?: string;
   bookId: string;
-  actId?: string | null;
   name: string;
   description: string;
   role: string;
   orderIndex: number;
-  threadIds: string[];
+};
+
+export type MoveBeatToChapterInput = {
+  bookId: string;
+  beatId: string;
+  chapterId: string | null;
+  orderIndex: number;
 };
 
 export type UpsertPlotThreadInput = {
