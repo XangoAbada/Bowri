@@ -10,6 +10,7 @@ import {
   FileText,
   Flag,
   GitBranch,
+  GripVertical,
   Hash,
   LayoutList,
   Link2,
@@ -27,7 +28,7 @@ import {
   X
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { FormEvent, MouseEvent, PointerEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAct,
@@ -74,7 +75,7 @@ type BookPlanPageProps = {
   projectId: string;
 };
 
-type PlanStep = "structure" | "acts" | "beats" | "threads" | "chapters";
+type PlanStep = "structure" | "acts" | "chapters" | "beats" | "threads";
 type PlanMode = "wizard" | "preview";
 type SelectedPlanItem =
   | { type: "structure"; id: string }
@@ -101,9 +102,9 @@ type BeatBoardLane = {
 const planSteps: Array<{ key: PlanStep; label: string; icon: typeof Map }> = [
   { key: "structure", label: "Struktura", icon: Map },
   { key: "acts", label: "Akty", icon: Flag },
+  { key: "chapters", label: "Rozdziały", icon: FileText },
   { key: "beats", label: "Beaty", icon: Target },
-  { key: "threads", label: "Wątki", icon: GitBranch },
-  { key: "chapters", label: "Rozdziały", icon: FileText }
+  { key: "threads", label: "Wątki", icon: GitBranch }
 ];
 
 const actColors = ["#3f8f6b", "#4f8fd9", "#8b5cf6", "#f59e42", "#d94f8f"];
@@ -401,6 +402,18 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     },
     onError: showError
   });
+  const chapterReorderMutation = useMutation({
+    mutationFn: async (inputs: UpsertChapterInput[]) => {
+      for (const input of inputs) {
+        await upsertChapter(input);
+      }
+    },
+    onSuccess: async () => {
+      setMessage("Zapisano kolejność rozdziałów.");
+      await invalidatePlan();
+    },
+    onError: showError
+  });
   const deleteMutation = useMutation({
     mutationFn: async (item: SelectedPlanItem) => {
       if (item.type === "act") {
@@ -547,6 +560,17 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onGenerate={queuePlanGeneration}
         onActivatePrompt={activatePlanPromptContext}
       />
+    ) : activeStep === "chapters" ? (
+      <ChaptersStep
+        bookId={bookId}
+        plan={plan}
+        saving={chapterMutation.isPending || chapterReorderMutation.isPending}
+        onOpenChapter={openChapterModal}
+        onCreateChapter={openNewChapterModal}
+        onReorderChapters={(inputs) => chapterReorderMutation.mutate(inputs)}
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
+      />
     ) : activeStep === "beats" ? (
       <BeatsStep
         bookId={bookId}
@@ -558,7 +582,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onGenerate={queuePlanGeneration}
         onActivatePrompt={activatePlanPromptContext}
       />
-    ) : activeStep === "threads" ? (
+    ) : (
       <ThreadsStep
         bookId={bookId}
         plan={plan}
@@ -566,16 +590,6 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onSave={(input) => threadMutation.mutate(input)}
         onDelete={(item) => deleteMutation.mutate(item)}
         onSelect={setSelectedItem}
-        onGenerate={queuePlanGeneration}
-        onActivatePrompt={activatePlanPromptContext}
-      />
-    ) : (
-      <ChaptersStep
-        bookId={bookId}
-        plan={plan}
-        saving={chapterMutation.isPending}
-        onOpenChapter={openChapterModal}
-        onCreateChapter={openNewChapterModal}
         onGenerate={queuePlanGeneration}
         onActivatePrompt={activatePlanPromptContext}
       />
@@ -1279,7 +1293,7 @@ function BeatsStep({
                             Rozdz.:
                             {chapters.length > 0 ? (
                               chapters.map((chapter) => (
-                                <em key={chapter.id}>{chapter.number}</em>
+                                <em key={chapter.id}>{dynamicChapterNumber(plan, chapter.id)}</em>
                               ))
                             ) : (
                               <em>Brak</em>
@@ -1791,6 +1805,8 @@ function ThreadFlowMap({
     );
   }
 
+  const orderedChapters = orderedChaptersForPlan(plan);
+
   return (
     <section className="thread-map-card">
       <div className="thread-section-heading">
@@ -1817,18 +1833,18 @@ function ThreadFlowMap({
         <div
           className="thread-map-axis"
           style={{
-            gridTemplateColumns: `minmax(150px, 180px) repeat(${plan.chapters.length}, minmax(48px, 1fr))`
+            gridTemplateColumns: `minmax(150px, 180px) repeat(${orderedChapters.length}, minmax(48px, 1fr))`
           }}
         >
           <span />
-          {plan.chapters.map((chapter) => (
+          {orderedChapters.map((chapter) => (
             <button
               type="button"
               key={chapter.id}
               title={chapter.workingTitle}
-              aria-label={`Rozdział ${chapter.number}: ${chapter.workingTitle}`}
+              aria-label={`Rozdział ${dynamicChapterNumber(plan, chapter.id)}: ${chapter.workingTitle}`}
             >
-              <strong>{chapter.number}</strong>
+              <strong>{dynamicChapterNumber(plan, chapter.id)}</strong>
               <small>{plan.acts.find((act) => act.id === chapter.actId)?.name ?? "Bez aktu"}</small>
             </button>
           ))}
@@ -1846,7 +1862,7 @@ function ThreadFlowMap({
                 selectedThreadId === thread.id ? "thread-map-track active" : "thread-map-track"
               }
               style={{
-                gridTemplateColumns: `minmax(150px, 180px) repeat(${plan.chapters.length}, minmax(48px, 1fr))`
+                gridTemplateColumns: `minmax(150px, 180px) repeat(${orderedChapters.length}, minmax(48px, 1fr))`
               }}
               key={thread.id}
             >
@@ -1855,7 +1871,7 @@ function ThreadFlowMap({
                 {thread.name}
               </button>
               <div className="thread-map-nodes">
-                {plan.chapters.map((chapter) => {
+                {orderedChapters.map((chapter) => {
                   const linked = linkedChapterIds.has(chapter.id);
 
                   return (
@@ -1865,8 +1881,8 @@ function ThreadFlowMap({
                       className={linked ? "linked" : ""}
                       style={linked ? { borderColor: thread.color, background: thread.color } : {}}
                       onClick={() => onSelect(thread)}
-                      title={`${thread.name}: rozdział ${chapter.number}`}
-                      aria-label={`${thread.name} w rozdziale ${chapter.number}`}
+                      title={`${thread.name}: rozdział ${dynamicChapterNumber(plan, chapter.id)}`}
+                      aria-label={`${thread.name} w rozdziale ${dynamicChapterNumber(plan, chapter.id)}`}
                     />
                   );
                 })}
@@ -1920,7 +1936,7 @@ function ThreadSummaryCard({
         </span>
         <span>
           <b>Rozdziały</b>
-          {chapterRangeLabel(chapters)}
+          {chapterRangeLabel(plan, chapters)}
         </span>
       </div>
       <div className="thread-progress-row">
@@ -1982,7 +1998,7 @@ function ThreadTable({
                 </td>
                 <td>{threadStatusLabel(thread.status)}</td>
                 <td>{beatsForThread(plan, thread).length}</td>
-                <td>{chapterRangeLabel(chaptersForThread(plan, thread))}</td>
+                <td>{chapterRangeLabel(plan, chaptersForThread(plan, thread))}</td>
                 <td>{coverage}%</td>
               </tr>
             );
@@ -2103,7 +2119,7 @@ function ThreadDetailsPanel({
           {chapters.length > 0 ? (
             chapters.map((chapter) => (
               <span key={chapter.id}>
-                {chapter.number}. {chapter.workingTitle}
+                {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
               </span>
             ))
           ) : (
@@ -2151,18 +2167,26 @@ function ThreadDetailsPanel({
 
 function ChaptersStep({
   plan,
+  saving,
   onOpenChapter,
   onCreateChapter,
+  onReorderChapters,
   onGenerate,
   onActivatePrompt
 }: StepProps & {
   onOpenChapter: (chapter: Chapter) => void;
   onCreateChapter: (actId?: string | null) => void;
+  onReorderChapters: (inputs: UpsertChapterInput[]) => void;
 }) {
   const chapterActRailRef = useRef<HTMLDivElement>(null);
   const chapterBoardRef = useRef<HTMLDivElement>(null);
+  const chapterDragRef = useRef<ChapterPointerDrag | null>(null);
+  const suppressChapterOpenRef = useRef(false);
+  const [chapterDrag, setChapterDrag] = useState<ChapterPointerDrag | null>(null);
   const lanes = chapterLanesForPlan(plan);
   const totalWords = plannedWordsForChapters(plan.chapters);
+  const draggedChapterId = chapterDrag?.chapterId ?? null;
+  const dropTarget = chapterDrag?.dropTarget ?? null;
 
   function scrollActRail(direction: -1 | 1) {
     const rail = chapterActRailRef.current;
@@ -2201,6 +2225,100 @@ function ChaptersStep({
       });
     }
   }
+
+  function handleChapterPointerDown(event: PointerEvent<HTMLElement>, chapterId: string) {
+    if (saving || event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const drag: ChapterPointerDrag = {
+      chapterId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      isDragging: false,
+      dropTarget: null
+    };
+    chapterDragRef.current = drag;
+    setChapterDrag(drag);
+  }
+
+  function handleChapterPointerMove(event: PointerEvent<HTMLElement>) {
+    const drag = chapterDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || saving) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    const isDragging = drag.isDragging || distance >= chapterDragActivationDistance;
+    const nextDrag: ChapterPointerDrag = {
+      ...drag,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      isDragging,
+      dropTarget: isDragging ? chapterDropTargetFromPoint(event.clientX, event.clientY) : null
+    };
+    chapterDragRef.current = nextDrag;
+    setChapterDrag(nextDrag);
+  }
+
+  function handleChapterPointerUp(event: PointerEvent<HTMLElement>) {
+    const drag = chapterDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (drag.isDragging && drag.dropTarget) {
+      const reordered = reorderedChaptersAfterDrop(plan, lanes, drag.chapterId, drag.dropTarget);
+
+      if (reordered.length > 0) {
+        onReorderChapters(
+          reordered.map((chapter, index) => chapterUpsertInputForPlan(plan, chapter, index))
+        );
+      }
+      suppressChapterOpenRef.current = true;
+    }
+
+    clearChapterDrag();
+  }
+
+  function handleChapterPointerCancel(event: PointerEvent<HTMLElement>) {
+    if (chapterDragRef.current?.pointerId === event.pointerId) {
+      clearChapterDrag();
+    }
+  }
+
+  function clearChapterDrag() {
+    chapterDragRef.current = null;
+    setChapterDrag(null);
+  }
+
+  useEffect(() => {
+    if (!chapterDrag) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        clearChapterDrag();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [chapterDrag]);
 
   return (
     <section className="chapter-board-workspace">
@@ -2285,7 +2403,17 @@ function ChaptersStep({
 
         <div ref={chapterBoardRef} className="chapter-act-columns">
           {lanes.map((lane) => (
-            <section className="chapter-act-column" key={lane.id}>
+            <section
+              className={
+                dropTarget?.actId === lane.actId
+                  ? "chapter-act-column drop-active"
+                  : "chapter-act-column"
+              }
+              key={lane.id}
+              data-act-id={lane.actId ?? ""}
+              data-drop-zone="chapter-lane"
+              data-lane-id={lane.id}
+            >
               <div className="chapter-act-column-header">
                 <div>
                   <span className="chapter-act-dot" style={{ background: lane.color }} />
@@ -2306,12 +2434,41 @@ function ChaptersStep({
                     <ChapterBoardCard
                       key={chapter.id}
                       chapter={chapter}
+                      number={dynamicChapterNumber(plan, chapter.id)}
                       plan={plan}
+                      dragging={draggedChapterId === chapter.id}
+                      dropPosition={
+                        dropTarget?.chapterId === chapter.id ? dropTarget.position : null
+                      }
+                      dragDisabled={saving}
+                      onPointerDown={(event) => handleChapterPointerDown(event, chapter.id)}
+                      onPointerMove={handleChapterPointerMove}
+                      onPointerUp={handleChapterPointerUp}
+                      onPointerCancel={handleChapterPointerCancel}
+                      onLostPointerCapture={() => clearChapterDrag()}
+                      onHandleClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
                       onOpen={() => onOpenChapter(chapter)}
+                      onSuppressOpen={() => {
+                        if (!suppressChapterOpenRef.current) {
+                          return false;
+                        }
+
+                        suppressChapterOpenRef.current = false;
+                        return true;
+                      }}
                     />
                   ))
                 ) : (
-                  <p className="muted-text chapter-empty-note">
+                  <p
+                    className={
+                      dropTarget?.actId === lane.actId
+                        ? "muted-text chapter-empty-note drop-active"
+                        : "muted-text chapter-empty-note"
+                    }
+                  >
                     Ten akt nie ma jeszcze rozdziałów.
                   </p>
                 )}
@@ -2334,25 +2491,82 @@ function ChaptersStep({
 
 function ChapterBoardCard({
   chapter,
+  number,
   plan,
+  dragging,
+  dropPosition,
+  dragDisabled,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onLostPointerCapture,
+  onHandleClick,
+  onSuppressOpen,
   onOpen
 }: {
   chapter: Chapter;
+  number: number;
   plan: BookPlan;
+  dragging: boolean;
+  dropPosition: ChapterDropTarget["position"] | null;
+  dragDisabled: boolean;
+  onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+  onPointerMove: (event: PointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLElement>) => void;
+  onPointerCancel: (event: PointerEvent<HTMLElement>) => void;
+  onLostPointerCapture: () => void;
+  onHandleClick: (event: MouseEvent<HTMLElement>) => void;
+  onSuppressOpen: () => boolean;
   onOpen: () => void;
 }) {
   const beats = beatsForChapter(plan, chapter);
   const threads = threadsForChapter(plan, chapter);
+  const className = [
+    "chapter-board-card",
+    dragging ? "dragging" : "",
+    dropPosition === "before" ? "drop-before" : "",
+    dropPosition === "after" ? "drop-after" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <button
-      type="button"
-      className="chapter-board-card"
-      onClick={onOpen}
+    <article
+      role="button"
+      tabIndex={0}
+      className={className}
+      data-chapter-id={chapter.id}
+      onClick={() => {
+        if (onSuppressOpen()) {
+          return;
+        }
+
+        onOpen();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
       aria-label={`Otwórz rozdział ${chapter.workingTitle}`}
     >
       <span className="chapter-card-topline">
-        <span className="chapter-number-badge">{chapter.number}</span>
+        <span className="chapter-number-badge">{number}</span>
+        <span
+          className="chapter-drag-handle"
+          aria-hidden="true"
+          data-drag-handle="chapter"
+          onClick={onHandleClick}
+          onPointerCancel={onPointerCancel}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onLostPointerCapture={onLostPointerCapture}
+        >
+          <GripVertical size={15} />
+        </span>
         <span>{formatWordCount(chapter.targetWordCount)}</span>
       </span>
       <strong>{chapter.workingTitle}</strong>
@@ -2384,7 +2598,7 @@ function ChapterBoardCard({
           <span className="chapter-chip muted">+{beats.length + threads.length - 4}</span>
         ) : null}
       </span>
-    </button>
+    </article>
   );
 }
 
@@ -2438,7 +2652,7 @@ function ChapterEditModal({
 
   const modalTitle =
     state.mode === "edit" && chapter
-      ? `Rozdział ${chapter.number}: ${chapter.workingTitle}`
+      ? `Rozdział ${dynamicChapterNumber(plan, chapter.id)}: ${chapter.workingTitle}`
       : "Nowy rozdział";
   const modal = (
     <div
@@ -2532,7 +2746,9 @@ function ChapterForm({
     .filter((item) => item.chapterId === chapter?.id)
     .map((item) => item.beatId);
   const defaultActId = defaultChapterActId(initialActId, plan);
-  const [number, setNumber] = useState(chapter?.number ?? orderIndex + 1);
+  const dynamicNumber = chapter
+    ? dynamicChapterNumber(plan, chapter.id)
+    : orderedChaptersForPlan(plan).length + 1;
   const [workingTitle, setWorkingTitle] = useState(
     chapter?.workingTitle ?? `Rozdział ${orderIndex + 1}`
   );
@@ -2548,7 +2764,6 @@ function ChapterForm({
   const [beatIds, setBeatIds] = useState(chapterBeatIds);
 
   useEffect(() => {
-    setNumber(chapter?.number ?? orderIndex + 1);
     setWorkingTitle(chapter?.workingTitle ?? `Rozdział ${orderIndex + 1}`);
     setSummary(chapter?.summary ?? "");
     setPurpose(chapter?.purpose ?? "");
@@ -2559,7 +2774,6 @@ function ChapterForm({
     setThreadIds(chapterThreadIds);
     setBeatIds(chapterBeatIds);
   }, [
-    chapter?.number,
     chapter?.workingTitle,
     chapter?.summary,
     chapter?.purpose,
@@ -2580,7 +2794,7 @@ function ChapterForm({
       id: chapter?.id,
       bookId,
       actId: actId || null,
-      number,
+      number: dynamicNumber,
       workingTitle,
       summary,
       purpose,
@@ -2638,7 +2852,7 @@ function ChapterForm({
         <span className="chapter-edit-metric">
           <Hash size={16} />
           <span>Numer:</span>
-          <strong>{number || 1}</strong>
+          <strong>{dynamicNumber}</strong>
         </span>
         <span className="chapter-edit-metric">
           <Target size={16} />
@@ -2667,15 +2881,10 @@ function ChapterForm({
               <h4>Podstawy</h4>
             </div>
             <div className="chapter-basic-grid">
-              <label className="field-label">
+              <div className="field-label chapter-number-static">
                 Numer
-                <input
-                  type="number"
-                  min={1}
-                  value={number}
-                  onChange={(event) => setNumber(Number(event.target.value))}
-                />
-              </label>
+                <span>{dynamicNumber}</span>
+              </div>
               <label className="field-label">
                 Akt
                 <select value={actId} onChange={(event) => setActId(event.target.value)}>
@@ -3010,6 +3219,7 @@ function PlanPreview({
     (sum, chapter) => sum + (chapter.targetWordCount ?? 0),
     0
   );
+  const orderedChapters = orderedChaptersForPlan(plan);
 
   return (
     <div className="plan-preview-layout">
@@ -3066,7 +3276,7 @@ function PlanPreview({
                     onClick={() => onSelect({ type: "chapter", id: chapter.id })}
                     aria-label={`Otwórz rozdział ${chapter.workingTitle}`}
                   >
-                    <span>Rozdział {chapter.number}</span>
+                    <span>Rozdział {dynamicChapterNumber(plan, chapter.id)}</span>
                     <strong>{chapter.workingTitle}</strong>
                     <small>{chapter.targetWordCount ?? 0} słów</small>
                   </button>
@@ -3095,7 +3305,7 @@ function PlanPreview({
                 {thread.name}
               </button>
               <div className="thread-map-line">
-                {plan.chapters.map((chapter) => {
+                {orderedChapters.map((chapter) => {
                   const linked = plan.chapterThreads.some(
                     (item) => item.chapterId === chapter.id && item.threadId === thread.id
                   );
@@ -3105,7 +3315,7 @@ function PlanPreview({
                       key={chapter.id}
                       className={linked ? "thread-node linked" : "thread-node"}
                       onClick={() => onSelect({ type: "chapter", id: chapter.id })}
-                      aria-label={`${thread.name} w rozdziale ${chapter.number}`}
+                      aria-label={`${thread.name} w rozdziale ${dynamicChapterNumber(plan, chapter.id)}`}
                       title={chapter.workingTitle}
                     />
                   );
@@ -3289,6 +3499,179 @@ type ChapterLane = {
   rangeLabel: string;
   chapters: Chapter[];
 };
+type ChapterDropTarget = {
+  actId: string | null;
+  chapterId?: string;
+  position: "before" | "after" | "end";
+};
+type ChapterPointerDrag = {
+  chapterId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  isDragging: boolean;
+  dropTarget: ChapterDropTarget | null;
+};
+
+const withoutActLaneId = "without-act";
+const chapterDragActivationDistance = 6;
+
+function orderedChaptersForPlan(plan: BookPlan): Chapter[] {
+  const originalIndex = new globalThis.Map(
+    plan.chapters.map((chapter, index) => [chapter.id, index])
+  );
+
+  return [...plan.chapters].sort((left, right) => {
+    if (left.orderIndex !== right.orderIndex) {
+      return left.orderIndex - right.orderIndex;
+    }
+
+    if (left.number !== right.number) {
+      return left.number - right.number;
+    }
+
+    return (originalIndex.get(left.id) ?? 0) - (originalIndex.get(right.id) ?? 0);
+  });
+}
+
+function chapterNumberMap(plan: BookPlan): globalThis.Map<string, number> {
+  return new globalThis.Map(
+    orderedChaptersForPlan(plan).map((chapter, index) => [chapter.id, index + 1])
+  );
+}
+
+function dynamicChapterNumber(plan: BookPlan, chapterId: string): number {
+  return chapterNumberMap(plan).get(chapterId) ?? 1;
+}
+
+function chapterLaneKey(actId: string | null): string {
+  return actId ?? withoutActLaneId;
+}
+
+function chapterDropTargetFromPoint(clientX: number, clientY: number): ChapterDropTarget | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const element = document.elementFromPoint(clientX, clientY);
+  if (!element) {
+    return null;
+  }
+
+  const chapterElement = element.closest<HTMLElement>("[data-chapter-id]");
+  if (chapterElement) {
+    const laneElement = chapterElement.closest<HTMLElement>('[data-drop-zone="chapter-lane"]');
+    const bounds = chapterElement.getBoundingClientRect();
+    return {
+      actId: actIdFromLaneElement(laneElement),
+      chapterId: chapterElement.dataset.chapterId,
+      position: clientY < bounds.top + bounds.height / 2 ? "before" : "after"
+    };
+  }
+
+  const laneElement = element.closest<HTMLElement>('[data-drop-zone="chapter-lane"]');
+  if (!laneElement) {
+    return null;
+  }
+
+  return {
+    actId: actIdFromLaneElement(laneElement),
+    position: "end"
+  };
+}
+
+function actIdFromLaneElement(element: HTMLElement | null): string | null {
+  if (!element || element.dataset.laneId === withoutActLaneId) {
+    return null;
+  }
+
+  return element.dataset.actId || null;
+}
+
+function reorderedChaptersAfterDrop(
+  plan: BookPlan,
+  lanes: ChapterLane[],
+  draggedChapterId: string,
+  target: ChapterDropTarget
+): Chapter[] {
+  if (target.chapterId === draggedChapterId) {
+    return [];
+  }
+
+  const draggedChapter = plan.chapters.find((chapter) => chapter.id === draggedChapterId);
+  if (!draggedChapter) {
+    return [];
+  }
+
+  const laneKeys = lanes.map((lane) => chapterLaneKey(lane.actId));
+  const laneMap = new globalThis.Map(
+    lanes.map((lane) => [
+      chapterLaneKey(lane.actId),
+      lane.chapters.filter((chapter) => chapter.id !== draggedChapterId)
+    ])
+  );
+  const targetKey = chapterLaneKey(target.actId);
+
+  if (!laneMap.has(targetKey)) {
+    laneKeys.push(targetKey);
+    laneMap.set(targetKey, []);
+  }
+
+  const targetChapters = laneMap.get(targetKey) ?? [];
+  const movedChapter = { ...draggedChapter, actId: target.actId };
+
+  if (!target.chapterId || target.position === "end") {
+    targetChapters.push(movedChapter);
+  } else {
+    const targetIndex = targetChapters.findIndex((chapter) => chapter.id === target.chapterId);
+    const insertIndex =
+      targetIndex === -1 ? targetChapters.length : targetIndex + (target.position === "after" ? 1 : 0);
+    targetChapters.splice(insertIndex, 0, movedChapter);
+  }
+
+  laneMap.set(targetKey, targetChapters);
+
+  const reordered = laneKeys.flatMap((key) => laneMap.get(key) ?? []);
+  const previous = orderedChaptersForPlan(plan);
+  const changed =
+    reordered.length !== previous.length ||
+    reordered.some((chapter, index) => {
+      const previousChapter = previous[index];
+      return (
+        !previousChapter ||
+        previousChapter.id !== chapter.id ||
+        previousChapter.actId !== chapter.actId ||
+        previousChapter.orderIndex !== index ||
+        previousChapter.number !== index + 1
+      );
+    });
+
+  return changed ? reordered : [];
+}
+
+function chapterUpsertInputForPlan(
+  plan: BookPlan,
+  chapter: Chapter,
+  index: number
+): UpsertChapterInput {
+  return {
+    id: chapter.id,
+    bookId: chapter.bookId,
+    actId: chapter.actId,
+    number: index + 1,
+    workingTitle: chapter.workingTitle,
+    summary: chapter.summary,
+    purpose: chapter.purpose,
+    conflict: chapter.conflict,
+    turningPoint: chapter.turningPoint,
+    targetWordCount: chapter.targetWordCount,
+    orderIndex: index,
+    threadIds: chapterThreadIdsForChapter(plan, chapter.id),
+    beatIds: chapterBeatIdsForChapter(plan, chapter.id)
+  };
+}
 
 function chapterLanesForPlan(plan: BookPlan): ChapterLane[] {
   const lanes: ChapterLane[] = plan.acts.map((act) => ({
@@ -3302,17 +3685,15 @@ function chapterLanesForPlan(plan: BookPlan): ChapterLane[] {
   }));
   const unassigned = chaptersWithoutAct(plan);
 
-  if (unassigned.length > 0 || lanes.length === 0) {
-    lanes.push({
-      id: "without-act",
-      actId: null,
-      name: "Bez aktu",
-      color: "#8a9791",
-      purpose: "Rozdziały czekające na przypisanie do aktu.",
-      rangeLabel: "Poza aktami",
-      chapters: unassigned
-    });
-  }
+  lanes.push({
+    id: withoutActLaneId,
+    actId: null,
+    name: "Bez aktu",
+    color: "#8a9791",
+    purpose: "Rozdziały czekające na przypisanie do aktu.",
+    rangeLabel: "Poza aktami",
+    chapters: unassigned
+  });
 
   return lanes;
 }
@@ -3391,13 +3772,13 @@ function threadCoveragePercent(plan: BookPlan, thread: PlotThread): number {
   return Math.round((chaptersForThread(plan, thread).length / plan.chapters.length) * 100);
 }
 
-function chapterRangeLabel(chapters: Chapter[]): string {
+function chapterRangeLabel(plan: BookPlan, chapters: Chapter[]): string {
   if (chapters.length === 0) {
     return "Brak";
   }
 
   const numbers = chapters
-    .map((chapter) => chapter.number)
+    .map((chapter) => dynamicChapterNumber(plan, chapter.id))
     .sort((left, right) => left - right);
 
   if (numbers.length === 1) {
@@ -3438,7 +3819,7 @@ function chaptersForBeat(plan: BookPlan, beat: Beat): Chapter[] {
       .map((relation) => relation.chapterId)
   );
 
-  return plan.chapters.filter((chapter) => chapterIds.has(chapter.id));
+  return orderedChaptersForPlan(plan).filter((chapter) => chapterIds.has(chapter.id));
 }
 
 function plannedWordsForChapters(chapters: Chapter[]): number {
@@ -3469,11 +3850,7 @@ function beatsForChapter(plan: BookPlan, chapter: Chapter): Beat[] {
 }
 
 function threadsForChapter(plan: BookPlan, chapter: Chapter): PlotThread[] {
-  const threadIds = new Set(
-    plan.chapterThreads
-      .filter((relation) => relation.chapterId === chapter.id)
-      .map((relation) => relation.threadId)
-  );
+  const threadIds = new Set(chapterThreadIdsForChapter(plan, chapter.id));
 
   return plan.threads.filter((thread) => threadIds.has(thread.id));
 }
@@ -3485,7 +3862,19 @@ function chaptersForThread(plan: BookPlan, thread: PlotThread): Chapter[] {
       .map((relation) => relation.chapterId)
   );
 
-  return plan.chapters.filter((chapter) => chapterIds.has(chapter.id));
+  return orderedChaptersForPlan(plan).filter((chapter) => chapterIds.has(chapter.id));
+}
+
+function chapterThreadIdsForChapter(plan: BookPlan, chapterId: string): string[] {
+  return plan.chapterThreads
+    .filter((relation) => relation.chapterId === chapterId)
+    .map((relation) => relation.threadId);
+}
+
+function chapterBeatIdsForChapter(plan: BookPlan, chapterId: string): string[] {
+  return plan.chapterBeats
+    .filter((relation) => relation.chapterId === chapterId)
+    .map((relation) => relation.beatId);
 }
 
 function formatWordCount(value: number | null): string {
@@ -3557,7 +3946,7 @@ function selectedItemDetails(item: SelectedPlanItem | null, plan: BookPlan) {
     const chapter = plan.chapters.find((candidate) => candidate.id === item.id);
     return chapter
       ? {
-          title: `Rozdział ${chapter.number}: ${chapter.workingTitle}`,
+          title: `Rozdział ${dynamicChapterNumber(plan, chapter.id)}: ${chapter.workingTitle}`,
           description: chapter.summary || chapter.purpose,
           meta: [
             { label: "Akt", value: plan.acts.find((act) => act.id === chapter.actId)?.name ?? "Brak" },
@@ -3572,11 +3961,11 @@ function selectedItemDetails(item: SelectedPlanItem | null, plan: BookPlan) {
 }
 
 function chaptersForAct(plan: BookPlan, actId: string): Chapter[] {
-  return plan.chapters.filter((chapter) => chapter.actId === actId);
+  return orderedChaptersForPlan(plan).filter((chapter) => chapter.actId === actId);
 }
 
 function chaptersWithoutAct(plan: BookPlan): Chapter[] {
-  return plan.chapters.filter((chapter) => !chapter.actId);
+  return orderedChaptersForPlan(plan).filter((chapter) => !chapter.actId);
 }
 
 function emptyPlan(): BookPlan {

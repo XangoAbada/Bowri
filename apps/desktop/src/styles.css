@@ -2009,6 +2009,12 @@
   scroll-snap-align: start;
 }
 
+.chapter-act-column.drop-active {
+  border-color: rgba(47, 128, 103, 0.44);
+  background: #f3faf5;
+  box-shadow: inset 0 0 0 1px rgba(47, 128, 103, 0.1);
+}
+
 .chapter-act-column-header,
 .chapter-act-column-header > div,
 .chapter-act-column-stats,
@@ -2073,6 +2079,7 @@
 }
 
 .chapter-board-card {
+  position: relative;
   display: grid;
   gap: 9px;
   width: 100%;
@@ -2083,6 +2090,7 @@
   border-radius: 8px;
   background: #ffffff;
   color: var(--ink);
+  cursor: pointer;
   text-align: left;
   box-shadow: 0 10px 24px rgba(24, 35, 31, 0.04);
 }
@@ -2091,6 +2099,31 @@
 .chapter-board-card:focus-visible {
   border-color: rgba(47, 128, 103, 0.42);
   background: #fbfefc;
+}
+
+.chapter-board-card.dragging {
+  opacity: 0.55;
+  border-color: rgba(47, 128, 103, 0.5);
+  background: #f3faf5;
+}
+
+.chapter-board-card.drop-before::before,
+.chapter-board-card.drop-after::after {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--green);
+  content: "";
+}
+
+.chapter-board-card.drop-before::before {
+  top: -7px;
+}
+
+.chapter-board-card.drop-after::after {
+  bottom: -7px;
 }
 
 .chapter-card-topline {
@@ -2110,6 +2143,29 @@
   background: var(--green);
   color: #ffffff;
   font-size: 15px;
+}
+
+.chapter-drag-handle {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: auto;
+  border-radius: 7px;
+  color: #7a8982;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.chapter-board-card.dragging .chapter-drag-handle {
+  cursor: grabbing;
+}
+
+.chapter-board-card:hover .chapter-drag-handle,
+.chapter-board-card:focus-visible .chapter-drag-handle {
+  background: #edf5ef;
+  color: var(--green);
 }
 
 .chapter-board-card strong {
@@ -2190,6 +2246,12 @@
   border: 1px dashed rgba(39, 63, 50, 0.18);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.58);
+}
+
+.chapter-empty-note.drop-active {
+  border-color: rgba(47, 128, 103, 0.48);
+  background: #ffffff;
+  color: var(--green);
 }
 
 .chapter-column-add {
@@ -2385,6 +2447,18 @@
 
 .chapter-basic-grid .field-label:last-child {
   grid-column: 1 / 2;
+}
+
+.chapter-number-static span {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f6faf7;
+  color: var(--green);
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .chapter-edit-form textarea {
