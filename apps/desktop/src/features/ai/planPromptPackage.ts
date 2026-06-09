@@ -18,6 +18,9 @@ export type PlanFieldKey =
   | "actPurpose"
   | "actSummary"
   | "beatSheet"
+  | "beatName"
+  | "beatRole"
+  | "beatDescription"
   | "plotThreads"
   | "chapterPlan"
   | "chapterSummary"
@@ -47,6 +50,7 @@ export type PlanPromptPackage = {
     targetField: PlanFieldKey;
     targetEntityId?: string;
     targetEntityLabel?: string;
+    targetEntitySnapshot?: unknown;
     book: Pick<
       Book,
       | "workingTitle"
@@ -149,6 +153,30 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     userInstruction:
       "Wygeneruj tylko beat sheet przypisany do istniejacych rozdzialow. Nie generuj struktury, aktow, watkow ani rozdzialow."
   },
+  beatName: {
+    key: "beatName",
+    label: "Nazwa beatu",
+    action: "generate_beat_field",
+    targetKind: "beat",
+    userInstruction:
+      "Wygeneruj tylko wartosc pola nazwy wybranego beatu. Nie zmieniaj roli, opisu, przypisania ani innych elementow planu."
+  },
+  beatRole: {
+    key: "beatRole",
+    label: "Rola beatu",
+    action: "generate_beat_field",
+    targetKind: "beat",
+    userInstruction:
+      "Wygeneruj tylko wartosc pola roli wybranego beatu w strukturze historii. Nie zmieniaj nazwy, opisu, przypisania ani innych elementow planu."
+  },
+  beatDescription: {
+    key: "beatDescription",
+    label: "Opis beatu",
+    action: "generate_beat_field",
+    targetKind: "beat",
+    userInstruction:
+      "Wygeneruj tylko wartosc pola opisu wybranego beatu. Nie zmieniaj nazwy, roli, przypisania ani innych elementow planu."
+  },
   plotThreads: {
     key: "plotThreads",
     label: "Watki",
@@ -250,6 +278,7 @@ export function buildPlanPromptPackage(
           ? targetEntity.workingTitle
           : targetEntity.name
         : undefined,
+      ...(targetEntity ? { targetEntitySnapshot: targetEntity } : {}),
       book: bookPlanContext(book),
       plan: {
         structureType: plan.structure?.structureType ?? "",
@@ -318,6 +347,7 @@ ${renderPlanContext(promptPackage.context.plan, promptPackage.context.contextCon
 # Current Work
 Docelowe pole: ${promptPackage.context.targetField} (${config.label}).
 Docelowy element: ${promptPackage.context.targetEntityLabel ?? "(brak)"}
+Migawka docelowego elementu: ${JSON.stringify(promptPackage.context.targetEntitySnapshot ?? null)}
 ${modeInstruction}
 
 # Output Contract
@@ -457,6 +487,15 @@ function currentPlanFieldValue(
   }
   if (targetEntity && "summary" in targetEntity && field === "actSummary") {
     return targetEntity.summary ?? "";
+  }
+  if (targetEntity && "role" in targetEntity && field === "beatName") {
+    return targetEntity.name ?? "";
+  }
+  if (targetEntity && "role" in targetEntity && field === "beatRole") {
+    return targetEntity.role ?? "";
+  }
+  if (targetEntity && "role" in targetEntity && field === "beatDescription") {
+    return targetEntity.description ?? "";
   }
   if (targetEntity && "summary" in targetEntity && field === "chapterSummary") {
     return targetEntity.summary ?? "";

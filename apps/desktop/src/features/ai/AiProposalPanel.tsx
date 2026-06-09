@@ -31,6 +31,7 @@ import {
   longConceptFields
 } from "./promptPackage";
 import { planFieldConfigs, PlanFieldKey } from "./planPromptPackage";
+import { applyPlanDraftField } from "./planDraftFieldTargets";
 import { applyPlanProposalPayload } from "./planProposalApplication";
 import {
   ActiveAiProposal,
@@ -109,10 +110,32 @@ export function AiProposalPanel({
           "context" in proposal.promptPackageJson
             ? proposal.promptPackageJson.context
             : {};
+        const scopedPackageContext =
+          packageContext && typeof packageContext === "object"
+            ? (packageContext as Record<string, unknown>)
+            : {};
+        const planField = proposal.field as PlanFieldKey;
+
+        if (isBeatDraftField(planField) && isDraftAcceptance(scopedPackageContext)) {
+          const targetEntityId =
+            typeof scopedPackageContext.targetEntityId === "string"
+              ? scopedPackageContext.targetEntityId
+              : "";
+          const value = planPayloadTextValue(payload);
+          if (targetEntityId && applyPlanDraftField(targetEntityId, planField, value)) {
+            return null;
+          }
+
+          if (!targetEntityId || targetEntityId.startsWith("draft-beat:")) {
+            throw new Error(
+              "Nie ma juz otwartego formularza beatu dla tej propozycji AI."
+            );
+          }
+        }
 
         await applyPlanProposalPayload(
           payload,
-          proposal.field as PlanFieldKey,
+          planField,
           packageContext,
           {
             bookId: proposal.bookId,
@@ -781,7 +804,10 @@ function isPlanTextField(field: PlanFieldKey): boolean {
     "chapterSummary",
     "chapterPurpose",
     "chapterConflict",
-    "chapterTurningPoint"
+    "chapterTurningPoint",
+    "beatName",
+    "beatRole",
+    "beatDescription"
   ].includes(field);
 }
 
@@ -791,12 +817,35 @@ function isPlanAction(action: string): boolean {
     "generate_acts",
     "generate_act_field",
     "generate_beat_sheet",
+    "generate_beat_field",
     "generate_plot_threads",
     "generate_chapter_plan",
     "generate_chapter_field",
     "suggest_chapter_relations",
     "find_plan_gaps"
   ].includes(action);
+}
+
+function isBeatDraftField(field: PlanFieldKey): boolean {
+  return ["beatName", "beatRole", "beatDescription"].includes(field);
+}
+
+function planPayloadTextValue(payload: unknown): string {
+  const record =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+
+  return typeof record.value === "string" ? record.value : "";
+}
+
+function isDraftAcceptance(packageContext: Record<string, unknown>): boolean {
+  const snapshot = packageContext.targetEntitySnapshot;
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return false;
+  }
+
+  return (snapshot as Record<string, unknown>).draftAcceptance === true;
 }
 
 export function editableFieldsFromParsed(

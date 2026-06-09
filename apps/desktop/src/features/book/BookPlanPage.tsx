@@ -71,6 +71,10 @@ import {
   promptContextControlForActiveTarget,
   useAiPromptContextStore
 } from "../ai/aiPromptContextStore";
+import {
+  registerPlanDraftFieldTarget,
+  unregisterPlanDraftFieldTarget
+} from "../ai/planDraftFieldTargets";
 import { pendingProposalStatus, useProposalStore } from "../ai/proposalStore";
 
 type BookPlanPageProps = {
@@ -734,6 +738,8 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
             onSuccess: () => setBeatModal(null)
           })
         }
+        onGenerate={queuePlanGeneration}
+        onActivatePrompt={activatePlanPromptContext}
       />
     </section>
   );
@@ -2012,7 +2018,9 @@ function BeatForm({
   saving,
   onSave,
   onDelete,
-  onCancel
+  onCancel,
+  onGenerate,
+  onActivatePrompt
 }: {
   bookId: string;
   beat?: Beat;
@@ -2023,12 +2031,18 @@ function BeatForm({
   onSave: (input: BeatSaveInput) => void;
   onDelete?: () => void;
   onCancel?: () => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onActivatePrompt: (
+    field: PlanFieldKey,
+    targetEntity?: Act | Beat | PlotThread | Chapter
+  ) => void;
 }) {
   const assignedChapterId = beat ? chapterIdForBeat(plan, beat.id) : initialChapterId ?? null;
   const [name, setName] = useState(beat?.name ?? `Beat ${orderIndex + 1}`);
   const [description, setDescription] = useState(beat?.description ?? "");
   const [role, setRole] = useState(beat?.role ?? "");
   const [chapterId, setChapterId] = useState(assignedChapterId ?? "");
+  const targetId = beat?.id ?? `draft-beat:${bookId}:${initialChapterId ?? "unassigned"}`;
 
   useEffect(() => {
     setName(beat?.name ?? `Beat ${orderIndex + 1}`);
@@ -2036,6 +2050,50 @@ function BeatForm({
     setRole(beat?.role ?? "");
     setChapterId(assignedChapterId ?? "");
   }, [beat?.name, beat?.description, beat?.role, assignedChapterId, orderIndex]);
+
+  useEffect(() => {
+    registerPlanDraftFieldTarget(targetId, (field, value) => {
+      if (field === "beatName") {
+        setName(value);
+      }
+      if (field === "beatRole") {
+        setRole(value);
+      }
+      if (field === "beatDescription") {
+        setDescription(value);
+      }
+    });
+
+    return () => unregisterPlanDraftFieldTarget(targetId);
+  }, [targetId]);
+
+  const draftBeat = (): Beat & {
+    chapterId?: string | null;
+    draftAcceptance: true;
+  } => ({
+    id: targetId,
+    bookId,
+    name,
+    description,
+    role,
+    orderIndex: beat?.orderIndex ?? orderIndex,
+    createdAt: beat?.createdAt ?? "",
+    updatedAt: beat?.updatedAt ?? "",
+    chapterId: chapterId || null,
+    draftAcceptance: true
+  });
+
+  function generateBeatField(
+    field: Extract<PlanFieldKey, "beatName" | "beatRole" | "beatDescription">
+  ) {
+    onGenerate(field, draftBeat());
+  }
+
+  function activateBeatPrompt(
+    field: Extract<PlanFieldKey, "beatName" | "beatRole" | "beatDescription">
+  ) {
+    onActivatePrompt(field, draftBeat());
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -2099,22 +2157,31 @@ function BeatForm({
               <h4>Treść beatu</h4>
             </div>
             <div className="chapter-field-stack">
-              <label className="field-label">
-                Nazwa
-                <input value={name} onChange={(event) => setName(event.target.value)} />
-              </label>
-              <label className="field-label">
-                Rola
-                <input value={role} onChange={(event) => setRole(event.target.value)} />
-              </label>
-              <label className="field-label">
-                Opis
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  rows={6}
-                />
-              </label>
+              <BeatInlineField
+                label="Nazwa"
+                value={name}
+                field="beatName"
+                onChange={setName}
+                onGenerate={generateBeatField}
+                onActivatePrompt={activateBeatPrompt}
+              />
+              <BeatInlineField
+                label="Rola"
+                value={role}
+                field="beatRole"
+                onChange={setRole}
+                onGenerate={generateBeatField}
+                onActivatePrompt={activateBeatPrompt}
+              />
+              <BeatInlineField
+                label="Opis"
+                value={description}
+                field="beatDescription"
+                rows={6}
+                onChange={setDescription}
+                onGenerate={generateBeatField}
+                onActivatePrompt={activateBeatPrompt}
+              />
             </div>
           </section>
         </main>
@@ -2173,6 +2240,56 @@ function BeatForm({
   );
 }
 
+function BeatInlineField({
+  label,
+  value,
+  field,
+  rows,
+  onChange,
+  onGenerate,
+  onActivatePrompt
+}: {
+  label: string;
+  value: string;
+  field: Extract<PlanFieldKey, "beatName" | "beatRole" | "beatDescription">;
+  rows?: number;
+  onChange: (value: string) => void;
+  onGenerate: (
+    field: Extract<PlanFieldKey, "beatName" | "beatRole" | "beatDescription">
+  ) => void;
+  onActivatePrompt: (
+    field: Extract<PlanFieldKey, "beatName" | "beatRole" | "beatDescription">
+  ) => void;
+}) {
+  return (
+    <label className="field-label plan-inline-field">
+      <span className="plan-inline-label-row">
+        {label}
+        <PlanAiActions
+          field={field}
+          targetEntity={{} as Beat}
+          onGenerate={() => onGenerate(field)}
+          onActivatePrompt={() => onActivatePrompt(field)}
+        />
+      </span>
+      {rows ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => onActivatePrompt(field)}
+          rows={rows}
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => onActivatePrompt(field)}
+        />
+      )}
+    </label>
+  );
+}
+
 function BeatEditModal({
   state,
   bookId,
@@ -2180,7 +2297,9 @@ function BeatEditModal({
   saving,
   onClose,
   onSave,
-  onDelete
+  onDelete,
+  onGenerate,
+  onActivatePrompt
 }: {
   state: BeatModalState | null;
   bookId: string;
@@ -2189,6 +2308,11 @@ function BeatEditModal({
   onClose: () => void;
   onSave: (input: BeatSaveInput) => void;
   onDelete: (item: SelectedPlanItem) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onActivatePrompt: (
+    field: PlanFieldKey,
+    targetEntity?: Act | Beat | PlotThread | Chapter
+  ) => void;
 }) {
   const beat =
     state?.mode === "edit"
@@ -2255,6 +2379,8 @@ function BeatEditModal({
             onCancel={onClose}
             onSave={onSave}
             onDelete={beat ? () => onDelete({ type: "beat", id: beat.id }) : undefined}
+            onGenerate={onGenerate}
+            onActivatePrompt={onActivatePrompt}
           />
         </div>
       </div>
@@ -5193,6 +5319,9 @@ function isEntityField(field: PlanFieldKey): boolean {
   return [
     "actPurpose",
     "actSummary",
+    "beatName",
+    "beatRole",
+    "beatDescription",
     "chapterSummary",
     "chapterPurpose",
     "chapterConflict",

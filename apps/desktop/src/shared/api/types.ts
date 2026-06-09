@@ -268,6 +268,7 @@ export type AIAction =
   | "generate_acts"
   | "generate_act_field"
   | "generate_beat_sheet"
+  | "generate_beat_field"
   | "generate_plot_threads"
   | "generate_chapter_plan"
   | "generate_chapter_field"

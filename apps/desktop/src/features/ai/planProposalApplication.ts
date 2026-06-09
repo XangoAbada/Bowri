@@ -291,6 +291,19 @@ async function applySingleField(
     });
   }
 
+  const beat = context.plan.beats.find((item) => item.id === targetEntityId);
+  if (
+    beat &&
+    ["beatName", "beatRole", "beatDescription"].includes(targetField)
+  ) {
+    await context.saveBeat({
+      ...beat,
+      name: targetField === "beatName" ? value : beat.name,
+      role: targetField === "beatRole" ? value : beat.role,
+      description: targetField === "beatDescription" ? value : beat.description
+    });
+  }
+
   const chapter = context.plan.chapters.find((item) => item.id === targetEntityId);
   if (
     chapter &&

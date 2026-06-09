@@ -12,6 +12,13 @@
 - When changing the database schema or migration behavior, add a new migration instead of modifying a previously applied migration.
 - If a migration must be corrected immediately after creation, first verify it has not been applied; otherwise create a follow-up migration.
 
+## AI Field Controls
+
+- Every text input or textarea added to the app should include an AI generation button.
+- Each AI field generation must include the meaningful context fields for that generation target.
+- The `+` context button should let the author attach relevant fields to the active prompt context where the screen supports contextual AI prompts.
+- AI-generated text must go through the proposal/acceptance flow and must not be saved permanently without user confirmation.
+
 ## Commit Hygiene
 
 - Before committing, remove unnecessary generated log files from the project directory, especially root-level `*.log` files from Vite, Tauri, or local preview runs.
