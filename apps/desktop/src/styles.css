@@ -1261,7 +1261,7 @@
 
 .thread-content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
@@ -2585,6 +2585,10 @@
   min-height: 0;
   overflow: auto;
   padding: 18px 24px;
+}
+
+.thread-edit-content-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chapter-edit-main,

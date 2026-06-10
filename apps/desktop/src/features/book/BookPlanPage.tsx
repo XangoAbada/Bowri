@@ -2630,12 +2630,6 @@ function ThreadsStep({
           </div>
         </div>
 
-        <ThreadDetailsPanel
-          plan={plan}
-          thread={selectedThread}
-          onDelete={(thread) => onDelete({ type: "thread", id: thread.id })}
-          onEdit={(target) => setEditingThreadId(target)}
-        />
       </div>
       <ThreadEditModal
         state={editingThreadId}
@@ -2811,7 +2805,7 @@ function ThreadEditor({
 
   return (
     <form className="thread-editor-form chapter-edit-form" onSubmit={submit}>
-      <div className="chapter-edit-content-grid">
+      <div className="chapter-edit-content-grid thread-edit-content-grid">
         <main className="chapter-edit-main">
           <section className="chapter-edit-section">
             <div className="chapter-section-heading">
@@ -2849,10 +2843,8 @@ function ThreadEditor({
               </div>
             </div>
           </section>
-        </main>
 
-        <aside className="chapter-edit-sidebar" aria-label="Przebieg wątku w rozdziałach">
-          <section className="chapter-side-section">
+          <section className="chapter-edit-section thread-chapter-flow-section">
             <div className="chapter-side-heading">
               <FileText size={16} />
               <h4>Przebieg w rozdziałach</h4>
@@ -2915,7 +2907,7 @@ function ThreadEditor({
               )}
             </div>
           </section>
-        </aside>
+        </main>
       </div>
 
       {chapterPickerOpen && thread ? (
@@ -4680,11 +4672,13 @@ function PlanAiActions({
       <button
         type="button"
         className="icon-button ai-context-add-button"
+        onMouseDown={(event) => {
+          event.preventDefault();
+        }}
         onClick={(event) => {
           event.stopPropagation();
           addContextSourceToActiveTarget(planPromptContextSource(field));
         }}
-        onFocus={onActivatePrompt}
         disabled={!activeTarget || fieldAlreadyInContext}
         title="Dodaj pole planu do aktywnego kontekstu promptu."
         aria-label={`Dodaj ${planFieldConfigs[field].label} do kontekstu promptu`}
