@@ -79,6 +79,7 @@ export type AiProposalTarget = {
   field?: AiTaskFieldKey;
   action?: AIAction;
   scope?: AiProposalScope;
+  targetEntityId?: string;
 };
 
 type ProposalResult = Pick<
@@ -337,7 +338,8 @@ function findActiveDuplicate(
         bookId: snapshot.bookId,
         field: snapshot.field,
         action: snapshot.action,
-        scope: snapshot.scope ?? "bookConcept"
+        scope: snapshot.scope ?? "bookConcept",
+        targetEntityId: promptPackageTargetEntityId(snapshot.promptPackageJson)
       })
   );
 }
@@ -359,8 +361,32 @@ function proposalMatchesTarget(
     (target.bookId === undefined || proposal.bookId === target.bookId) &&
     (target.field === undefined || proposal.field === target.field) &&
     (target.action === undefined || proposal.action === target.action) &&
-    (target.scope === undefined || proposalScope === target.scope)
+    (target.scope === undefined || proposalScope === target.scope) &&
+    (target.targetEntityId === undefined ||
+      promptPackageTargetEntityId(proposal.promptPackageJson) === target.targetEntityId)
   );
+}
+
+function promptPackageTargetEntityId(
+  promptPackageJson: ActiveAiProposal["promptPackageJson"]
+): string | undefined {
+  if (
+    promptPackageJson &&
+    typeof promptPackageJson === "object" &&
+    "context" in promptPackageJson
+  ) {
+    const context = promptPackageJson.context;
+    if (
+      context &&
+      typeof context === "object" &&
+      "targetEntityId" in context &&
+      typeof context.targetEntityId === "string"
+    ) {
+      return context.targetEntityId;
+    }
+  }
+
+  return undefined;
 }
 
 function syncActive(

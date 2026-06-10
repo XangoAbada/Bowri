@@ -15,6 +15,7 @@ import {
   upsertAct,
   upsertBeat,
   upsertChapter,
+  upsertChapterThreadRelation,
   upsertPlotThread,
   updateBookConcept
 } from "../../shared/api/commands";
@@ -145,7 +146,8 @@ export function AiProposalPanel({
             saveBeat: upsertBeat,
             moveBeatToChapter,
             saveThread: upsertPlotThread,
-            saveChapter: upsertChapter
+            saveChapter: upsertChapter,
+            saveChapterThreadRelation: upsertChapterThreadRelation
           }
         );
         return null;
@@ -702,7 +704,7 @@ function useCoverGenerationProgressListener() {
 
 export function parseProposalResult(
   rawOutput: string,
-  expectedField: ConceptFieldKey,
+  expectedField: ConceptFieldKey | PlanFieldKey,
   action: string
 ): ParsedAiProposal {
   if (isPlanAction(action)) {
@@ -713,7 +715,7 @@ export function parseProposalResult(
     return parsePremiseDevelopment(rawOutput);
   }
 
-  return parseConceptFieldSuggestion(rawOutput, expectedField);
+  return parseConceptFieldSuggestion(rawOutput, expectedField as ConceptFieldKey);
 }
 
 function parsePlanSuggestion(
@@ -807,7 +809,9 @@ function isPlanTextField(field: PlanFieldKey): boolean {
     "chapterTurningPoint",
     "beatName",
     "beatRole",
-    "beatDescription"
+    "beatDescription",
+    "threadDescription",
+    "threadChapterDescription"
   ].includes(field);
 }
 
@@ -819,6 +823,7 @@ function isPlanAction(action: string): boolean {
     "generate_beat_sheet",
     "generate_beat_field",
     "generate_plot_threads",
+    "generate_thread_chapter_field",
     "generate_chapter_plan",
     "generate_chapter_field",
     "suggest_chapter_relations",

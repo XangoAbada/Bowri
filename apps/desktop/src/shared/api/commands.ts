@@ -16,6 +16,7 @@ import {
   browserReorderPlanItems,
   browserRunCodexPrompt,
   browserSaveStoryStructure,
+  browserUpsertChapterThreadRelation,
   browserUpsertAct,
   browserUpsertBeat,
   browserUpsertChapter,
@@ -52,6 +53,7 @@ import type {
   UpsertActInput,
   UpsertBeatInput,
   UpsertChapterInput,
+  UpsertChapterThreadInput,
   UpsertPlotThreadInput
 } from "./types";
 
@@ -161,6 +163,16 @@ export function upsertChapter(input: UpsertChapterInput): Promise<Chapter> {
   }
 
   return invoke("upsert_chapter", { input });
+}
+
+export function upsertChapterThreadRelation(
+  input: UpsertChapterThreadInput
+): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserUpsertChapterThreadRelation(input);
+  }
+
+  return invoke("upsert_chapter_thread_relation", { input });
 }
 
 export function deleteChapter(id: string): Promise<void> {

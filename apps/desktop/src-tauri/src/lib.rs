@@ -375,6 +375,7 @@ pub struct Chapter {
 pub struct ChapterThread {
     pub chapter_id: String,
     pub thread_id: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -469,6 +470,15 @@ pub struct UpsertChapterInput {
     pub order_index: i64,
     pub thread_ids: Vec<String>,
     pub beat_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertChapterThreadInput {
+    pub book_id: String,
+    pub chapter_id: String,
+    pub thread_id: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -629,7 +639,7 @@ pub async fn get_book_plan_in_pool(pool: &SqlitePool, book_id: &str) -> Result<B
 
     let chapter_threads = sqlx::query_as::<_, ChapterThread>(
         r#"
-        SELECT ct.chapter_id, ct.thread_id
+        SELECT ct.chapter_id, ct.thread_id, ct.description
         FROM chapter_threads ct
         INNER JOIN chapters c ON c.id = ct.chapter_id
         WHERE c.book_id = ?
@@ -957,16 +967,31 @@ pub async fn upsert_chapter_in_pool(
     .execute(&mut *tx)
     .await?;
 
+    let existing_thread_descriptions = sqlx::query_as::<_, (String, String)>(
+        "SELECT thread_id, description FROM chapter_threads WHERE chapter_id = ?",
+    )
+    .bind(&id)
+    .fetch_all(&mut *tx)
+    .await?;
+
     sqlx::query("DELETE FROM chapter_threads WHERE chapter_id = ?")
         .bind(&id)
         .execute(&mut *tx)
         .await?;
     for thread_id in unique_ids(input.thread_ids) {
-        sqlx::query("INSERT OR IGNORE INTO chapter_threads (chapter_id, thread_id) VALUES (?, ?)")
-            .bind(&id)
-            .bind(thread_id)
-            .execute(&mut *tx)
-            .await?;
+        let description = existing_thread_descriptions
+            .iter()
+            .find(|(existing_thread_id, _)| existing_thread_id == &thread_id)
+            .map(|(_, description)| description.as_str())
+            .unwrap_or("");
+        sqlx::query(
+            "INSERT OR IGNORE INTO chapter_threads (chapter_id, thread_id, description) VALUES (?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(thread_id)
+        .bind(description)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM chapter_beats WHERE chapter_id = ?")
@@ -996,6 +1021,52 @@ pub async fn upsert_chapter_in_pool(
         .fetch_one(pool)
         .await
         .map_err(AppError::from)
+}
+
+pub async fn upsert_chapter_thread_relation_in_pool(
+    pool: &SqlitePool,
+    input: UpsertChapterThreadInput,
+) -> Result<(), AppError> {
+    let now = Utc::now().to_rfc3339();
+    let mut tx = pool.begin().await?;
+
+    let chapter_exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ?")
+            .bind(&input.chapter_id)
+            .bind(&input.book_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if chapter_exists.0 == 0 {
+        return Err(AppError::Process("Nie znaleziono rozdzialu.".into()));
+    }
+
+    let thread_exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM plot_threads WHERE id = ? AND book_id = ?")
+            .bind(&input.thread_id)
+            .bind(&input.book_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if thread_exists.0 == 0 {
+        return Err(AppError::Process("Nie znaleziono watku.".into()));
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO chapter_threads (chapter_id, thread_id, description)
+        VALUES (?, ?, ?)
+        ON CONFLICT(chapter_id, thread_id) DO UPDATE SET
+          description = excluded.description
+        "#,
+    )
+    .bind(&input.chapter_id)
+    .bind(&input.thread_id)
+    .bind(input.description)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_for_book(&mut tx, &input.book_id, &now).await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 pub async fn delete_act_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
@@ -1534,6 +1605,16 @@ async fn upsert_chapter(
     input: UpsertChapterInput,
 ) -> Result<Chapter, String> {
     upsert_chapter_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_chapter_thread_relation(
+    state: State<'_, AppState>,
+    input: UpsertChapterThreadInput,
+) -> Result<(), String> {
+    upsert_chapter_thread_relation_in_pool(&state.db, input)
         .await
         .map_err(command_error)
 }
@@ -2698,6 +2779,7 @@ pub fn run() {
             upsert_plot_thread,
             delete_plot_thread,
             upsert_chapter,
+            upsert_chapter_thread_relation,
             delete_chapter,
             reorder_plan_items,
             list_ai_runs,

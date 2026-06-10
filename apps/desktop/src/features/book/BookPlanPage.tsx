@@ -42,6 +42,7 @@ import {
   upsertAct,
   upsertBeat,
   upsertChapter,
+  upsertChapterThreadRelation,
   upsertPlotThread
 } from "../../shared/api/commands";
 import type {
@@ -49,12 +50,14 @@ import type {
   Beat,
   BookPlan,
   Chapter,
+  ChapterThread,
   MoveBeatToChapterInput,
   PlotThread,
   SaveStoryStructureInput,
   UpsertActInput,
   UpsertBeatInput,
   UpsertChapterInput,
+  UpsertChapterThreadInput,
   UpsertPlotThreadInput
 } from "../../shared/api/types";
 import { useProjectNavigationStore } from "../../app/projectNavigationStore";
@@ -114,6 +117,7 @@ type BeatBoardLane = {
 type BeatSaveInput = UpsertBeatInput & {
   chapterId?: string | null;
 };
+type PlanPromptEntity = Act | Beat | PlotThread | Chapter | ChapterThread;
 
 const planSteps: Array<{ key: PlanStep; label: string; icon: typeof Map }> = [
   { key: "structure", label: "Struktura", icon: Map },
@@ -441,6 +445,14 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     },
     onError: showError
   });
+  const chapterThreadMutation = useMutation({
+    mutationFn: (input: UpsertChapterThreadInput) => upsertChapterThreadRelation(input),
+    onSuccess: async () => {
+      setMessage("Zapisano przebieg wątku w rozdziale.");
+      await invalidatePlan();
+    },
+    onError: showError
+  });
   const chapterReorderMutation = useMutation({
     mutationFn: async (inputs: UpsertChapterInput[]) => {
       for (const input of inputs) {
@@ -491,7 +503,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
 
   function queuePlanGeneration(
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) {
     setErrorMessage("");
     if (!projectQuery.data || !bookId) {
@@ -499,7 +511,11 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       return;
     }
 
-    const targetId = planPromptContextTargetId(projectId, field, targetEntity?.id);
+    const targetId = planPromptContextTargetId(
+      projectId,
+      field,
+      targetEntity ? planPromptEntityId(targetEntity) : undefined
+    );
     const contextControl = promptContextControlForActiveTarget(targetId);
     const usedPromptContext = Boolean(contextControl);
     const promptPackage = buildPlanPromptPackage(
@@ -530,9 +546,13 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
 
   function activatePlanPromptContext(
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) {
-    const targetId = planPromptContextTargetId(projectId, field, targetEntity?.id);
+    const targetId = planPromptContextTargetId(
+      projectId,
+      field,
+      targetEntity ? planPromptEntityId(targetEntity) : undefined
+    );
     const loading = pendingProposalStatus(proposals, {
       projectId,
       bookId,
@@ -541,7 +561,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     });
 
     activatePromptContextTarget(
-      createPlanPromptContextTarget(projectId, field, targetEntity?.id, {
+      createPlanPromptContextTarget(projectId, field, targetEntity ? planPromptEntityId(targetEntity) : undefined, {
         submitLabel: "Wyślij do AI",
         submitDisabled: Boolean(loading),
         submitDisabledReason: loading
@@ -638,8 +658,10 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       <ThreadsStep
         bookId={bookId}
         plan={plan}
-        saving={threadMutation.isPending}
+        saving={threadMutation.isPending || chapterMutation.isPending || chapterThreadMutation.isPending}
         onSave={(input) => threadMutation.mutate(input)}
+        onSaveChapter={(input) => chapterMutation.mutate(input)}
+        onSaveChapterThreadRelation={(input) => chapterThreadMutation.mutate(input)}
         onDelete={(item) => deleteMutation.mutate(item)}
         onSelect={setSelectedItem}
         onGenerate={queuePlanGeneration}
@@ -749,10 +771,10 @@ type StepProps = {
   bookId: string;
   plan: BookPlan;
   saving: boolean;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 };
 
@@ -1033,10 +1055,10 @@ function ActForm({
   onSave: (input: UpsertActInput) => void;
   onDelete?: () => void;
   onSelect?: () => void;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 }) {
   const [name, setName] = useState(act?.name ?? `Akt ${orderIndex + 1}`);
@@ -1166,25 +1188,18 @@ function LegacyBeatsStep({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [actFilter, setActFilter] = useState("all");
-  const [threadFilter, setThreadFilter] = useState("all");
   const [sortMode, setSortMode] = useState<BeatSortMode>("order");
   const [expandedBeatId, setExpandedBeatId] = useState<string | null>(null);
   const [addingBeat, setAddingBeat] = useState(false);
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase("pl-PL");
   const visibleBeats = plan.beats
     .filter((beat) => {
-      const threadIds = beatThreadIdsForBeat(plan, beat.id);
-      const threadNames = plan.threads
-        .filter((thread) => threadIds.includes(thread.id))
-        .map((thread) => thread.name)
-        .join(" ");
-      const searchable = `${beat.name} ${beat.description} ${beat.role} ${threadNames}`
+      const searchable = `${beat.name} ${beat.description} ${beat.role}`
         .toLocaleLowerCase("pl-PL");
       const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
       const matchesAct = true;
-      const matchesThread = true;
 
-      return matchesSearch && matchesAct && matchesThread;
+      return matchesSearch && matchesAct;
     })
     .sort((first, second) => {
       if (sortMode === "name") {
@@ -1237,18 +1252,6 @@ function LegacyBeatsStep({
             {plan.acts.map((act) => (
               <option value={act.id} key={act.id}>
                 {act.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={threadFilter}
-            onChange={(event) => setThreadFilter(event.target.value)}
-            aria-label="Filtruj beaty po wątku"
-          >
-            <option value="all">Wątek: Wszystkie</option>
-            {plan.threads.map((thread) => (
-              <option value={thread.id} key={thread.id}>
-                {thread.name}
               </option>
             ))}
           </select>
@@ -1417,26 +1420,22 @@ function LegacyBeatForm({
   onCancel?: () => void;
   formClassName?: string;
 }) {
-  const beatThreadIds: string[] = [];
   const [name, setName] = useState(beat?.name ?? `Beat ${orderIndex + 1}`);
   const [description, setDescription] = useState(beat?.description ?? "");
   const [role, setRole] = useState(beat?.role ?? "");
   const [actId, setActId] = useState("");
-  const [threadIds, setThreadIds] = useState(beatThreadIds);
 
   useEffect(() => {
     setName(beat?.name ?? `Beat ${orderIndex + 1}`);
     setDescription(beat?.description ?? "");
     setRole(beat?.role ?? "");
     setActId("");
-    setThreadIds(beatThreadIds);
   }, [
     beat?.name,
     beat?.description,
     beat?.role,
     beat?.id,
     plan.acts,
-    beatThreadIds.join("|"),
     orderIndex
   ]);
 
@@ -1494,12 +1493,6 @@ function LegacyBeatForm({
           rows={4}
         />
       </label>
-      <RelationPicker
-        label="Wątki"
-        items={plan.threads}
-        selectedIds={threadIds}
-        onChange={setThreadIds}
-      />
       <div className="beat-form-actions">
         <EntityActions saving={saving} onDelete={onDelete} />
         {onCancel ? (
@@ -2031,10 +2024,10 @@ function BeatForm({
   onSave: (input: BeatSaveInput) => void;
   onDelete?: () => void;
   onCancel?: () => void;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 }) {
   const assignedChapterId = beat ? chapterIdForBeat(plan, beat.id) : initialChapterId ?? null;
@@ -2128,7 +2121,7 @@ function BeatForm({
         </span>
         <span className="chapter-edit-metric">
           <FileText size={16} />
-          <span>Rozdział:</span>
+          <span>Rozdział</span>
           <strong>
             {selectedChapter
               ? `${dynamicChapterNumber(plan, selectedChapter.id)}. ${selectedChapter.workingTitle}`
@@ -2308,10 +2301,10 @@ function BeatEditModal({
   onClose: () => void;
   onSave: (input: BeatSaveInput) => void;
   onDelete: (item: SelectedPlanItem) => void;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 }) {
   const beat =
@@ -2399,12 +2392,16 @@ function ThreadsStep({
   plan,
   saving,
   onSave,
+  onSaveChapter,
+  onSaveChapterThreadRelation,
   onDelete,
   onSelect,
   onGenerate,
   onActivatePrompt
 }: StepProps & {
   onSave: (input: UpsertPlotThreadInput) => void;
+  onSaveChapter: (input: UpsertChapterInput) => void;
+  onSaveChapterThreadRelation: (input: UpsertChapterThreadInput) => void;
   onDelete: (item: SelectedPlanItem) => void;
   onSelect: (item: SelectedPlanItem) => void;
 }) {
@@ -2475,6 +2472,26 @@ function ThreadsStep({
     setEditingThreadId(null);
   }
 
+  function removeThreadFromChapter(thread: PlotThread, chapter: Chapter) {
+    onSaveChapter(
+      chapterUpsertInputWithRelations(
+        plan,
+        chapter,
+        chapterThreadIdsForChapter(plan, chapter.id).filter((threadId) => threadId !== thread.id),
+        chapterBeatIdsForChapter(plan, chapter.id)
+      )
+    );
+  }
+
+  function addThreadToChapter(thread: PlotThread, chapter: Chapter) {
+    onSaveChapterThreadRelation({
+      bookId,
+      threadId: thread.id,
+      chapterId: chapter.id,
+      description: chapterThreadRelation(plan, thread.id, chapter.id)?.description ?? ""
+    });
+  }
+
   return (
     <section className="thread-workspace-shell">
       <header className="thread-workspace-header">
@@ -2488,7 +2505,7 @@ function ThreadsStep({
           </div>
           <p>
             Zobacz przebieg wątków przez historię, ich pokrycie w rozdziałach i szybkie
-            powiązania z beatami.
+            przypięcia do rozdziałów.
           </p>
         </div>
         <div className="thread-header-actions">
@@ -2568,13 +2585,13 @@ function ThreadsStep({
             threads={visibleThreads}
             selectedThreadId={selectedThread?.id ?? null}
             onSelect={selectThread}
+            onAddRelation={addThreadToChapter}
           />
 
           <div className="thread-view-panel">
             <div className="thread-view-summary">
               <span>{visibleThreads.length} widocznych</span>
               <span>{linkedChapterCount} powiązań z rozdziałami</span>
-              <span>{plan.chapterBeats.length} powiązań z beatami</span>
             </div>
 
             {viewMode === "table" ? (
@@ -2597,6 +2614,8 @@ function ThreadsStep({
                       setSelectedThreadId(thread.id);
                       setEditingThreadId(thread.id);
                     }}
+                    onAddChapter={(chapter) => addThreadToChapter(thread, chapter)}
+                    onRemoveChapter={(chapter) => removeThreadFromChapter(thread, chapter)}
                   />
                 ))}
                 {visibleThreads.length === 0 ? (
@@ -2612,56 +2631,159 @@ function ThreadsStep({
         </div>
 
         <ThreadDetailsPanel
-          bookId={bookId}
           plan={plan}
           thread={selectedThread}
-          editingThreadId={editingThreadId}
-          orderIndex={plan.threads.length}
-          saving={saving}
-          onSave={finishEdit}
           onDelete={(thread) => onDelete({ type: "thread", id: thread.id })}
           onEdit={(target) => setEditingThreadId(target)}
-          onCancelEdit={() => setEditingThreadId(null)}
         />
       </div>
+      <ThreadEditModal
+        state={editingThreadId}
+        bookId={bookId}
+        plan={plan}
+        saving={saving}
+        onClose={() => setEditingThreadId(null)}
+        onSave={finishEdit}
+        onSaveChapter={onSaveChapter}
+        onSaveChapterThreadRelation={onSaveChapterThreadRelation}
+        onDelete={(thread) => onDelete({ type: "thread", id: thread.id })}
+        onGenerate={onGenerate}
+        onActivatePrompt={onActivatePrompt}
+      />
     </section>
   );
+}
+
+function ThreadEditModal({
+  state,
+  bookId,
+  plan,
+  saving,
+  onClose,
+  onSave,
+  onSaveChapter,
+  onSaveChapterThreadRelation,
+  onDelete,
+  onGenerate,
+  onActivatePrompt
+}: {
+  state: ThreadEditTarget;
+  bookId: string;
+  plan: BookPlan;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (input: UpsertPlotThreadInput) => void;
+  onSaveChapter: (input: UpsertChapterInput) => void;
+  onSaveChapterThreadRelation: (input: UpsertChapterThreadInput) => void;
+  onDelete: (thread: PlotThread) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
+  onActivatePrompt: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
+}) {
+  if (!state) {
+    return null;
+  }
+
+  const thread = state === "new" ? undefined : plan.threads.find((item) => item.id === state);
+  if (state !== "new" && !thread) {
+    return null;
+  }
+
+  const modalTitle = thread ? thread.name : "Nowy wątek";
+  const modal = (
+    <div className="chapter-edit-modal" role="dialog" aria-modal="true" aria-labelledby="thread-edit-title">
+      <button
+        type="button"
+        className="chapter-edit-backdrop"
+        onClick={onClose}
+        aria-label="Zamknij edycję wątku"
+      />
+      <div className="chapter-edit-shell">
+        <header className="chapter-edit-header">
+          <div>
+            <p className="eyebrow">Edycja wątku</p>
+            <h3 id="thread-edit-title">{modalTitle}</h3>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Zamknij edycję wątku" title="Zamknij">
+            <X size={18} />
+          </button>
+        </header>
+        <div className="chapter-edit-body">
+          <ThreadEditor
+            bookId={bookId}
+            thread={thread}
+            plan={plan}
+            orderIndex={plan.threads.length}
+            saving={saving}
+            onSave={onSave}
+            onSaveChapter={onSaveChapter}
+            onSaveChapterThreadRelation={onSaveChapterThreadRelation}
+            onDelete={thread ? () => onDelete(thread) : undefined}
+            onCancel={onClose}
+            onGenerate={onGenerate}
+            onActivatePrompt={onActivatePrompt}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (typeof document === "undefined") {
+    return modal;
+  }
+
+  return createPortal(modal, document.body);
 }
 
 function ThreadEditor({
   bookId,
   thread,
+  plan,
   orderIndex = 0,
   saving,
   onSave,
+  onSaveChapter,
+  onSaveChapterThreadRelation,
   onDelete,
-  onCancel
+  onCancel,
+  onGenerate,
+  onActivatePrompt
 }: {
   bookId: string;
   thread?: PlotThread;
+  plan: BookPlan;
   orderIndex?: number;
   saving: boolean;
   onSave: (input: UpsertPlotThreadInput) => void;
+  onSaveChapter: (input: UpsertChapterInput) => void;
+  onSaveChapterThreadRelation: (input: UpsertChapterThreadInput) => void;
   onDelete?: () => void;
   onCancel?: () => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
+  onActivatePrompt: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
 }) {
   const [name, setName] = useState(thread?.name ?? `Wątek ${orderIndex + 1}`);
   const [description, setDescription] = useState(thread?.description ?? "");
   const [color, setColor] = useState(thread?.color ?? actColors[orderIndex % actColors.length]);
   const [status, setStatus] = useState(thread?.status ?? "planned");
+  const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
+  const [relationDescriptions, setRelationDescriptions] = useState<Record<string, string>>({});
+  const relations = thread ? chapterThreadRelationsForThread(plan, thread.id) : [];
+  const chapters = thread ? chaptersForThread(plan, thread) : [];
+  const availableChapters = thread
+    ? orderedChaptersForPlan(plan).filter(
+        (chapter) => !relations.some((relation) => relation.chapterId === chapter.id)
+      )
+    : [];
 
   useEffect(() => {
     setName(thread?.name ?? `Wątek ${orderIndex + 1}`);
     setDescription(thread?.description ?? "");
     setColor(thread?.color ?? actColors[orderIndex % actColors.length]);
     setStatus(thread?.status ?? "planned");
-  }, [
-    thread?.name,
-    thread?.description,
-    thread?.color,
-    thread?.status,
-    orderIndex
-  ]);
+    setRelationDescriptions(
+      Object.fromEntries(relations.map((relation) => [relation.chapterId, relation.description ?? ""]))
+    );
+  }, [thread?.id, thread?.name, thread?.description, thread?.color, thread?.status, orderIndex, relations.map((relation) => `${relation.chapterId}:${relation.description}`).join("|")]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -2674,66 +2796,184 @@ function ThreadEditor({
       status,
       orderIndex: thread?.orderIndex ?? orderIndex
     });
+
+    if (thread) {
+      for (const relation of relations) {
+        onSaveChapterThreadRelation({
+          bookId,
+          threadId: thread.id,
+          chapterId: relation.chapterId,
+          description: relationDescriptions[relation.chapterId] ?? ""
+        });
+      }
+    }
   }
 
   return (
-    <form className="thread-editor-form" onSubmit={submit}>
-      <div className="thread-editor-title">
-        <span style={{ background: color }} />
-        <strong>{thread ? "Edytuj wątek" : "Nowy wątek"}</strong>
+    <form className="thread-editor-form chapter-edit-form" onSubmit={submit}>
+      <div className="chapter-edit-content-grid">
+        <main className="chapter-edit-main">
+          <section className="chapter-edit-section">
+            <div className="chapter-section-heading">
+              <GitBranch size={17} />
+              <h4>Dane wątku</h4>
+            </div>
+            <div className="chapter-field-stack">
+              <label className="field-label">
+                Nazwa
+                <input value={name} onChange={(event) => setName(event.target.value)} />
+              </label>
+              <PlanInlineField
+                label="Opis"
+                value={description}
+                rows={4}
+                field="threadDescription"
+                entity={thread}
+                onChange={setDescription}
+                onGenerate={onGenerate}
+                onActivatePrompt={onActivatePrompt}
+              />
+              <div className="plan-form-row">
+                <label className="field-label">
+                  Status
+                  <select value={status} onChange={(event) => setStatus(event.target.value)}>
+                    <option value="planned">Planowany</option>
+                    <option value="active">Aktywny</option>
+                    <option value="resolved">Domknięty</option>
+                  </select>
+                </label>
+                <label className="field-label">
+                  Kolor
+                  <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
+                </label>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside className="chapter-edit-sidebar" aria-label="Przebieg wątku w rozdziałach">
+          <section className="chapter-side-section">
+            <div className="chapter-side-heading">
+              <FileText size={16} />
+              <h4>Przebieg w rozdziałach</h4>
+              {thread && availableChapters.length > 0 ? (
+                <button type="button" className="icon-button chapter-relation-add-button" onClick={() => setChapterPickerOpen(true)} title="Dodaj rozdział" aria-label="Dodaj rozdział">
+                  <Plus size={15} />
+                </button>
+              ) : null}
+            </div>
+            <div className="chapter-field-stack">
+              {thread && chapters.length > 0 ? (
+                chapters.map((chapter) => {
+                  const relation = chapterThreadRelation(plan, thread.id, chapter.id);
+                  if (!relation) {
+                    return null;
+                  }
+
+                  return (
+                    <div className="thread-detail-section" key={chapter.id}>
+                      <div className="chapter-side-heading">
+                        <h4>{dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}</h4>
+                        <button
+                          type="button"
+                          className="chapter-side-chip-remove"
+                          onClick={() =>
+                            onSaveChapter(
+                              chapterUpsertInputWithRelations(
+                                plan,
+                                chapter,
+                                chapterThreadIdsForChapter(plan, chapter.id).filter((threadId) => threadId !== thread.id),
+                                chapterBeatIdsForChapter(plan, chapter.id)
+                              )
+                            )
+                          }
+                          aria-label={`Odepnij rozdział ${chapter.workingTitle}`}
+                          title={`Odepnij rozdział ${chapter.workingTitle}`}
+                        >
+                          -
+                        </button>
+                      </div>
+                      <PlanInlineField
+                        label="Co dzieje się z wątkiem"
+                        value={relationDescriptions[chapter.id] ?? relation.description ?? ""}
+                        rows={3}
+                        field="threadChapterDescription"
+                        entity={relation}
+                        onChange={(value) =>
+                          setRelationDescriptions((current) => ({ ...current, [chapter.id]: value }))
+                        }
+                        onGenerate={onGenerate}
+                        onActivatePrompt={onActivatePrompt}
+                      />
+                    </div>
+                  );
+                })
+              ) : (
+                <span className="chapter-side-empty">
+                  {thread ? "Brak przypiętych rozdziałów" : "Zapisz wątek, aby przypiąć rozdziały."}
+                </span>
+              )}
+            </div>
+          </section>
+        </aside>
       </div>
-      <label className="field-label">
-        Nazwa
-        <input value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <label className="field-label">
-        Opis
-        <textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          rows={4}
+
+      {chapterPickerOpen && thread ? (
+        <ThreadChapterPickerModal
+          plan={plan}
+          thread={thread}
+          availableChapters={availableChapters}
+          onClose={() => setChapterPickerOpen(false)}
+          onAdd={(chapter) => {
+            onSaveChapterThreadRelation({
+              bookId,
+              threadId: thread.id,
+              chapterId: chapter.id,
+              description: ""
+            });
+            setChapterPickerOpen(false);
+          }}
         />
-      </label>
-      <div className="plan-form-row">
-        <label className="field-label">
-          Status
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="planned">Planowany</option>
-            <option value="active">Aktywny</option>
-            <option value="resolved">Domknięty</option>
-          </select>
-        </label>
-        <label className="field-label">
-          Kolor
-          <input
-            type="color"
-            value={color}
-            onChange={(event) => setColor(event.target.value)}
-          />
-        </label>
-      </div>
-      <div className="thread-editor-actions">
-        <EntityActions saving={saving} onDelete={onDelete} />
-        {onCancel ? (
-          <button type="button" className="ghost-button" onClick={onCancel}>
-            Zamknij
+      ) : null}
+
+      <footer className="chapter-edit-footer">
+        <div className="chapter-footer-status">
+          <CheckCircle2 size={16} />
+          <span>{thread ? `${relations.length} przypięć do rozdziałów` : "Nowy wątek"}</span>
+        </div>
+        <div className="chapter-footer-actions">
+          {onDelete ? (
+            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete}>
+              <Trash2 size={16} />
+              Usuń
+            </button>
+          ) : null}
+          {onCancel ? (
+            <button type="button" className="ghost-button" onClick={onCancel}>
+              Anuluj
+            </button>
+          ) : null}
+          <button type="submit" className="primary-button" disabled={saving}>
+            <Save size={16} />
+            {saving ? "Zapisuję" : "Zapisz zmiany"}
           </button>
-        ) : null}
-      </div>
+        </div>
+      </footer>
     </form>
   );
 }
-
 function ThreadFlowMap({
   plan,
   threads,
   selectedThreadId,
-  onSelect
+  onSelect,
+  onAddRelation
 }: {
   plan: BookPlan;
   threads: PlotThread[];
   selectedThreadId: string | null;
   onSelect: (thread: PlotThread) => void;
+  onAddRelation: (thread: PlotThread, chapter: Chapter) => void;
 }) {
   if (plan.chapters.length === 0) {
     return (
@@ -2761,19 +3001,6 @@ function ThreadFlowMap({
           <h4>Przebieg przez rozdziały</h4>
         </div>
         <span>{plan.chapters.length} rozdz.</span>
-      </div>
-      <div className="thread-map-legend">
-        {threads.slice(0, 6).map((thread) => (
-          <button
-            type="button"
-            key={thread.id}
-            className={selectedThreadId === thread.id ? "active" : ""}
-            onClick={() => onSelect(thread)}
-          >
-            <span style={{ background: thread.color }} />
-            {thread.name}
-          </button>
-        ))}
       </div>
       <div className="thread-map-board">
         <div
@@ -2826,7 +3053,12 @@ function ThreadFlowMap({
                       key={chapter.id}
                       className={linked ? "linked" : ""}
                       style={linked ? { borderColor: thread.color, background: thread.color } : {}}
-                      onClick={() => onSelect(thread)}
+                      onClick={() => {
+                        onSelect(thread);
+                        if (!linked) {
+                          onAddRelation(thread, chapter);
+                        }
+                      }}
                       title={`${thread.name}: rozdział ${dynamicChapterNumber(plan, chapter.id)}`}
                       aria-label={`${thread.name} w rozdziale ${dynamicChapterNumber(plan, chapter.id)}`}
                     />
@@ -2846,18 +3078,25 @@ function ThreadSummaryCard({
   thread,
   active,
   onSelect,
-  onEdit
+  onEdit,
+  onAddChapter,
+  onRemoveChapter
 }: {
   plan: BookPlan;
   thread: PlotThread;
   active: boolean;
   onSelect: () => void;
   onEdit: () => void;
+  onAddChapter: (chapter: Chapter) => void;
+  onRemoveChapter: (chapter: Chapter) => void;
 }) {
-  const beats = beatsForThread(plan, thread);
   const chapters = chaptersForThread(plan, thread);
   const acts = actsForThread(plan, thread);
   const coverage = threadCoveragePercent(plan, thread);
+  const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
+  const availableChapters = orderedChaptersForPlan(plan).filter(
+    (chapter) => !chapters.some((linkedChapter) => linkedChapter.id === chapter.id)
+  );
 
   return (
     <article className={active ? "thread-summary-card active" : "thread-summary-card"}>
@@ -2877,10 +3116,6 @@ function ThreadSummaryCard({
           {acts.length > 0 ? acts.map((act) => act.name).join(", ") : "Brak"}
         </span>
         <span>
-          <b>Beaty</b>
-          {beats.length}
-        </span>
-        <span>
           <b>Rozdziały</b>
           {chapterRangeLabel(plan, chapters)}
         </span>
@@ -2892,11 +3127,53 @@ function ThreadSummaryCard({
         <em>{coverage}%</em>
       </div>
       <div className="thread-card-tags">
-        {beats.slice(0, 3).map((beat) => (
-          <span key={beat.id}>{beat.name}</span>
+        {chapters.map((chapter) => (
+          <span className="thread-chapter-chip" key={chapter.id}>
+            {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
+            <button
+              type="button"
+              className="thread-chip-remove"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onRemoveChapter(chapter);
+              }}
+              aria-label={`Odepnij rozdział ${chapter.workingTitle}`}
+              title={`Odepnij rozdział ${chapter.workingTitle}`}
+            >
+              -
+            </button>
+          </span>
         ))}
-        {beats.length > 3 ? <span>+{beats.length - 3}</span> : null}
+        {availableChapters.length > 0 ? (
+          <button
+            type="button"
+            className="thread-card-relation-add-button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setChapterPickerOpen(true);
+            }}
+            aria-label={`Dodaj wątek ${thread.name} do rozdziału`}
+            title="Dodaj do rozdziału"
+          >
+            <Plus size={13} />
+            <span>Rozdział</span>
+          </button>
+        ) : null}
       </div>
+      {chapterPickerOpen ? (
+        <ThreadChapterPickerModal
+          plan={plan}
+          thread={thread}
+          availableChapters={availableChapters}
+          onClose={() => setChapterPickerOpen(false)}
+          onAdd={(chapter) => {
+            onAddChapter(chapter);
+            setChapterPickerOpen(false);
+          }}
+        />
+      ) : null}
       <button type="button" className="thread-card-edit" onClick={onEdit}>
         <Pencil size={14} />
         Edytuj
@@ -2923,7 +3200,6 @@ function ThreadTable({
           <tr>
             <th>Wątek</th>
             <th>Status</th>
-            <th>Beaty</th>
             <th>Rozdziały</th>
             <th>Pokrycie</th>
           </tr>
@@ -2943,7 +3219,6 @@ function ThreadTable({
                   <strong>{thread.name}</strong>
                 </td>
                 <td>{threadStatusLabel(thread.status)}</td>
-                <td>{beatsForThread(plan, thread).length}</td>
                 <td>{chapterRangeLabel(plan, chaptersForThread(plan, thread))}</td>
                 <td>{coverage}%</td>
               </tr>
@@ -2961,68 +3236,98 @@ function ThreadTable({
   );
 }
 
-function ThreadDetailsPanel({
-  bookId,
+function ThreadChapterPickerModal({
   plan,
   thread,
-  editingThreadId,
-  orderIndex,
-  saving,
-  onSave,
-  onDelete,
-  onEdit,
-  onCancelEdit
+  availableChapters,
+  onClose,
+  onAdd
 }: {
-  bookId: string;
   plan: BookPlan;
-  thread: PlotThread | null;
-  editingThreadId: ThreadEditTarget;
-  orderIndex: number;
-  saving: boolean;
-  onSave: (input: UpsertPlotThreadInput) => void;
-  onDelete: (thread: PlotThread) => void;
-  onEdit: (target: ThreadEditTarget) => void;
-  onCancelEdit: () => void;
+  thread: PlotThread;
+  availableChapters: Chapter[];
+  onClose: () => void;
+  onAdd: (chapter: Chapter) => void;
 }) {
-  const editingThread =
-    editingThreadId && editingThreadId !== "new"
-      ? plan.threads.find((candidate) => candidate.id === editingThreadId)
-      : undefined;
+  const modal = (
+    <div className="chapter-relation-modal" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="chapter-relation-backdrop"
+        onClick={onClose}
+        aria-label="Zamknij wybór rozdziału"
+      />
+      <section className="chapter-relation-shell" aria-label="Dodaj rozdział do wątku">
+        <header className="chapter-relation-header">
+          <div>
+            <p className="eyebrow">Przypięcie wątku</p>
+            <h4>Dodaj rozdział do wątku {thread.name}</h4>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Zamknij" title="Zamknij">
+            <X size={16} />
+          </button>
+        </header>
+        <div className="chapter-relation-list">
+          {availableChapters.length > 0 ? (
+            availableChapters.map((chapter) => (
+              <button
+                type="button"
+                className="chapter-relation-option"
+                key={chapter.id}
+                onClick={() => onAdd(chapter)}
+              >
+                <span className="relation-dot thread" style={{ background: thread.color }} />
+                <span>
+                  <strong>
+                    {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
+                  </strong>
+                  <em>{chapter.summary || "Brak streszczenia rozdziału."}</em>
+                </span>
+              </button>
+            ))
+          ) : (
+            <p className="chapter-relation-empty">Wątek jest już przypięty do wszystkich rozdziałów.</p>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 
-  if (editingThreadId === "new" || editingThread) {
-    return (
-      <aside className="thread-details-panel">
-        <ThreadEditor
-          bookId={bookId}
-          thread={editingThread}
-          orderIndex={orderIndex}
-          saving={saving}
-          onSave={onSave}
-          onDelete={editingThread ? () => onDelete(editingThread) : undefined}
-          onCancel={onCancelEdit}
-        />
-      </aside>
-    );
+  if (typeof document === "undefined") {
+    return modal;
   }
 
+  return createPortal(modal, document.body);
+}
+
+function ThreadDetailsPanel({
+  plan,
+  thread,
+  onDelete,
+  onEdit
+}: {
+  plan: BookPlan;
+  thread: PlotThread | null;
+  onDelete: (thread: PlotThread) => void;
+  onEdit: (target: ThreadEditTarget) => void;
+}) {
   if (!thread) {
     return (
       <aside className="thread-details-panel">
         <div className="thread-detail-empty">
           <GitBranch size={22} />
           <strong>Wybierz wątek</strong>
-          <p>Panel pokaże status, powiązania, checklistę i edycję wybranego wątku.</p>
+          <p>Panel pokaże status, rozdziały i przebieg wybranego wątku.</p>
         </div>
       </aside>
     );
   }
 
-  const beats = beatsForThread(plan, thread);
   const chapters = chaptersForThread(plan, thread);
   const acts = actsForThread(plan, thread);
   const checklist = [
     { label: "Zdefiniowana rola w historii", complete: Boolean(thread.description.trim()) },
-    { label: "Powiązane akty i beaty", complete: beats.length > 0 || acts.length > 0 },
+    { label: "Powiązane akty", complete: acts.length > 0 },
     { label: "Powiązane rozdziały", complete: chapters.length > 0 }
   ];
 
@@ -3050,24 +3355,17 @@ function ThreadDetailsPanel({
         </div>
       </div>
       <div className="thread-detail-section">
-        <strong>Powiązane beaty</strong>
-        <div className="thread-chip-row">
-          {beats.length > 0 ? (
-            beats.map((beat) => <span key={beat.id}>{beat.name}</span>)
-          ) : (
-            <em>Brak</em>
-          )}
-        </div>
-      </div>
-      <div className="thread-detail-section">
-        <strong>Powiązane rozdziały</strong>
+        <strong>Przebieg w rozdziałach</strong>
         <div className="thread-chip-row">
           {chapters.length > 0 ? (
-            chapters.map((chapter) => (
-              <span key={chapter.id}>
-                {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
-              </span>
-            ))
+            chapters.map((chapter) => {
+              const relation = chapterThreadRelation(plan, thread.id, chapter.id);
+              return (
+                <span key={chapter.id} title={relation?.description || "Brak opisu przebiegu."}>
+                  {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
+                </span>
+              );
+            })
           ) : (
             <em>Brak</em>
           )}
@@ -3089,10 +3387,6 @@ function ThreadDetailsPanel({
           Pokrycie
         </span>
         <span>
-          <b>{beats.length}</b>
-          Beaty
-        </span>
-        <span>
           <b>{chapters.length}</b>
           Rozdziały
         </span>
@@ -3110,7 +3404,6 @@ function ThreadDetailsPanel({
     </aside>
   );
 }
-
 function ChaptersStep({
   plan,
   saving,
@@ -3682,10 +3975,10 @@ function ChapterEditModal({
   onClose: () => void;
   onSave: (input: UpsertChapterInput) => void;
   onDelete: (item: SelectedPlanItem) => void;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 }) {
   const chapter =
@@ -3795,10 +4088,10 @@ function ChapterForm({
   onCancel: () => void;
   onDelete?: () => void;
   onSelect?: () => void;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 }) {
   const chapterThreadIds = plan.chapterThreads
@@ -4136,7 +4429,8 @@ function ChapterRelationActions({
   const proposals = useProposalStore((state) => state.proposals);
   const loading = pendingProposalStatus(proposals, {
     field,
-    scope: "bookPlan"
+    scope: "bookPlan",
+    targetEntityId: chapter?.id
   });
   const running = loading === "running";
   const queued = loading === "queued";
@@ -4304,12 +4598,12 @@ function PlanInlineField({
   value: string;
   rows: number;
   field: PlanFieldKey;
-  entity?: Act | Chapter;
+  entity?: PlanPromptEntity;
   onChange: (value: string) => void;
-  onGenerate: (field: PlanFieldKey, targetEntity?: Act | Beat | PlotThread | Chapter) => void;
+  onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (
     field: PlanFieldKey,
-    targetEntity?: Act | Beat | PlotThread | Chapter
+    targetEntity?: PlanPromptEntity
   ) => void;
 }) {
   return (
@@ -4340,7 +4634,7 @@ function PlanAiActions({
   onActivatePrompt
 }: {
   field: PlanFieldKey;
-  targetEntity?: Act | Beat | PlotThread | Chapter;
+  targetEntity?: PlanPromptEntity;
   onGenerate: () => void;
   onActivatePrompt: () => void;
 }) {
@@ -4352,9 +4646,11 @@ function PlanAiActions({
     (state) => state.addContextSourceToActiveTarget
   );
   const proposals = useProposalStore((state) => state.proposals);
+  const targetEntityId = targetEntity ? planPromptEntityId(targetEntity) : undefined;
   const loading = pendingProposalStatus(proposals, {
     field,
-    scope: "bookPlan"
+    scope: "bookPlan",
+    targetEntityId
   });
   const running = loading === "running";
   const queued = loading === "queued";
@@ -4469,7 +4765,7 @@ function PlanPreview({
                     onClick={() => onSelect({ type: "chapter", id: chapter.id })}
                     aria-label={`Otwórz rozdział ${chapter.workingTitle}`}
                   >
-                    <span>Rozdział {dynamicChapterNumber(plan, chapter.id)}</span>
+                    <span>Rozdział</span>
                     <strong>{chapter.workingTitle}</strong>
                     <small>{chapter.targetWordCount ?? 0} słów</small>
                   </button>
@@ -4744,6 +5040,14 @@ function orderedChaptersForPlan(plan: BookPlan): Chapter[] {
 
     return (originalIndex.get(left.id) ?? 0) - (originalIndex.get(right.id) ?? 0);
   });
+}
+
+function planPromptEntityId(entity: PlanPromptEntity): string {
+  if ("chapterId" in entity && "threadId" in entity) {
+    return `${entity.threadId}:${entity.chapterId}`;
+  }
+
+  return entity.id;
 }
 
 function chapterNumberMap(plan: BookPlan): globalThis.Map<string, number> {
@@ -5050,25 +5354,9 @@ function beatBoardLanesForPlan(plan: BookPlan, beats: Beat[]): BeatBoardLane[] {
   return beatChapterLanesForPlan(plan, beats);
 }
 
-function beatThreadIdsForBeat(plan: BookPlan, beatId: string): string[] {
-  return [];
-}
-
 function threadsForBeat(plan: BookPlan, beat: Beat): PlotThread[] {
   const chapter = chapterForBeat(plan, beat);
   return chapter ? threadsForChapter(plan, chapter) : [];
-}
-
-function beatsForThread(plan: BookPlan, thread: PlotThread): Beat[] {
-  const beatIds = new Set<string>();
-
-  for (const chapter of chaptersForThread(plan, thread)) {
-    for (const beat of beatsForChapter(plan, chapter)) {
-      beatIds.add(beat.id);
-    }
-  }
-
-  return plan.beats.filter((beat) => beatIds.has(beat.id));
 }
 
 function actsForThread(plan: BookPlan, thread: PlotThread): Act[] {
@@ -5182,6 +5470,26 @@ function chaptersForThread(plan: BookPlan, thread: PlotThread): Chapter[] {
   );
 
   return orderedChaptersForPlan(plan).filter((chapter) => chapterIds.has(chapter.id));
+}
+
+function chapterThreadRelationsForThread(plan: BookPlan, threadId: string): ChapterThread[] {
+  const chapterOrder = chapterNumberMap(plan);
+  return plan.chapterThreads
+    .filter((relation) => relation.threadId === threadId)
+    .sort(
+      (left, right) =>
+        (chapterOrder.get(left.chapterId) ?? 0) - (chapterOrder.get(right.chapterId) ?? 0)
+    );
+}
+
+function chapterThreadRelation(
+  plan: BookPlan,
+  threadId: string,
+  chapterId: string
+): ChapterThread | undefined {
+  return plan.chapterThreads.find(
+    (relation) => relation.threadId === threadId && relation.chapterId === chapterId
+  );
 }
 
 function chapterThreadIdsForChapter(plan: BookPlan, chapterId: string): string[] {
@@ -5322,10 +5630,12 @@ function isEntityField(field: PlanFieldKey): boolean {
     "beatName",
     "beatRole",
     "beatDescription",
+    "threadDescription",
     "chapterSummary",
     "chapterPurpose",
     "chapterConflict",
     "chapterTurningPoint",
+    "threadChapterDescription",
     "chapterThreadSuggestions",
     "chapterBeatSuggestions"
   ].includes(field);
@@ -5349,3 +5659,11 @@ function parseOptionalPositiveInt(value: string): number | null {
   const parsed = Number(trimmed.replace(/\s+/g, ""));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
+
+
+
+
+
+
+
+

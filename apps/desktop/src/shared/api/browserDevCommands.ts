@@ -26,6 +26,7 @@ import type {
   UpsertActInput,
   UpsertBeatInput,
   UpsertChapterInput,
+  UpsertChapterThreadInput,
   UpsertPlotThreadInput
 } from "./types";
 
@@ -338,7 +339,11 @@ export async function browserUpsertChapter(
     ...plan.chapterThreads.filter((item) => item.chapterId !== chapter.id),
     ...uniqueIds(input.threadIds).map((threadId) => ({
       chapterId: chapter.id,
-      threadId
+      threadId,
+      description:
+        plan.chapterThreads.find(
+          (item) => item.chapterId === chapter.id && item.threadId === threadId
+        )?.description ?? ""
     }))
   ];
   const beatIds = uniqueIds(input.beatIds);
@@ -355,6 +360,35 @@ export async function browserUpsertChapter(
   touchBook(state, input.bookId, now);
   writeState(state);
   return chapter;
+}
+
+export async function browserUpsertChapterThreadRelation(
+  input: UpsertChapterThreadInput
+): Promise<void> {
+  const state = readState();
+  const plan = ensurePlan(state, input.bookId);
+  const now = new Date().toISOString();
+
+  if (!plan.chapters.some((chapter) => chapter.id === input.chapterId)) {
+    throw new Error("Nie znaleziono rozdzialu.");
+  }
+
+  if (!plan.threads.some((thread) => thread.id === input.threadId)) {
+    throw new Error("Nie znaleziono watku.");
+  }
+
+  plan.chapterThreads = [
+    ...plan.chapterThreads.filter(
+      (item) => item.chapterId !== input.chapterId || item.threadId !== input.threadId
+    ),
+    {
+      chapterId: input.chapterId,
+      threadId: input.threadId,
+      description: input.description
+    }
+  ];
+  touchBook(state, input.bookId, now);
+  writeState(state);
 }
 
 export async function browserDeleteChapter(id: string): Promise<void> {
@@ -703,7 +737,12 @@ function normalizePlan(plan: Partial<BookPlan> | undefined): BookPlan {
     beats: Array.isArray(plan?.beats) ? plan.beats : [],
     threads: Array.isArray(plan?.threads) ? plan.threads : [],
     chapters: Array.isArray(plan?.chapters) ? plan.chapters : [],
-    chapterThreads: Array.isArray(plan?.chapterThreads) ? plan.chapterThreads : [],
+    chapterThreads: Array.isArray(plan?.chapterThreads)
+      ? plan.chapterThreads.map((relation) => ({
+          ...relation,
+          description: relation.description ?? ""
+        }))
+      : [],
     chapterBeats: Array.isArray(plan?.chapterBeats) ? plan.chapterBeats : []
   };
 }

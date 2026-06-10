@@ -7,6 +7,7 @@ import type {
   UpsertActInput,
   UpsertBeatInput,
   UpsertChapterInput,
+  UpsertChapterThreadInput,
   UpsertPlotThreadInput
 } from "../../shared/api/types";
 import type { PlanFieldKey } from "./planPromptPackage";
@@ -22,6 +23,7 @@ export type ApplyPlanContext = {
   moveBeatToChapter: (input: MoveBeatToChapterInput) => Promise<unknown>;
   saveThread: (input: UpsertPlotThreadInput) => Promise<unknown>;
   saveChapter: (input: UpsertChapterInput) => Promise<unknown>;
+  saveChapterThreadRelation: (input: UpsertChapterThreadInput) => Promise<unknown>;
 };
 
 export async function applyPlanProposalPayload(
@@ -304,6 +306,14 @@ async function applySingleField(
     });
   }
 
+  const thread = context.plan.threads.find((item) => item.id === targetEntityId);
+  if (thread && targetField === "threadDescription") {
+    await context.saveThread({
+      ...thread,
+      description: value
+    });
+  }
+
   const chapter = context.plan.chapters.find((item) => item.id === targetEntityId);
   if (
     chapter &&
@@ -324,6 +334,20 @@ async function applySingleField(
       beatIds: context.plan.chapterBeats
         .filter((item) => item.chapterId === chapter.id)
         .map((item) => item.beatId)
+    });
+  }
+
+  if (targetField === "threadChapterDescription") {
+    const [threadId, chapterId] = targetEntityId.split(":");
+    if (!threadId || !chapterId) {
+      return;
+    }
+
+    await context.saveChapterThreadRelation({
+      bookId: context.bookId,
+      threadId,
+      chapterId,
+      description: value
     });
   }
 }

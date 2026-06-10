@@ -56,13 +56,52 @@ describe("pendingProposalStatus", () => {
       })
     ).toBe("running");
   });
+
+  it("can match pending plan proposals by target entity id", () => {
+    const proposals = [
+      proposal(
+        "running-thread-chapter-1",
+        "threadChapterDescription",
+        "running",
+        "bookPlan",
+        "thread-1:chapter-1"
+      ),
+      proposal(
+        "queued-thread-chapter-2",
+        "threadChapterDescription",
+        "queued",
+        "bookPlan",
+        "thread-1:chapter-2"
+      )
+    ];
+
+    expect(
+      pendingProposalStatus(proposals, {
+        projectId: "project-1",
+        bookId: "book-1",
+        field: "threadChapterDescription",
+        scope: "bookPlan",
+        targetEntityId: "thread-1:chapter-1"
+      })
+    ).toBe("running");
+    expect(
+      pendingProposalStatus(proposals, {
+        projectId: "project-1",
+        bookId: "book-1",
+        field: "threadChapterDescription",
+        scope: "bookPlan",
+        targetEntityId: "thread-1:chapter-2"
+      })
+    ).toBe("queued");
+  });
 });
 
 function proposal(
   id: string,
   field: ActiveAiProposal["field"],
   status: ActiveAiProposal["status"],
-  scope: ActiveAiProposal["scope"] = "bookConcept"
+  scope: ActiveAiProposal["scope"] = "bookConcept",
+  targetEntityId?: string
 ): ActiveAiProposal {
   return {
     id,
@@ -72,7 +111,11 @@ function proposal(
     field,
     action: "generate_premise",
     promptPackageId: `${id}:prompt`,
-    promptPackageJson: {} as ActiveAiProposal["promptPackageJson"],
+    promptPackageJson: {
+      context: {
+        ...(targetEntityId ? { targetEntityId } : {})
+      }
+    } as ActiveAiProposal["promptPackageJson"],
     prompt: "Prompt",
     status,
     rawOutput: "",

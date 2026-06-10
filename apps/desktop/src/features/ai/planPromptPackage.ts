@@ -5,6 +5,7 @@ import type {
   Book,
   BookPlan,
   Chapter,
+  ChapterThread,
   PlotThread,
   Project
 } from "../../shared/api/types";
@@ -22,11 +23,13 @@ export type PlanFieldKey =
   | "beatRole"
   | "beatDescription"
   | "plotThreads"
+  | "threadDescription"
   | "chapterPlan"
   | "chapterSummary"
   | "chapterPurpose"
   | "chapterConflict"
   | "chapterTurningPoint"
+  | "threadChapterDescription"
   | "chapterThreadSuggestions"
   | "chapterBeatSuggestions"
   | "planGaps";
@@ -185,6 +188,14 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     userInstruction:
       "Zaproponuj tylko watki fabularne wraz z rola i kolorem do mapy planu. Nie generuj struktury, aktow, beatow ani rozdzialow."
   },
+  threadDescription: {
+    key: "threadDescription",
+    label: "Opis watku",
+    action: "generate_plot_threads",
+    targetKind: "thread",
+    userInstruction:
+      "Wygeneruj tylko wartosc pola opisu wybranego watku fabularnego. Nie zmieniaj nazwy, statusu, koloru, przypiec do rozdzialow ani innych elementow planu."
+  },
   chapterPlan: {
     key: "chapterPlan",
     label: "Plan rozdzialow",
@@ -225,6 +236,14 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     userInstruction:
       "Wygeneruj tylko wartosc pola punktu zwrotnego wybranego rozdzialu. Nie zmieniaj innych pol ani encji."
   },
+  threadChapterDescription: {
+    key: "threadChapterDescription",
+    label: "Opis watku w rozdziale",
+    action: "generate_thread_chapter_field",
+    targetKind: "thread",
+    userInstruction:
+      "Wygeneruj tylko opis tego, co dzieje sie z wybranym watkiem w wybranym rozdziale. Uwzglednij ogolny opis watku, tresc rozdzialu i sasiednie rozdzialy tego samego watku. Nie zmieniaj listy relacji ani innych pol planu."
+  },
   chapterThreadSuggestions: {
     key: "chapterThreadSuggestions",
     label: "Powiazane watki",
@@ -256,7 +275,7 @@ export function buildPlanPromptPackage(
   book: Book,
   plan: BookPlan,
   field: PlanFieldKey,
-  targetEntity?: Act | Beat | PlotThread | Chapter,
+  targetEntity?: Act | Beat | PlotThread | Chapter | ChapterThread,
   contextControl?: PromptContextControl
 ): PlanPromptPackage {
   const config = planFieldConfigs[field];
@@ -272,12 +291,8 @@ export function buildPlanPromptPackage(
     userInstruction: config.userInstruction,
     context: {
       targetField: field,
-      targetEntityId: targetEntity?.id,
-      targetEntityLabel: targetEntity
-        ? "workingTitle" in targetEntity
-          ? targetEntity.workingTitle
-          : targetEntity.name
-        : undefined,
+      targetEntityId: targetEntity ? planTargetEntityId(targetEntity) : undefined,
+      targetEntityLabel: targetEntity ? planTargetEntityLabel(plan, targetEntity) : undefined,
       ...(targetEntity ? { targetEntitySnapshot: targetEntity } : {}),
       book: bookPlanContext(book),
       plan: {
@@ -468,10 +483,31 @@ function renderPlanContext(
   return sections.length ? sections.join("\n") : "(brak wybranego kontekstu planu)";
 }
 
+function planTargetEntityId(entity: Act | Beat | PlotThread | Chapter | ChapterThread): string {
+  if ("chapterId" in entity && "threadId" in entity) {
+    return `${entity.threadId}:${entity.chapterId}`;
+  }
+
+  return entity.id;
+}
+
+function planTargetEntityLabel(
+  plan: BookPlan,
+  entity: Act | Beat | PlotThread | Chapter | ChapterThread
+): string {
+  if ("chapterId" in entity && "threadId" in entity) {
+    const thread = plan.threads.find((item) => item.id === entity.threadId);
+    const chapter = plan.chapters.find((item) => item.id === entity.chapterId);
+    return `${thread?.name ?? "Watek"} / ${chapter?.workingTitle ?? "Rozdzial"}`;
+  }
+
+  return "workingTitle" in entity ? entity.workingTitle : entity.name;
+}
+
 function currentPlanFieldValue(
   plan: BookPlan,
   field: PlanFieldKey,
-  targetEntity?: Act | Beat | PlotThread | Chapter
+  targetEntity?: Act | Beat | PlotThread | Chapter | ChapterThread
 ): string {
   if (field === "storyStructure") {
     return plan.structure?.structureType ?? "";
@@ -497,6 +533,9 @@ function currentPlanFieldValue(
   if (targetEntity && "role" in targetEntity && field === "beatDescription") {
     return targetEntity.description ?? "";
   }
+  if (targetEntity && "status" in targetEntity && field === "threadDescription") {
+    return targetEntity.description ?? "";
+  }
   if (targetEntity && "summary" in targetEntity && field === "chapterSummary") {
     return targetEntity.summary ?? "";
   }
@@ -512,6 +551,14 @@ function currentPlanFieldValue(
     field === "chapterTurningPoint"
   ) {
     return targetEntity.turningPoint ?? "";
+  }
+  if (
+    targetEntity &&
+    "chapterId" in targetEntity &&
+    "threadId" in targetEntity &&
+    field === "threadChapterDescription"
+  ) {
+    return targetEntity.description ?? "";
   }
   if (targetEntity && "workingTitle" in targetEntity && field === "chapterThreadSuggestions") {
     const assignedThreadIds = new Set(
@@ -557,7 +604,12 @@ function planSuggestionSchema(field: PlanFieldKey): unknown {
     };
   }
 
-  if (field === "storyStructureDescription" || field === "storyStructureNotes") {
+  if (
+    field === "storyStructureDescription" ||
+    field === "storyStructureNotes" ||
+    field === "threadDescription" ||
+    field === "threadChapterDescription"
+  ) {
     return {
       ...base,
       value: "string"

@@ -118,7 +118,7 @@ const plan: BookPlan = {
       updatedAt: "2026-06-05T12:00:00Z"
     }
   ],
-  chapterThreads: [{ chapterId: "chapter-1", threadId: "thread-1" }],
+  chapterThreads: [{ chapterId: "chapter-1", threadId: "thread-1", description: "" }],
   chapterBeats: [{ chapterId: "chapter-1", beatId: "beat-1" }]
 };
 

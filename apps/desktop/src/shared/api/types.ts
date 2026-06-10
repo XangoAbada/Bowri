@@ -124,6 +124,7 @@ export type Chapter = {
 export type ChapterThread = {
   chapterId: string;
   threadId: string;
+  description: string;
 };
 
 export type ChapterBeat = {
@@ -204,6 +205,13 @@ export type UpsertChapterInput = {
   beatIds: string[];
 };
 
+export type UpsertChapterThreadInput = {
+  bookId: string;
+  chapterId: string;
+  threadId: string;
+  description: string;
+};
+
 export type ReorderPlanItemsInput = {
   itemType: "acts" | "beats" | "threads" | "chapters";
   orderedIds: string[];
@@ -272,6 +280,7 @@ export type AIAction =
   | "generate_plot_threads"
   | "generate_chapter_plan"
   | "generate_chapter_field"
+  | "generate_thread_chapter_field"
   | "suggest_chapter_relations"
   | "find_plan_gaps";
 

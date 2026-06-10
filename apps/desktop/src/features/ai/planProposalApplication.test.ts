@@ -55,7 +55,8 @@ describe("applyPlanProposalPayload", () => {
         saveBeat,
         moveBeatToChapter: vi.fn(),
         saveThread: vi.fn(),
-        saveChapter: vi.fn()
+        saveChapter: vi.fn(),
+        saveChapterThreadRelation: vi.fn()
       }
     );
 

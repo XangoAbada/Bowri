@@ -1582,8 +1582,8 @@
   min-width: 0;
 }
 
-.thread-card-tags span,
-.thread-chip-row span {
+.thread-card-tags > span,
+.thread-chip-row > span {
   max-width: 100%;
   padding: 5px 8px;
   border: 1px solid rgba(39, 63, 50, 0.1);
@@ -1593,6 +1593,62 @@
   font-size: 11px;
   font-weight: 850;
   overflow-wrap: anywhere;
+}
+
+.thread-card-tags .thread-chapter-chip {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 5px 3px 9px;
+  border-color: #b7dacb;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  line-height: 1.2;
+}
+
+.thread-chip-remove {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.thread-chip-remove:hover {
+  background: #fffdf8;
+  color: var(--red);
+}
+
+.thread-card-relation-add-button {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid #b7dacb;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(47, 128, 103, 0.1);
+}
+
+.thread-card-relation-add-button:hover {
+  border-color: rgba(47, 128, 103, 0.55);
+  background: var(--green-soft);
+  color: #23644f;
 }
 
 .thread-card-edit {
