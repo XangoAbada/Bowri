@@ -1,5 +1,6 @@
 import type {
   AcceptGeneratedBookCoverInput,
+  AcceptGeneratedCharacterImageInput,
   Act,
   AiLogEntry,
   AiRunResult,
@@ -9,10 +10,17 @@ import type {
   BookConceptInput,
   BookPlan,
   Chapter,
+  Character,
+  CharacterImageResult,
+  CharacterMemory,
+  CharacterMemoryLink,
+  CharacterRelation,
+  CharacterWorkspace,
   CodexCliStatus,
   CodexModelCatalog,
   CreateProjectInput,
   GenerateBookCoverInput,
+  GenerateCharacterImageInput,
   GenerateNewProjectTitleRequest,
   MoveBeatToChapterInput,
   PlotThread,
@@ -27,7 +35,12 @@ import type {
   UpsertBeatInput,
   UpsertChapterInput,
   UpsertChapterThreadInput,
-  UpsertPlotThreadInput
+  UpsertCharacterInput,
+  UpsertCharacterMemoryInput,
+  UpsertCharacterMemoryLinkInput,
+  UpsertCharacterRelationInput,
+  UpsertPlotThreadInput,
+  VisualAsset
 } from "./types";
 
 const STORAGE_KEY = "storyforge2.browserPreview.projects";
@@ -36,12 +49,14 @@ type BrowserPreviewState = {
   projects: ProjectDetails[];
   aiRuns: AiLogEntry[];
   plans: Record<string, BookPlan>;
+  characterWorkspaces: Record<string, CharacterWorkspace>;
 };
 
 let memoryState: BrowserPreviewState = {
   projects: [],
   aiRuns: [],
-  plans: {}
+  plans: {},
+  characterWorkspaces: {}
 };
 
 export function isTauriRuntime(): boolean {
@@ -146,6 +161,13 @@ export async function browserGetProject(
 export async function browserGetBookPlan(bookId: string): Promise<BookPlan> {
   const state = readState();
   return normalizePlan(state.plans[bookId]);
+}
+
+export async function browserGetCharacterWorkspace(
+  projectId: string
+): Promise<CharacterWorkspace> {
+  const state = readState();
+  return normalizeCharacterWorkspace(state.characterWorkspaces[projectId]);
 }
 
 export async function browserSaveStoryStructure(
@@ -397,6 +419,227 @@ export async function browserDeleteChapter(id: string): Promise<void> {
     plan.chapters = plan.chapters.filter((item) => item.id !== id);
     plan.chapterThreads = plan.chapterThreads.filter((item) => item.chapterId !== id);
     plan.chapterBeats = plan.chapterBeats.filter((item) => item.chapterId !== id);
+  }
+  writeState(state);
+}
+
+export async function browserUpsertCharacter(
+  input: UpsertCharacterInput
+): Promise<Character> {
+  const state = readState();
+  const workspace = ensureCharacterWorkspace(state, input.projectId);
+  const now = new Date().toISOString();
+  const existing = input.id
+    ? workspace.characters.find((item) => item.id === input.id)
+    : undefined;
+  const character: Character = {
+    id: existing?.id ?? input.id ?? createId(),
+    projectId: input.projectId,
+    characterType: input.characterType || "person",
+    name: input.name,
+    aliasesJson: normalizeJsonList(input.aliasesJson),
+    role: input.role,
+    shortDescription: input.shortDescription,
+    externalGoal: input.externalGoal,
+    internalNeed: input.internalNeed,
+    wound: input.wound,
+    falseBelief: input.falseBelief,
+    secret: input.secret,
+    strengthsJson: normalizeJsonList(input.strengthsJson),
+    weaknessesJson: normalizeJsonList(input.weaknessesJson),
+    voiceNotes: input.voiceNotes,
+    arcSummary: input.arcSummary,
+    knowledgeNotes: input.knowledgeNotes,
+    visualPrompt: input.visualPrompt,
+    imageAssetId: input.imageAssetId ?? existing?.imageAssetId ?? null,
+    status: input.status || "draft",
+    orderIndex: input.orderIndex,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  workspace.characters = upsertById(workspace.characters, character);
+  touchProject(state, input.projectId, now);
+  writeState(state);
+  return character;
+}
+
+export async function browserDeleteCharacter(id: string): Promise<void> {
+  const state = readState();
+  const now = new Date().toISOString();
+  for (const [projectId, workspace] of Object.entries(state.characterWorkspaces)) {
+    const memoryIds = new Set(
+      workspace.memories
+        .filter((memory) => memory.characterId === id)
+        .map((memory) => memory.id)
+    );
+    workspace.characters = workspace.characters.filter((item) => item.id !== id);
+    workspace.relations = workspace.relations.filter(
+      (item) => item.fromCharacterId !== id && item.toCharacterId !== id
+    );
+    workspace.memories = workspace.memories.filter((item) => item.characterId !== id);
+    workspace.memoryLinks = workspace.memoryLinks.filter(
+      (item) => !memoryIds.has(item.fromMemoryId) && !memoryIds.has(item.toMemoryId)
+    );
+    touchProject(state, projectId, now);
+  }
+  writeState(state);
+}
+
+export async function browserUpsertCharacterRelation(
+  input: UpsertCharacterRelationInput
+): Promise<CharacterRelation> {
+  if (input.fromCharacterId === input.toCharacterId) {
+    throw new Error("Relacja wymaga dwoch roznych postaci.");
+  }
+
+  const state = readState();
+  const workspace = ensureCharacterWorkspace(state, input.projectId);
+  const now = new Date().toISOString();
+  if (!workspace.characters.some((item) => item.id === input.fromCharacterId)) {
+    throw new Error("Nie znaleziono pierwszej postaci relacji.");
+  }
+  if (!workspace.characters.some((item) => item.id === input.toCharacterId)) {
+    throw new Error("Nie znaleziono drugiej postaci relacji.");
+  }
+
+  const existing = input.id
+    ? workspace.relations.find((item) => item.id === input.id)
+    : workspace.relations.find(
+        (item) =>
+          item.fromCharacterId === input.fromCharacterId &&
+          item.toCharacterId === input.toCharacterId &&
+          item.relationType === input.relationType
+      );
+  const relation: CharacterRelation = {
+    id: existing?.id ?? input.id ?? createId(),
+    projectId: input.projectId,
+    fromCharacterId: input.fromCharacterId,
+    toCharacterId: input.toCharacterId,
+    relationType: input.relationType || "other",
+    description: input.description,
+    history: input.history,
+    conflict: input.conflict,
+    opinion: input.opinion,
+    trustLevel: clampNumber(input.trustLevel, 0, 100),
+    secret: input.secret,
+    changeOverTime: input.changeOverTime,
+    status: input.status || "draft",
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  workspace.relations = upsertById(workspace.relations, relation);
+  touchProject(state, input.projectId, now);
+  writeState(state);
+  return relation;
+}
+
+export async function browserDeleteCharacterRelation(id: string): Promise<void> {
+  const state = readState();
+  const now = new Date().toISOString();
+  for (const [projectId, workspace] of Object.entries(state.characterWorkspaces)) {
+    workspace.relations = workspace.relations.filter((item) => item.id !== id);
+    touchProject(state, projectId, now);
+  }
+  writeState(state);
+}
+
+export async function browserUpsertCharacterMemory(
+  input: UpsertCharacterMemoryInput
+): Promise<CharacterMemory> {
+  const state = readState();
+  const workspace = ensureCharacterWorkspace(state, input.projectId);
+  const now = new Date().toISOString();
+  if (!workspace.characters.some((item) => item.id === input.characterId)) {
+    throw new Error("Nie znaleziono postaci dla wspomnienia.");
+  }
+  const existing = input.id
+    ? workspace.memories.find((item) => item.id === input.id)
+    : undefined;
+  const memory: CharacterMemory = {
+    id: existing?.id ?? input.id ?? createId(),
+    projectId: input.projectId,
+    characterId: input.characterId,
+    title: input.title,
+    summary: input.summary,
+    details: input.details,
+    memoryType: input.memoryType || "event",
+    subject: input.subject,
+    emotion: input.emotion,
+    importance: clampNumber(input.importance, 0, 100),
+    status: input.status || "draft",
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  workspace.memories = upsertById(workspace.memories, memory);
+  touchProject(state, input.projectId, now);
+  writeState(state);
+  return memory;
+}
+
+export async function browserDeleteCharacterMemory(id: string): Promise<void> {
+  const state = readState();
+  const now = new Date().toISOString();
+  for (const [projectId, workspace] of Object.entries(state.characterWorkspaces)) {
+    workspace.memories = workspace.memories.filter((item) => item.id !== id);
+    workspace.memoryLinks = workspace.memoryLinks.filter(
+      (item) => item.fromMemoryId !== id && item.toMemoryId !== id
+    );
+    touchProject(state, projectId, now);
+  }
+  writeState(state);
+}
+
+export async function browserUpsertCharacterMemoryLink(
+  input: UpsertCharacterMemoryLinkInput
+): Promise<CharacterMemoryLink> {
+  if (input.fromMemoryId === input.toMemoryId) {
+    throw new Error("Polaczenie wymaga dwoch roznych wspomnien.");
+  }
+
+  const state = readState();
+  const workspace = ensureCharacterWorkspace(state, input.projectId);
+  const now = new Date().toISOString();
+  if (!workspace.memories.some((item) => item.id === input.fromMemoryId)) {
+    throw new Error("Nie znaleziono pierwszego wspomnienia.");
+  }
+  if (!workspace.memories.some((item) => item.id === input.toMemoryId)) {
+    throw new Error("Nie znaleziono drugiego wspomnienia.");
+  }
+  const existing = input.id
+    ? workspace.memoryLinks.find((item) => item.id === input.id)
+    : workspace.memoryLinks.find(
+        (item) =>
+          item.fromMemoryId === input.fromMemoryId &&
+          item.toMemoryId === input.toMemoryId &&
+          item.linkType === input.linkType
+      );
+  const link: CharacterMemoryLink = {
+    id: existing?.id ?? input.id ?? createId(),
+    projectId: input.projectId,
+    fromMemoryId: input.fromMemoryId,
+    toMemoryId: input.toMemoryId,
+    linkType: input.linkType || "association",
+    description: input.description,
+    strength: clampNumber(input.strength, 0, 100),
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  workspace.memoryLinks = upsertById(workspace.memoryLinks, link);
+  touchProject(state, input.projectId, now);
+  writeState(state);
+  return link;
+}
+
+export async function browserDeleteCharacterMemoryLink(id: string): Promise<void> {
+  const state = readState();
+  const now = new Date().toISOString();
+  for (const [projectId, workspace] of Object.entries(state.characterWorkspaces)) {
+    workspace.memoryLinks = workspace.memoryLinks.filter((item) => item.id !== id);
+    touchProject(state, projectId, now);
   }
   writeState(state);
 }
@@ -658,6 +901,132 @@ export async function browserAcceptGeneratedBookCover(
   return details.book;
 }
 
+export async function browserGenerateCharacterImage(
+  input: GenerateCharacterImageInput
+): Promise<CharacterImageResult> {
+  const state = readState();
+  const workspace = ensureCharacterWorkspace(state, input.projectId);
+  const character = workspace.characters.find((item) => item.id === input.characterId);
+  if (!character) {
+    throw new Error("Character not found in browser preview storage.");
+  }
+
+  const now = new Date().toISOString();
+  const aiRunId = createId();
+  const imagePath = createCharacterDataUrl(character.name || "Postac", input.imagePrompt);
+  const asset: VisualAsset = {
+    id: createId(),
+    projectId: input.projectId,
+    relatedType: "character",
+    relatedId: input.characterId,
+    assetType: "image",
+    title: character.name,
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    filePath: imagePath,
+    source: "ai",
+    status: "proposed",
+    createdAt: now,
+    updatedAt: now
+  };
+  const rawOutput = JSON.stringify({
+    version: 1,
+    kind: "character_image",
+    imagePath,
+    warnings: ["Browser preview generated a local placeholder data URL."]
+  });
+
+  appendAiRun({
+    id: aiRunId,
+    projectId: input.projectId,
+    providerId: "codex-cli-bridge",
+    model: input.model ?? "",
+    reasoningEffort: input.reasoningEffort ?? "",
+    action: "generate_character_image",
+    promptPackageJson: input.promptPackageJson,
+    prompt: input.prompt,
+    rawOutput,
+    status: "success",
+    errorMessage: null,
+    createdAt: now,
+    completedAt: now
+  });
+
+  return {
+    character,
+    visualAsset: asset,
+    aiRun: {
+      id: aiRunId,
+      providerId: "codex-cli-bridge",
+      promptPackageId: input.promptPackageId,
+      action: "generate_character_image",
+      status: "success",
+      rawOutput,
+      durationMs: 0
+    },
+    imagePath,
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    generatedAt: now
+  };
+}
+
+export async function browserAcceptGeneratedCharacterImage(
+  input: AcceptGeneratedCharacterImageInput
+): Promise<CharacterImageResult> {
+  const state = readState();
+  const workspace = ensureCharacterWorkspace(state, input.projectId);
+  const now = new Date().toISOString();
+  const character = workspace.characters.find((item) => item.id === input.characterId);
+  if (!character) {
+    throw new Error("Character not found in browser preview storage.");
+  }
+
+  const asset: VisualAsset = {
+    id: createId(),
+    projectId: input.projectId,
+    relatedType: "character",
+    relatedId: input.characterId,
+    assetType: "image",
+    title: character.name,
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    filePath: input.imagePath,
+    source: "ai",
+    status: "canon",
+    createdAt: now,
+    updatedAt: now
+  };
+  workspace.visualAssets = upsertById(workspace.visualAssets, asset);
+  const updatedCharacter = {
+    ...character,
+    imageAssetId: asset.id,
+    visualPrompt: input.imagePrompt,
+    updatedAt: now
+  };
+  workspace.characters = upsertById(workspace.characters, updatedCharacter);
+  touchProject(state, input.projectId, now);
+  writeState(state);
+
+  return {
+    character: updatedCharacter,
+    visualAsset: asset,
+    aiRun: {
+      id: createId(),
+      providerId: "browser-preview",
+      promptPackageId: "accepted-character-image",
+      action: "generate_character_image",
+      status: "success",
+      rawOutput: null,
+      durationMs: 0
+    },
+    imagePath: input.imagePath,
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    generatedAt: input.generatedAt
+  };
+}
+
 function readState(): BrowserPreviewState {
   if (typeof window === "undefined") {
     return memoryState;
@@ -666,7 +1035,7 @@ function readState(): BrowserPreviewState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { projects: [], aiRuns: [], plans: {} };
+      return { projects: [], aiRuns: [], plans: {}, characterWorkspaces: {} };
     }
 
     const parsed = JSON.parse(raw) as BrowserPreviewState;
@@ -680,9 +1049,10 @@ function readState(): BrowserPreviewState {
                 reasoningEffort: run.reasoningEffort ?? ""
               }))
             : [],
-          plans: normalizePlans(parsed.plans)
+          plans: normalizePlans(parsed.plans),
+          characterWorkspaces: normalizeCharacterWorkspaces(parsed.characterWorkspaces)
         }
-      : { projects: [], aiRuns: [], plans: {} };
+      : { projects: [], aiRuns: [], plans: {}, characterWorkspaces: {} };
   } catch {
     return memoryState;
   }
@@ -730,6 +1100,21 @@ function normalizePlans(plans: BrowserPreviewState["plans"] | undefined): Record
   );
 }
 
+function normalizeCharacterWorkspaces(
+  workspaces: BrowserPreviewState["characterWorkspaces"] | undefined
+): Record<string, CharacterWorkspace> {
+  if (!workspaces || typeof workspaces !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(workspaces).map(([projectId, workspace]) => [
+      projectId,
+      normalizeCharacterWorkspace(workspace)
+    ])
+  );
+}
+
 function normalizePlan(plan: Partial<BookPlan> | undefined): BookPlan {
   return {
     structure: plan?.structure ?? null,
@@ -745,6 +1130,27 @@ function normalizePlan(plan: Partial<BookPlan> | undefined): BookPlan {
       : [],
     chapterBeats: Array.isArray(plan?.chapterBeats) ? plan.chapterBeats : []
   };
+}
+
+function normalizeCharacterWorkspace(
+  workspace: Partial<CharacterWorkspace> | undefined
+): CharacterWorkspace {
+  return {
+    characters: Array.isArray(workspace?.characters) ? workspace.characters : [],
+    relations: Array.isArray(workspace?.relations) ? workspace.relations : [],
+    memories: Array.isArray(workspace?.memories) ? workspace.memories : [],
+    memoryLinks: Array.isArray(workspace?.memoryLinks) ? workspace.memoryLinks : [],
+    visualAssets: Array.isArray(workspace?.visualAssets) ? workspace.visualAssets : []
+  };
+}
+
+function ensureCharacterWorkspace(
+  state: BrowserPreviewState,
+  projectId: string
+): CharacterWorkspace {
+  const workspace = normalizeCharacterWorkspace(state.characterWorkspaces[projectId]);
+  state.characterWorkspaces[projectId] = workspace;
+  return workspace;
 }
 
 function upsertById<Item extends { id: string }>(items: Item[], nextItem: Item): Item[] {
@@ -780,6 +1186,20 @@ function touchBook(
 
   details.book = { ...details.book, updatedAt };
   details.project = { ...details.project, updatedAt };
+}
+
+function touchProject(
+  state: BrowserPreviewState,
+  projectId: string,
+  updatedAt: string
+): void {
+  const details = state.projects.find(({ project }) => project.id === projectId);
+  if (!details) {
+    return;
+  }
+
+  details.project = { ...details.project, updatedAt };
+  details.book = { ...details.book, updatedAt };
 }
 
 function normalizeDetails(details: ProjectDetails): ProjectDetails {
@@ -821,10 +1241,38 @@ function createCoverDataUrl(title: string, prompt: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function createCharacterDataUrl(name: string, prompt: string): string {
+  const safeName = escapeSvg(name || "Postac");
+  const safePrompt = escapeSvg(prompt.slice(0, 140));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1100" viewBox="0 0 900 1100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f8f6"/><stop offset=".5" stop-color="#dfe8df"/><stop offset="1" stop-color="#2f8067"/></linearGradient></defs><rect width="900" height="1100" fill="url(#g)"/><circle cx="450" cy="390" r="210" fill="#fffdf8" opacity=".74"/><path d="M260 850c42-156 118-234 190-234s148 78 190 234" fill="#24463e" opacity=".82"/><circle cx="450" cy="340" r="128" fill="#24463e" opacity=".88"/><text x="450" y="940" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="58" fill="#fffdf8" font-weight="800">${safeName}</text><text x="450" y="1004" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="23" fill="#fffdf8" opacity=".78">${safePrompt}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function escapeSvg(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function normalizeJsonList(value: string): string {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? JSON.stringify(parsed) : "[]";
+  } catch {
+    const items = value
+      .split(/[,;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return JSON.stringify([...new Set(items)]);
+  }
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.min(max, Math.max(min, Math.round(value)));
 }

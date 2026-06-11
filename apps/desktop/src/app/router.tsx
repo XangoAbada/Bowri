@@ -3,6 +3,7 @@ import { DashboardPage } from "../features/projects/DashboardPage";
 import { ProjectShell } from "./ProjectShell";
 import { BookConceptPage } from "../features/book/BookConceptPage";
 import { BookPlanPage } from "../features/book/BookPlanPage";
+import { CharactersPage } from "../features/characters/CharactersPage";
 import { CodexSettingsPage } from "../features/ai/CodexSettingsPage";
 import { AiLogPage } from "../features/ai/AiLogPage";
 
@@ -34,6 +35,12 @@ const projectPlanRoute = createRoute({
   component: ProjectPlanRoute
 });
 
+const projectCharactersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId/characters",
+  component: ProjectCharactersRoute
+});
+
 const projectAiRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects/$projectId/ai",
@@ -51,6 +58,7 @@ const routeTree = rootRoute.addChildren([
   projectRoute,
   projectConceptRoute,
   projectPlanRoute,
+  projectCharactersRoute,
   projectAiRoute,
   projectAiLogRoute
 ]);
@@ -78,6 +86,15 @@ function ProjectPlanRoute() {
   return (
     <ProjectShell projectId={projectId} activeSection="plan">
       <BookPlanPage projectId={projectId} />
+    </ProjectShell>
+  );
+}
+
+function ProjectCharactersRoute() {
+  const projectId = useProjectId();
+  return (
+    <ProjectShell projectId={projectId} activeSection="characters">
+      <CharactersPage projectId={projectId} />
     </ProjectShell>
   );
 }

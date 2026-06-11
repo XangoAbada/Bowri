@@ -397,6 +397,114 @@ pub struct BookPlan {
     pub chapter_beats: Vec<ChapterBeat>,
 }
 
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct VisualAsset {
+    pub id: String,
+    pub project_id: String,
+    pub related_type: String,
+    pub related_id: String,
+    pub asset_type: String,
+    pub title: String,
+    pub prompt: String,
+    pub negative_prompt: String,
+    pub file_path: String,
+    pub source: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Character {
+    pub id: String,
+    pub project_id: String,
+    pub character_type: String,
+    pub name: String,
+    pub aliases_json: String,
+    pub role: String,
+    pub short_description: String,
+    pub external_goal: String,
+    pub internal_need: String,
+    pub wound: String,
+    pub false_belief: String,
+    pub secret: String,
+    pub strengths_json: String,
+    pub weaknesses_json: String,
+    pub voice_notes: String,
+    pub arc_summary: String,
+    pub knowledge_notes: String,
+    pub visual_prompt: String,
+    pub image_asset_id: Option<String>,
+    pub status: String,
+    pub order_index: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterRelation {
+    pub id: String,
+    pub project_id: String,
+    pub from_character_id: String,
+    pub to_character_id: String,
+    pub relation_type: String,
+    pub description: String,
+    pub history: String,
+    pub conflict: String,
+    pub opinion: String,
+    pub trust_level: i64,
+    pub secret: String,
+    pub change_over_time: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterMemory {
+    pub id: String,
+    pub project_id: String,
+    pub character_id: String,
+    pub title: String,
+    pub summary: String,
+    pub details: String,
+    pub memory_type: String,
+    pub subject: String,
+    pub emotion: String,
+    pub importance: i64,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterMemoryLink {
+    pub id: String,
+    pub project_id: String,
+    pub from_memory_id: String,
+    pub to_memory_id: String,
+    pub link_type: String,
+    pub description: String,
+    pub strength: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterWorkspace {
+    pub characters: Vec<Character>,
+    pub relations: Vec<CharacterRelation>,
+    pub memories: Vec<CharacterMemory>,
+    pub memory_links: Vec<CharacterMemoryLink>,
+    pub visual_assets: Vec<VisualAsset>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveStoryStructureInput {
@@ -486,6 +594,117 @@ pub struct UpsertChapterThreadInput {
 pub struct ReorderPlanItemsInput {
     pub item_type: String,
     pub ordered_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertCharacterInput {
+    pub id: Option<String>,
+    pub project_id: String,
+    pub character_type: String,
+    pub name: String,
+    pub aliases_json: String,
+    pub role: String,
+    pub short_description: String,
+    pub external_goal: String,
+    pub internal_need: String,
+    pub wound: String,
+    pub false_belief: String,
+    pub secret: String,
+    pub strengths_json: String,
+    pub weaknesses_json: String,
+    pub voice_notes: String,
+    pub arc_summary: String,
+    pub knowledge_notes: String,
+    pub visual_prompt: String,
+    pub image_asset_id: Option<String>,
+    pub status: String,
+    pub order_index: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertCharacterRelationInput {
+    pub id: Option<String>,
+    pub project_id: String,
+    pub from_character_id: String,
+    pub to_character_id: String,
+    pub relation_type: String,
+    pub description: String,
+    pub history: String,
+    pub conflict: String,
+    pub opinion: String,
+    pub trust_level: i64,
+    pub secret: String,
+    pub change_over_time: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertCharacterMemoryInput {
+    pub id: Option<String>,
+    pub project_id: String,
+    pub character_id: String,
+    pub title: String,
+    pub summary: String,
+    pub details: String,
+    pub memory_type: String,
+    pub subject: String,
+    pub emotion: String,
+    pub importance: i64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertCharacterMemoryLinkInput {
+    pub id: Option<String>,
+    pub project_id: String,
+    pub from_memory_id: String,
+    pub to_memory_id: String,
+    pub link_type: String,
+    pub description: String,
+    pub strength: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateCharacterImageInput {
+    pub project_id: String,
+    pub character_id: String,
+    pub prompt_package_id: String,
+    pub prompt_package_json: Value,
+    pub prompt: String,
+    pub image_prompt: String,
+    pub negative_prompt: String,
+    pub codex_path: Option<String>,
+    pub timeout_seconds: Option<u64>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptGeneratedCharacterImageInput {
+    pub project_id: String,
+    pub character_id: String,
+    pub image_path: String,
+    pub image_prompt: String,
+    pub negative_prompt: String,
+    pub generated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterImageResult {
+    pub character: Character,
+    pub visual_asset: VisualAsset,
+    pub ai_run: AiRunResult,
+    pub image_path: String,
+    pub prompt: String,
+    pub negative_prompt: String,
+    pub generated_at: String,
 }
 
 pub async fn init_database(app_data_dir: PathBuf) -> Result<SqlitePool, AppError> {
@@ -1159,6 +1378,26 @@ async fn touch_project_for_book(
     Ok(())
 }
 
+async fn touch_project_by_id(
+    tx: &mut Transaction<'_, Sqlite>,
+    project_id: &str,
+    updated_at: &str,
+) -> Result<(), AppError> {
+    sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?")
+        .bind(updated_at)
+        .bind(project_id)
+        .execute(&mut **tx)
+        .await?;
+
+    sqlx::query("UPDATE books SET updated_at = ? WHERE project_id = ?")
+        .bind(updated_at)
+        .bind(project_id)
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
+}
+
 fn unique_ids(ids: Vec<String>) -> Vec<String> {
     let mut unique = Vec::new();
     for id in ids {
@@ -1168,6 +1407,388 @@ fn unique_ids(ids: Vec<String>) -> Vec<String> {
         }
     }
     unique
+}
+
+pub async fn get_character_workspace_in_pool(
+    pool: &SqlitePool,
+    project_id: &str,
+) -> Result<CharacterWorkspace, AppError> {
+    let characters = sqlx::query_as::<_, Character>(
+        "SELECT * FROM characters WHERE project_id = ? ORDER BY order_index, created_at",
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    let relations = sqlx::query_as::<_, CharacterRelation>(
+        "SELECT * FROM character_relations WHERE project_id = ? ORDER BY created_at",
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    let memories = sqlx::query_as::<_, CharacterMemory>(
+        "SELECT * FROM character_memories WHERE project_id = ? ORDER BY created_at",
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    let memory_links = sqlx::query_as::<_, CharacterMemoryLink>(
+        "SELECT * FROM character_memory_links WHERE project_id = ? ORDER BY created_at",
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    let visual_assets = sqlx::query_as::<_, VisualAsset>(
+        "SELECT * FROM visual_assets WHERE project_id = ? ORDER BY created_at",
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(CharacterWorkspace {
+        characters,
+        relations,
+        memories,
+        memory_links,
+        visual_assets,
+    })
+}
+
+pub async fn upsert_character_in_pool(
+    pool: &SqlitePool,
+    input: UpsertCharacterInput,
+) -> Result<Character, AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Process("Nazwa postaci nie moze byc pusta.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO characters
+          (id, project_id, character_type, name, aliases_json, role, short_description, external_goal, internal_need, wound, false_belief, secret, strengths_json, weaknesses_json, voice_notes, arc_summary, knowledge_notes, visual_prompt, image_asset_id, status, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          character_type = excluded.character_type,
+          name = excluded.name,
+          aliases_json = excluded.aliases_json,
+          role = excluded.role,
+          short_description = excluded.short_description,
+          external_goal = excluded.external_goal,
+          internal_need = excluded.internal_need,
+          wound = excluded.wound,
+          false_belief = excluded.false_belief,
+          secret = excluded.secret,
+          strengths_json = excluded.strengths_json,
+          weaknesses_json = excluded.weaknesses_json,
+          voice_notes = excluded.voice_notes,
+          arc_summary = excluded.arc_summary,
+          knowledge_notes = excluded.knowledge_notes,
+          visual_prompt = excluded.visual_prompt,
+          image_asset_id = COALESCE(excluded.image_asset_id, characters.image_asset_id),
+          status = excluded.status,
+          order_index = excluded.order_index,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.project_id)
+    .bind(input.character_type)
+    .bind(input.name)
+    .bind(input.aliases_json)
+    .bind(input.role)
+    .bind(input.short_description)
+    .bind(input.external_goal)
+    .bind(input.internal_need)
+    .bind(input.wound)
+    .bind(input.false_belief)
+    .bind(input.secret)
+    .bind(input.strengths_json)
+    .bind(input.weaknesses_json)
+    .bind(input.voice_notes)
+    .bind(input.arc_summary)
+    .bind(input.knowledge_notes)
+    .bind(input.visual_prompt)
+    .bind(input.image_asset_id)
+    .bind(input.status)
+    .bind(input.order_index)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_by_id(&mut tx, &input.project_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, Character>("SELECT * FROM characters WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn upsert_character_relation_in_pool(
+    pool: &SqlitePool,
+    input: UpsertCharacterRelationInput,
+) -> Result<CharacterRelation, AppError> {
+    if input.from_character_id == input.to_character_id {
+        return Err(AppError::Process(
+            "Relacja wymaga dwoch roznych postaci.".into(),
+        ));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let trust_level = input.trust_level.clamp(0, 100);
+    let mut tx = pool.begin().await?;
+
+    validate_character_in_project(&mut tx, &input.from_character_id, &input.project_id).await?;
+    validate_character_in_project(&mut tx, &input.to_character_id, &input.project_id).await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO character_relations
+          (id, project_id, from_character_id, to_character_id, relation_type, description, history, conflict, opinion, trust_level, secret, change_over_time, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(from_character_id, to_character_id, relation_type) DO UPDATE SET
+          description = excluded.description,
+          history = excluded.history,
+          conflict = excluded.conflict,
+          opinion = excluded.opinion,
+          trust_level = excluded.trust_level,
+          secret = excluded.secret,
+          change_over_time = excluded.change_over_time,
+          status = excluded.status,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.project_id)
+    .bind(&input.from_character_id)
+    .bind(&input.to_character_id)
+    .bind(&input.relation_type)
+    .bind(input.description)
+    .bind(input.history)
+    .bind(input.conflict)
+    .bind(input.opinion)
+    .bind(trust_level)
+    .bind(input.secret)
+    .bind(input.change_over_time)
+    .bind(input.status)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_by_id(&mut tx, &input.project_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, CharacterRelation>(
+        "SELECT * FROM character_relations WHERE from_character_id = ? AND to_character_id = ? AND relation_type = ?",
+    )
+    .bind(&input.from_character_id)
+    .bind(&input.to_character_id)
+    .bind(&input.relation_type)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn upsert_character_memory_in_pool(
+    pool: &SqlitePool,
+    input: UpsertCharacterMemoryInput,
+) -> Result<CharacterMemory, AppError> {
+    if input.title.trim().is_empty() {
+        return Err(AppError::Process("Tytul wspomnienia nie moze byc pusty.".into()));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let importance = input.importance.clamp(0, 100);
+    let mut tx = pool.begin().await?;
+
+    validate_character_in_project(&mut tx, &input.character_id, &input.project_id).await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO character_memories
+          (id, project_id, character_id, title, summary, details, memory_type, subject, emotion, importance, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          character_id = excluded.character_id,
+          title = excluded.title,
+          summary = excluded.summary,
+          details = excluded.details,
+          memory_type = excluded.memory_type,
+          subject = excluded.subject,
+          emotion = excluded.emotion,
+          importance = excluded.importance,
+          status = excluded.status,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.project_id)
+    .bind(&input.character_id)
+    .bind(input.title)
+    .bind(input.summary)
+    .bind(input.details)
+    .bind(input.memory_type)
+    .bind(input.subject)
+    .bind(input.emotion)
+    .bind(importance)
+    .bind(input.status)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_by_id(&mut tx, &input.project_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, CharacterMemory>("SELECT * FROM character_memories WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn upsert_character_memory_link_in_pool(
+    pool: &SqlitePool,
+    input: UpsertCharacterMemoryLinkInput,
+) -> Result<CharacterMemoryLink, AppError> {
+    if input.from_memory_id == input.to_memory_id {
+        return Err(AppError::Process(
+            "Polaczenie wymaga dwoch roznych wspomnien.".into(),
+        ));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let strength = input.strength.clamp(0, 100);
+    let mut tx = pool.begin().await?;
+
+    validate_memory_in_project(&mut tx, &input.from_memory_id, &input.project_id).await?;
+    validate_memory_in_project(&mut tx, &input.to_memory_id, &input.project_id).await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO character_memory_links
+          (id, project_id, from_memory_id, to_memory_id, link_type, description, strength, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(from_memory_id, to_memory_id, link_type) DO UPDATE SET
+          description = excluded.description,
+          strength = excluded.strength,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.project_id)
+    .bind(&input.from_memory_id)
+    .bind(&input.to_memory_id)
+    .bind(&input.link_type)
+    .bind(input.description)
+    .bind(strength)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    touch_project_by_id(&mut tx, &input.project_id, &now).await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, CharacterMemoryLink>(
+        "SELECT * FROM character_memory_links WHERE from_memory_id = ? AND to_memory_id = ? AND link_type = ?",
+    )
+    .bind(&input.from_memory_id)
+    .bind(&input.to_memory_id)
+    .bind(&input.link_type)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn delete_character_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM characters WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_character_relation_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM character_relations WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_character_memory_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM character_memories WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_character_memory_link_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM character_memory_links WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+async fn validate_character_in_project(
+    tx: &mut Transaction<'_, Sqlite>,
+    character_id: &str,
+    project_id: &str,
+) -> Result<(), AppError> {
+    let exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM characters WHERE id = ? AND project_id = ?")
+            .bind(character_id)
+            .bind(project_id)
+            .fetch_one(&mut **tx)
+            .await?;
+    if exists.0 == 0 {
+        return Err(AppError::Process("Nie znaleziono postaci.".into()));
+    }
+
+    Ok(())
+}
+
+async fn validate_memory_in_project(
+    tx: &mut Transaction<'_, Sqlite>,
+    memory_id: &str,
+    project_id: &str,
+) -> Result<(), AppError> {
+    let exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM character_memories WHERE id = ? AND project_id = ?")
+            .bind(memory_id)
+            .bind(project_id)
+            .fetch_one(&mut **tx)
+            .await?;
+    if exists.0 == 0 {
+        return Err(AppError::Process("Nie znaleziono wspomnienia.".into()));
+    }
+
+    Ok(())
 }
 
 pub async fn list_ai_runs_in_pool(
@@ -1502,6 +2123,224 @@ pub async fn generate_book_cover_in_pool(
     })
 }
 
+pub async fn generate_character_image_in_pool(
+    app: &AppHandle,
+    pool: &SqlitePool,
+    input: GenerateCharacterImageInput,
+) -> Result<CharacterImageResult, AppError> {
+    if input.image_prompt.trim().is_empty() {
+        return Err(AppError::Process(
+            "Prompt obrazu postaci nie moze byc pusty.".into(),
+        ));
+    }
+
+    let character = sqlx::query_as::<_, Character>(
+        "SELECT * FROM characters WHERE id = ? AND project_id = ?",
+    )
+    .bind(&input.character_id)
+    .bind(&input.project_id)
+    .fetch_one(pool)
+    .await?;
+
+    let ai_run_id = Uuid::new_v4().to_string();
+    let created_at = Utc::now().to_rfc3339();
+    let prompt_package_json = serde_json::to_string(&input.prompt_package_json)?;
+    let timeout_seconds = cover_timeout_seconds(input.timeout_seconds);
+
+    sqlx::query(
+        r#"
+        INSERT INTO ai_runs
+          (id, project_id, provider_id, model, reasoning_effort, action, prompt_package_json, prompt, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'generate_character_image', ?, ?, 'running', ?)
+        "#,
+    )
+    .bind(&ai_run_id)
+    .bind(&input.project_id)
+    .bind(PROVIDER_ID)
+    .bind(input.model.as_deref().unwrap_or(""))
+    .bind(input.reasoning_effort.as_deref().unwrap_or(""))
+    .bind(&prompt_package_json)
+    .bind(&input.prompt)
+    .bind(&created_at)
+    .execute(pool)
+    .await?;
+
+    let started_at = Instant::now();
+    let run_result =
+        execute_codex_character_image_generation(app, &input, &ai_run_id, timeout_seconds).await;
+    let duration_ms = started_at.elapsed().as_millis();
+    let completed_at = Utc::now().to_rfc3339();
+
+    let (stdout, stderr, generated_image_path) = match run_result {
+        Ok(result) => result,
+        Err(error) => {
+            let error_message = error.to_string();
+            complete_ai_run(
+                pool,
+                &ai_run_id,
+                if matches!(error, AppError::Timeout(_)) {
+                    "timeout"
+                } else {
+                    "error"
+                },
+                None,
+                Some(&error_message),
+                &completed_at,
+            )
+            .await?;
+            return Err(error);
+        }
+    };
+
+    verify_generated_png_file(&generated_image_path, "Codex CLI generated character image")
+        .await?;
+
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        AppError::Process(format!(
+            "Nie udalo sie ustalic katalogu danych aplikacji: {error}"
+        ))
+    })?;
+    let final_dir = app_data_dir
+        .join("characters")
+        .join(&input.project_id)
+        .join(&input.character_id);
+    tokio::fs::create_dir_all(&final_dir).await?;
+    let final_image_path = final_dir.join(format!("character-{ai_run_id}.png"));
+    tokio::fs::copy(&generated_image_path, &final_image_path).await?;
+    verify_generated_png_file(&final_image_path, "Saved character image").await?;
+    let raw_output = codex_image_raw_output(&stdout, &stderr, &generated_image_path);
+    complete_ai_run(
+        pool,
+        &ai_run_id,
+        "success",
+        Some(&raw_output),
+        None,
+        &completed_at,
+    )
+    .await?;
+
+    let final_image_path_text = final_image_path.to_string_lossy().to_string();
+    let proposed_asset = VisualAsset {
+        id: Uuid::new_v4().to_string(),
+        project_id: input.project_id.clone(),
+        related_type: "character".into(),
+        related_id: input.character_id.clone(),
+        asset_type: "image".into(),
+        title: character.name.clone(),
+        prompt: input.image_prompt.clone(),
+        negative_prompt: input.negative_prompt.clone(),
+        file_path: final_image_path_text.clone(),
+        source: "ai".into(),
+        status: "proposed".into(),
+        created_at: completed_at.clone(),
+        updated_at: completed_at.clone(),
+    };
+
+    Ok(CharacterImageResult {
+        character,
+        visual_asset: proposed_asset,
+        ai_run: AiRunResult {
+            id: ai_run_id,
+            provider_id: PROVIDER_ID.into(),
+            prompt_package_id: input.prompt_package_id,
+            action: "generate_character_image".into(),
+            status: "success".into(),
+            raw_output: Some(raw_output),
+            stderr: if stderr.trim().is_empty() {
+                None
+            } else {
+                Some(stderr)
+            },
+            error_message: None,
+            duration_ms,
+        },
+        image_path: final_image_path_text,
+        prompt: input.image_prompt,
+        negative_prompt: input.negative_prompt,
+        generated_at: completed_at,
+    })
+}
+
+pub async fn accept_generated_character_image_in_pool(
+    pool: &SqlitePool,
+    input: AcceptGeneratedCharacterImageInput,
+) -> Result<CharacterImageResult, AppError> {
+    verify_generated_png_file(Path::new(&input.image_path), "Accepted character image").await?;
+
+    let now = Utc::now().to_rfc3339();
+    let asset_id = Uuid::new_v4().to_string();
+    let mut tx = pool.begin().await?;
+    validate_character_in_project(&mut tx, &input.character_id, &input.project_id).await?;
+
+    let character = sqlx::query_as::<_, Character>(
+        "SELECT * FROM characters WHERE id = ? AND project_id = ?",
+    )
+    .bind(&input.character_id)
+    .bind(&input.project_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO visual_assets
+          (id, project_id, related_type, related_id, asset_type, title, prompt, negative_prompt, file_path, source, status, created_at, updated_at)
+        VALUES (?, ?, 'character', ?, 'image', ?, ?, ?, ?, 'ai', 'canon', ?, ?)
+        "#,
+    )
+    .bind(&asset_id)
+    .bind(&input.project_id)
+    .bind(&input.character_id)
+    .bind(&character.name)
+    .bind(&input.image_prompt)
+    .bind(&input.negative_prompt)
+    .bind(&input.image_path)
+    .bind(&input.generated_at)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE characters SET image_asset_id = ?, visual_prompt = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(&asset_id)
+    .bind(&input.image_prompt)
+    .bind(&now)
+    .bind(&input.character_id)
+    .execute(&mut *tx)
+    .await?;
+    touch_project_by_id(&mut tx, &input.project_id, &now).await?;
+    tx.commit().await?;
+
+    let character = sqlx::query_as::<_, Character>("SELECT * FROM characters WHERE id = ?")
+        .bind(&input.character_id)
+        .fetch_one(pool)
+        .await?;
+    let visual_asset = sqlx::query_as::<_, VisualAsset>("SELECT * FROM visual_assets WHERE id = ?")
+        .bind(&asset_id)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(CharacterImageResult {
+        character,
+        visual_asset,
+        ai_run: AiRunResult {
+            id: asset_id.clone(),
+            provider_id: PROVIDER_ID.into(),
+            prompt_package_id: "accepted-character-image".into(),
+            action: "generate_character_image".into(),
+            status: "success".into(),
+            raw_output: None,
+            stderr: None,
+            error_message: None,
+            duration_ms: 0,
+        },
+        image_path: input.image_path,
+        prompt: input.image_prompt,
+        negative_prompt: input.negative_prompt,
+        generated_at: input.generated_at,
+    })
+}
+
 #[tauri::command]
 async fn create_project(
     state: State<'_, AppState>,
@@ -1532,6 +2371,16 @@ async fn get_project(
 #[tauri::command]
 async fn get_book_plan(state: State<'_, AppState>, book_id: String) -> Result<BookPlan, String> {
     get_book_plan_in_pool(&state.db, &book_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn get_character_workspace(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<CharacterWorkspace, String> {
+    get_character_workspace_in_pool(&state.db, &project_id)
         .await
         .map_err(command_error)
 }
@@ -1627,6 +2476,77 @@ async fn delete_chapter(state: State<'_, AppState>, id: String) -> Result<(), St
 }
 
 #[tauri::command]
+async fn upsert_character(
+    state: State<'_, AppState>,
+    input: UpsertCharacterInput,
+) -> Result<Character, String> {
+    upsert_character_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_character(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_character_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_character_relation(
+    state: State<'_, AppState>,
+    input: UpsertCharacterRelationInput,
+) -> Result<CharacterRelation, String> {
+    upsert_character_relation_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_character_relation(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_character_relation_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_character_memory(
+    state: State<'_, AppState>,
+    input: UpsertCharacterMemoryInput,
+) -> Result<CharacterMemory, String> {
+    upsert_character_memory_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_character_memory(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    delete_character_memory_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn upsert_character_memory_link(
+    state: State<'_, AppState>,
+    input: UpsertCharacterMemoryLinkInput,
+) -> Result<CharacterMemoryLink, String> {
+    upsert_character_memory_link_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_character_memory_link(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    delete_character_memory_link_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
 async fn reorder_plan_items(
     state: State<'_, AppState>,
     input: ReorderPlanItemsInput,
@@ -1687,6 +2607,27 @@ async fn accept_generated_book_cover(
     )
     .await
     .map_err(command_error)
+}
+
+#[tauri::command]
+async fn generate_character_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: GenerateCharacterImageInput,
+) -> Result<CharacterImageResult, String> {
+    generate_character_image_in_pool(&app, &state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn accept_generated_character_image(
+    state: State<'_, AppState>,
+    input: AcceptGeneratedCharacterImageInput,
+) -> Result<CharacterImageResult, String> {
+    accept_generated_character_image_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
 }
 
 #[tauri::command]
@@ -2173,6 +3114,142 @@ async fn execute_codex_image_generation(
         None,
         Some(92),
     );
+
+    Ok((stdout, stderr, actual_image_path))
+}
+
+async fn execute_codex_character_image_generation(
+    app: &AppHandle,
+    request: &GenerateCharacterImageInput,
+    ai_run_id: &str,
+    timeout_seconds: u64,
+) -> Result<(String, String, PathBuf), AppError> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        AppError::Process(format!(
+            "Nie udalo sie ustalic katalogu danych aplikacji: {error}"
+        ))
+    })?;
+    let workspace = app_data_dir
+        .join("codex-workspaces")
+        .join(&request.project_id)
+        .join("character-image-runs")
+        .join(ai_run_id);
+    tokio::fs::create_dir_all(&workspace).await?;
+    ensure_git_workspace(&workspace).await;
+
+    let image_path = workspace.join("character.png");
+    let image_path_text = image_path.to_string_lossy().to_string();
+    let prompt = format!(
+        "{}\nFresh generation nonce: {ai_run_id}. Use this only to randomize the image generation; do not render it as visible text.\n",
+        request.prompt.replace("{OUTPUT_FILE}", &image_path_text)
+    );
+    match tokio::fs::remove_file(&image_path).await {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(AppError::from(error)),
+    }
+    let generation_started_at = SystemTime::now()
+        .checked_sub(Duration::from_secs(2))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+
+    tokio::fs::write(workspace.join("prompt.md"), prompt.as_bytes()).await?;
+    tokio::fs::write(
+        workspace.join("context.json"),
+        serde_json::to_string_pretty(&request.prompt_package_json)?.as_bytes(),
+    )
+    .await?;
+
+    let codex_path = request
+        .codex_path
+        .clone()
+        .unwrap_or_else(|| "codex".to_string());
+    let command_spec = resolve_codex_command(&codex_path).await;
+    let instruction = "Run the StoryForge2 character image prompt from stdin. You must invoke the built-in $imagegen/image_generation tool to create a brand-new PNG portrait/reference image from scratch before returning. Do not edit, extend, inpaint, upscale, vary, reuse, or derive from any previous image. Do not run shell commands, inspect the filesystem, copy files, or move files. Never return placeholder paths such as _image_id_.png. Return only compact JSON with imagePath set to the actual generated PNG path; if the exact filename is unavailable, return the generated_images session directory. StoryForge2 will resolve and copy the final PNG.";
+
+    let mut command = Command::new(command_spec.program);
+    command
+        .args(command_spec.prefix_args)
+        .arg("exec")
+        .arg("--enable")
+        .arg("image_generation")
+        .arg("--disable")
+        .arg("hooks")
+        .arg("--disable")
+        .arg("shell_tool");
+
+    if let Some(model) = request
+        .model
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        command.arg("--model").arg(model);
+    }
+
+    if let Some(reasoning_effort) = request
+        .reasoning_effort
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        command
+            .arg("-c")
+            .arg(format!("model_reasoning_effort=\"{reasoning_effort}\""));
+    }
+
+    command
+        .arg("--ephemeral")
+        .arg("--sandbox")
+        .arg("workspace-write")
+        .arg(instruction)
+        .current_dir(&workspace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let output = timeout(Duration::from_secs(timeout_seconds), async {
+        let mut child = command.spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(prompt.as_bytes()).await?;
+        }
+        child.wait_with_output().await.map_err(AppError::from)
+    })
+    .await
+    .map_err(|_| AppError::Timeout(timeout_seconds))??;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
+    tokio::fs::write(
+        workspace.join("last-run.json"),
+        serde_json::json!({
+            "action": "generate_character_image",
+            "model": request.model,
+            "reasoningEffort": request.reasoning_effort,
+            "status": output.status.code(),
+            "stderr": stderr,
+            "imagePath": image_path_text,
+            "completedAt": Utc::now().to_rfc3339()
+        })
+        .to_string()
+        .as_bytes(),
+    )
+    .await?;
+
+    let actual_image_path_result =
+        resolve_generated_cover_path(&image_path, &stdout, &stderr, generation_started_at).await;
+
+    if !output.status.success() {
+        return Err(AppError::Process(if stderr.trim().is_empty() {
+            "Codex CLI zwrocil niezerowy status podczas generowania obrazu postaci.".into()
+        } else {
+            stderr
+        }));
+    }
+
+    let actual_image_path = actual_image_path_result?;
+    verify_generated_png_file(&actual_image_path, "Codex CLI generated character image").await?;
 
     Ok((stdout, stderr, actual_image_path))
 }
@@ -2770,6 +3847,7 @@ pub fn run() {
             list_projects,
             get_project,
             get_book_plan,
+            get_character_workspace,
             save_story_structure,
             upsert_act,
             delete_act,
@@ -2782,10 +3860,20 @@ pub fn run() {
             upsert_chapter_thread_relation,
             delete_chapter,
             reorder_plan_items,
+            upsert_character,
+            delete_character,
+            upsert_character_relation,
+            delete_character_relation,
+            upsert_character_memory,
+            delete_character_memory,
+            upsert_character_memory_link,
+            delete_character_memory_link,
             list_ai_runs,
             update_book_concept,
             generate_book_cover,
             accept_generated_book_cover,
+            generate_character_image,
+            accept_generated_character_image,
             check_codex_cli,
             list_codex_models,
             generate_new_project_title,
@@ -2847,6 +3935,30 @@ mod tests {
         .unwrap();
 
         assert_eq!(table_count.0, 7);
+    }
+
+    #[tokio::test]
+    async fn migration_creates_character_workspace_tables() {
+        let pool = test_pool().await;
+        let table_count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name IN (
+                'characters',
+                'character_relations',
+                'character_memories',
+                'character_memory_links',
+                'visual_assets'
+              )
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(table_count.0, 5);
     }
 
     #[tokio::test]
@@ -3244,6 +4356,396 @@ mod tests {
         delete_plot_thread_in_pool(&pool, &thread.id).await.unwrap();
         let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
         assert!(plan.threads.is_empty());
+    }
+
+    #[tokio::test]
+    async fn character_workspace_persists_relations_memories_and_links() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Postacie".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let hero = upsert_character_in_pool(
+            &pool,
+            UpsertCharacterInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_type: "person".into(),
+                name: "Mira".into(),
+                aliases_json: "[]".into(),
+                role: "bohaterka".into(),
+                short_description: "Kartografka".into(),
+                external_goal: "Odnalezc mape".into(),
+                internal_need: "Zaufac komus".into(),
+                wound: "".into(),
+                false_belief: "".into(),
+                secret: "".into(),
+                strengths_json: "[]".into(),
+                weaknesses_json: "[]".into(),
+                voice_notes: "".into(),
+                arc_summary: "".into(),
+                knowledge_notes: "".into(),
+                visual_prompt: "".into(),
+                image_asset_id: None,
+                status: "draft".into(),
+                order_index: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let rival = upsert_character_in_pool(
+            &pool,
+            UpsertCharacterInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_type: "creature".into(),
+                name: "Szept".into(),
+                aliases_json: "[]".into(),
+                role: "rywal".into(),
+                short_description: "".into(),
+                external_goal: "".into(),
+                internal_need: "".into(),
+                wound: "".into(),
+                false_belief: "".into(),
+                secret: "".into(),
+                strengths_json: "[]".into(),
+                weaknesses_json: "[]".into(),
+                voice_notes: "".into(),
+                arc_summary: "".into(),
+                knowledge_notes: "".into(),
+                visual_prompt: "".into(),
+                image_asset_id: None,
+                status: "draft".into(),
+                order_index: 1,
+            },
+        )
+        .await
+        .unwrap();
+        let relation = upsert_character_relation_in_pool(
+            &pool,
+            UpsertCharacterRelationInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                from_character_id: hero.id.clone(),
+                to_character_id: rival.id.clone(),
+                relation_type: "rywalizacja".into(),
+                description: "Mira nie ufa Szeptowi.".into(),
+                history: "".into(),
+                conflict: "Mapa".into(),
+                opinion: "Niebezpieczny".into(),
+                trust_level: 18,
+                secret: "".into(),
+                change_over_time: "".into(),
+                status: "draft".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let first_memory = upsert_character_memory_in_pool(
+            &pool,
+            UpsertCharacterMemoryInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_id: hero.id.clone(),
+                title: "Most".into(),
+                summary: "Ucieczka przez most".into(),
+                details: "".into(),
+                memory_type: "wydarzenie".into(),
+                subject: "most".into(),
+                emotion: "strach".into(),
+                importance: 80,
+                status: "canon".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let second_memory = upsert_character_memory_in_pool(
+            &pool,
+            UpsertCharacterMemoryInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_id: hero.id.clone(),
+                title: "Mapa".into(),
+                summary: "Pierwsza mapa".into(),
+                details: "".into(),
+                memory_type: "przedmiot".into(),
+                subject: "mapa".into(),
+                emotion: "nadzieja".into(),
+                importance: 70,
+                status: "canon".into(),
+            },
+        )
+        .await
+        .unwrap();
+        upsert_character_memory_link_in_pool(
+            &pool,
+            UpsertCharacterMemoryLinkInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                from_memory_id: first_memory.id.clone(),
+                to_memory_id: second_memory.id.clone(),
+                link_type: "skojarzenie".into(),
+                description: "Mapa przypomina jej most.".into(),
+                strength: 75,
+            },
+        )
+        .await
+        .unwrap();
+
+        let workspace = get_character_workspace_in_pool(&pool, &created.project.id)
+            .await
+            .unwrap();
+        assert_eq!(workspace.characters.len(), 2);
+        assert_eq!(workspace.relations[0].id, relation.id);
+        assert_eq!(workspace.memories.len(), 2);
+        assert_eq!(workspace.memory_links.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn character_relation_rejects_missing_character_and_upserts_duplicate() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Relacje".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        let first = upsert_character_in_pool(
+            &pool,
+            UpsertCharacterInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_type: "person".into(),
+                name: "A".into(),
+                aliases_json: "[]".into(),
+                role: "".into(),
+                short_description: "".into(),
+                external_goal: "".into(),
+                internal_need: "".into(),
+                wound: "".into(),
+                false_belief: "".into(),
+                secret: "".into(),
+                strengths_json: "[]".into(),
+                weaknesses_json: "[]".into(),
+                voice_notes: "".into(),
+                arc_summary: "".into(),
+                knowledge_notes: "".into(),
+                visual_prompt: "".into(),
+                image_asset_id: None,
+                status: "draft".into(),
+                order_index: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let second = upsert_character_in_pool(
+            &pool,
+            UpsertCharacterInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_type: "person".into(),
+                name: "B".into(),
+                aliases_json: "[]".into(),
+                role: "".into(),
+                short_description: "".into(),
+                external_goal: "".into(),
+                internal_need: "".into(),
+                wound: "".into(),
+                false_belief: "".into(),
+                secret: "".into(),
+                strengths_json: "[]".into(),
+                weaknesses_json: "[]".into(),
+                voice_notes: "".into(),
+                arc_summary: "".into(),
+                knowledge_notes: "".into(),
+                visual_prompt: "".into(),
+                image_asset_id: None,
+                status: "draft".into(),
+                order_index: 1,
+            },
+        )
+        .await
+        .unwrap();
+
+        let missing_error = upsert_character_relation_in_pool(
+            &pool,
+            UpsertCharacterRelationInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                from_character_id: first.id.clone(),
+                to_character_id: "missing".into(),
+                relation_type: "sojusz".into(),
+                description: "".into(),
+                history: "".into(),
+                conflict: "".into(),
+                opinion: "".into(),
+                trust_level: 50,
+                secret: "".into(),
+                change_over_time: "".into(),
+                status: "draft".into(),
+            },
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(missing_error.contains("Nie znaleziono postaci"));
+
+        let relation = upsert_character_relation_in_pool(
+            &pool,
+            UpsertCharacterRelationInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                from_character_id: first.id.clone(),
+                to_character_id: second.id.clone(),
+                relation_type: "sojusz".into(),
+                description: "Pierwszy opis".into(),
+                history: "".into(),
+                conflict: "".into(),
+                opinion: "".into(),
+                trust_level: 50,
+                secret: "".into(),
+                change_over_time: "".into(),
+                status: "draft".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let updated = upsert_character_relation_in_pool(
+            &pool,
+            UpsertCharacterRelationInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                from_character_id: first.id.clone(),
+                to_character_id: second.id.clone(),
+                relation_type: "sojusz".into(),
+                description: "Drugi opis".into(),
+                history: "".into(),
+                conflict: "".into(),
+                opinion: "".into(),
+                trust_level: 65,
+                secret: "".into(),
+                change_over_time: "".into(),
+                status: "canon".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let workspace = get_character_workspace_in_pool(&pool, &created.project.id)
+            .await
+            .unwrap();
+        assert_eq!(workspace.relations.len(), 1);
+        assert_eq!(updated.id, relation.id);
+        assert_eq!(workspace.relations[0].description, "Drugi opis");
+    }
+
+    #[tokio::test]
+    async fn deleting_character_cascades_character_memory_graph() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Kasowanie postaci".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        let character = upsert_character_in_pool(
+            &pool,
+            UpsertCharacterInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_type: "person".into(),
+                name: "A".into(),
+                aliases_json: "[]".into(),
+                role: "".into(),
+                short_description: "".into(),
+                external_goal: "".into(),
+                internal_need: "".into(),
+                wound: "".into(),
+                false_belief: "".into(),
+                secret: "".into(),
+                strengths_json: "[]".into(),
+                weaknesses_json: "[]".into(),
+                voice_notes: "".into(),
+                arc_summary: "".into(),
+                knowledge_notes: "".into(),
+                visual_prompt: "".into(),
+                image_asset_id: None,
+                status: "draft".into(),
+                order_index: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let memory = upsert_character_memory_in_pool(
+            &pool,
+            UpsertCharacterMemoryInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_id: character.id.clone(),
+                title: "Wspomnienie".into(),
+                summary: "".into(),
+                details: "".into(),
+                memory_type: "wydarzenie".into(),
+                subject: "".into(),
+                emotion: "".into(),
+                importance: 50,
+                status: "draft".into(),
+            },
+        )
+        .await
+        .unwrap();
+        let other = upsert_character_memory_in_pool(
+            &pool,
+            UpsertCharacterMemoryInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                character_id: character.id.clone(),
+                title: "Drugie".into(),
+                summary: "".into(),
+                details: "".into(),
+                memory_type: "wydarzenie".into(),
+                subject: "".into(),
+                emotion: "".into(),
+                importance: 50,
+                status: "draft".into(),
+            },
+        )
+        .await
+        .unwrap();
+        upsert_character_memory_link_in_pool(
+            &pool,
+            UpsertCharacterMemoryLinkInput {
+                id: None,
+                project_id: created.project.id.clone(),
+                from_memory_id: memory.id,
+                to_memory_id: other.id,
+                link_type: "association".into(),
+                description: "".into(),
+                strength: 50,
+            },
+        )
+        .await
+        .unwrap();
+
+        delete_character_in_pool(&pool, &character.id).await.unwrap();
+        let workspace = get_character_workspace_in_pool(&pool, &created.project.id)
+            .await
+            .unwrap();
+        assert!(workspace.characters.is_empty());
+        assert!(workspace.memories.is_empty());
+        assert!(workspace.memory_links.is_empty());
     }
 
     #[test]

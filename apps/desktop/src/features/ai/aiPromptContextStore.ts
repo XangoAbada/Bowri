@@ -11,6 +11,11 @@ import {
   planPromptContextSources,
   type PlanFieldKey
 } from "./planPromptPackage";
+import {
+  characterFieldConfigs,
+  characterPromptContextSources,
+  type CharacterFieldKey
+} from "./characterPromptPackage";
 
 export type AiPromptContextTarget = {
   targetId: string;
@@ -241,6 +246,37 @@ export function createPlanPromptContextTarget(
     projectId,
     title: config.label,
     subtitle: "Pole planu",
+    sources,
+    defaultSources: sources,
+    submitLabel: options.submitLabel,
+    submitDisabled: options.submitDisabled,
+    submitDisabledReason: options.submitDisabledReason,
+    onSubmit: options.onSubmit
+  };
+}
+
+export function characterPromptContextTargetId(
+  projectId: string,
+  field: CharacterFieldKey,
+  targetEntityId?: string
+): string {
+  return `project:${projectId}:characters:${field}:${targetEntityId ?? "global"}`;
+}
+
+export function createCharacterPromptContextTarget(
+  projectId: string,
+  field: CharacterFieldKey,
+  targetEntityId: string | undefined,
+  options: PromptContextTargetOptions = {}
+): AiPromptContextTarget {
+  const config = characterFieldConfigs[field];
+  const sources = characterPromptContextSources(field);
+
+  return {
+    targetId: characterPromptContextTargetId(projectId, field, targetEntityId),
+    projectId,
+    title: config.label,
+    subtitle: "Pole postaci",
     sources,
     defaultSources: sources,
     submitLabel: options.submitLabel,

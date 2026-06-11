@@ -28,7 +28,16 @@ import {
   X
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { FormEvent, MouseEvent, PointerEvent, ReactNode, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  MouseEvent,
+  PointerEvent,
+  ReactNode,
+  KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteAct,
@@ -2609,10 +2618,10 @@ function ThreadsStep({
                     plan={plan}
                     thread={thread}
                     active={selectedThread?.id === thread.id}
-                    onSelect={() => selectThread(thread)}
-                    onEdit={() => {
+                    onSelect={() => {
                       setSelectedThreadId(thread.id);
                       setEditingThreadId(thread.id);
+                      onSelect({ type: "thread", id: thread.id });
                     }}
                     onAddChapter={(chapter) => addThreadToChapter(thread, chapter)}
                     onRemoveChapter={(chapter) => removeThreadFromChapter(thread, chapter)}
@@ -3070,7 +3079,6 @@ function ThreadSummaryCard({
   thread,
   active,
   onSelect,
-  onEdit,
   onAddChapter,
   onRemoveChapter
 }: {
@@ -3078,7 +3086,6 @@ function ThreadSummaryCard({
   thread: PlotThread;
   active: boolean;
   onSelect: () => void;
-  onEdit: () => void;
   onAddChapter: (chapter: Chapter) => void;
   onRemoveChapter: (chapter: Chapter) => void;
 }) {
@@ -3090,9 +3097,34 @@ function ThreadSummaryCard({
     (chapter) => !chapters.some((linkedChapter) => linkedChapter.id === chapter.id)
   );
 
+  function openFromCard(event: MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, [role='dialog']")) {
+      return;
+    }
+
+    onSelect();
+  }
+
+  function openFromKeyboard(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+
+    event.preventDefault();
+    onSelect();
+  }
+
   return (
-    <article className={active ? "thread-summary-card active" : "thread-summary-card"}>
-      <button type="button" className="thread-summary-hitarea" onClick={onSelect}>
+    <article
+      className={active ? "thread-summary-card active" : "thread-summary-card"}
+      role="button"
+      tabIndex={0}
+      onClick={openFromCard}
+      onKeyDown={openFromKeyboard}
+      aria-label={`Edytuj wątek ${thread.name}`}
+    >
+      <div className="thread-summary-hitarea">
         <span className="thread-color-dot" style={{ background: thread.color }} />
         <span>
           <strong>{thread.name}</strong>
@@ -3100,7 +3132,7 @@ function ThreadSummaryCard({
             {threadStatusLabel(thread.status)}
           </em>
         </span>
-      </button>
+      </div>
       <p>{thread.description || "Ten wątek nie ma jeszcze opisu."}</p>
       <div className="thread-card-metrics">
         <span>
@@ -3166,10 +3198,6 @@ function ThreadSummaryCard({
           }}
         />
       ) : null}
-      <button type="button" className="thread-card-edit" onClick={onEdit}>
-        <Pencil size={14} />
-        Edytuj
-      </button>
     </article>
   );
 }

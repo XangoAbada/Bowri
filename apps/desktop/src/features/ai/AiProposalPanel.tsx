@@ -6,7 +6,9 @@ import { coverImageSource } from "../../shared/api/assets";
 import { isTauriRuntime } from "../../shared/api/browserDevCommands";
 import {
   acceptGeneratedBookCover,
+  acceptGeneratedCharacterImage,
   generateBookCover,
+  generateCharacterImage,
   generateNewProjectTitle,
   getBookPlan,
   moveBeatToChapter,
@@ -15,13 +17,17 @@ import {
   upsertAct,
   upsertBeat,
   upsertChapter,
+  upsertCharacterMemory,
+  upsertCharacterRelation,
   upsertChapterThreadRelation,
   upsertPlotThread,
   updateBookConcept
 } from "../../shared/api/commands";
 import type {
   BookConceptInput,
-  CoverGenerationProgressEvent
+  CoverGenerationProgressEvent,
+  UpsertCharacterMemoryInput,
+  UpsertCharacterRelationInput
 } from "../../shared/api/types";
 import { parseConceptFieldSuggestion } from "./conceptFieldSuggestion";
 import { useCodexSettingsStore } from "./codexSettingsStore";
@@ -35,8 +41,14 @@ import { planFieldConfigs, PlanFieldKey } from "./planPromptPackage";
 import { applyPlanDraftField } from "./planDraftFieldTargets";
 import { applyPlanProposalPayload } from "./planProposalApplication";
 import {
+  characterFieldConfigs,
+  CharacterFieldKey
+} from "./characterPromptPackage";
+import { applyCharacterDraftField } from "./characterDraftFieldTargets";
+import {
   ActiveAiProposal,
   BOOK_COVER_FIELD,
+  CHARACTER_IMAGE_FIELD,
   ParsedAiProposal,
   useProposalStore
 } from "./proposalStore";
@@ -104,6 +116,38 @@ export function AiProposalPanel({
         });
       }
 
+      if (isCharacterImageProposal(proposal)) {
+        const imagePath = (
+          proposal.characterImagePath ||
+          proposal.coverImagePath ||
+          proposal.editableValue
+        ).trim();
+        const packageContext =
+          "context" in proposal.promptPackageJson
+            ? proposal.promptPackageJson.context
+            : {};
+        const scopedPackageContext =
+          packageContext && typeof packageContext === "object"
+            ? (packageContext as Record<string, unknown>)
+            : {};
+        const characterId =
+          typeof scopedPackageContext.targetEntityId === "string"
+            ? scopedPackageContext.targetEntityId
+            : "";
+        if (!imagePath || !characterId || !proposal.coverPrompt || !proposal.characterGeneratedAt) {
+          throw new Error("Brak kompletnej propozycji obrazu postaci do akceptacji.");
+        }
+
+        return acceptGeneratedCharacterImage({
+          projectId: proposal.projectId,
+          characterId,
+          imagePath,
+          imagePrompt: proposal.coverPrompt,
+          negativePrompt: proposal.coverNegativePrompt ?? "",
+          generatedAt: proposal.characterGeneratedAt
+        });
+      }
+
       if (proposal.scope === "bookPlan") {
         const plan = await getBookPlan(proposal.bookId);
         const payload = planPayloadFromEditableValue(proposal);
@@ -153,6 +197,42 @@ export function AiProposalPanel({
         return null;
       }
 
+      if (proposal.scope === "characters") {
+        const packageContext =
+          "context" in proposal.promptPackageJson
+            ? proposal.promptPackageJson.context
+            : {};
+        const scopedPackageContext =
+          packageContext && typeof packageContext === "object"
+            ? (packageContext as Record<string, unknown>)
+            : {};
+        const targetEntityId =
+          typeof scopedPackageContext.targetEntityId === "string"
+            ? scopedPackageContext.targetEntityId
+            : "";
+        const value = proposal.editableValue.trim();
+        if (
+          targetEntityId &&
+          applyCharacterDraftField(targetEntityId, proposal.field as CharacterFieldKey, value)
+        ) {
+          return null;
+        }
+
+        if (proposal.field === "characterRelation") {
+          return upsertCharacterRelation(
+            characterRelationInputFromProposal(proposal, scopedPackageContext)
+          );
+        }
+
+        if (proposal.field === "characterMemory") {
+          return upsertCharacterMemory(
+            characterMemoryInputFromProposal(proposal, scopedPackageContext)
+          );
+        }
+
+        throw new Error("Nie ma juz otwartego formularza dla tej propozycji postaci.");
+      }
+
       if (isPremiseDevelopment(proposal.parsed)) {
         const input = proposalInputFromFields(
           proposal.editableFields,
@@ -178,6 +258,7 @@ export function AiProposalPanel({
       clearProposal(proposalId);
       if (proposal.scope !== "newProject") {
         await queryClient.invalidateQueries({ queryKey: ["book-plan", proposal.bookId] });
+        await queryClient.invalidateQueries({ queryKey: ["character-workspace", projectId] });
         await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         await queryClient.invalidateQueries({ queryKey: ["projects"] });
       }
@@ -272,12 +353,18 @@ function ProposalQueueItem({
   onToggleField
 }: ProposalQueueItemProps) {
   const coverProposal = isBookCoverProposal(proposal);
+  const characterImageProposal = isCharacterImageProposal(proposal);
   const planProposal = proposal.scope === "bookPlan";
+  const characterProposal = proposal.scope === "characters";
   const label = coverProposal
     ? "Okładka"
     : planProposal
       ? planFieldConfigs[proposal.field as PlanFieldKey]?.label ?? "Plan"
-      : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
+      : characterImageProposal
+        ? "Obraz postaci"
+        : characterProposal
+          ? characterFieldConfigs[proposal.field as CharacterFieldKey]?.label ?? "Postac"
+          : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
   const running = proposal.status === "running";
   const queued = proposal.status === "queued";
   const success = proposal.status === "success";
@@ -288,14 +375,19 @@ function ProposalQueueItem({
   const structured = premiseProposal !== null;
   const proposalRows =
     !coverProposal &&
+    !characterProposal &&
     !planProposal &&
     (longConceptFields.includes(proposal.field as ConceptFieldKey) || structured)
       ? 8
       : 3;
   const canAccept = coverProposal
     ? Boolean((proposal.coverImagePath || proposal.editableValue).trim())
+    : characterImageProposal
+      ? Boolean((proposal.characterImagePath || proposal.coverImagePath || proposal.editableValue).trim())
     : planProposal
       ? proposal.editableValue.trim().length > 0
+      : characterProposal
+        ? proposal.editableValue.trim().length > 0
       : structured
         ? hasSelectedEditableField(proposal)
         : proposal.editableValue.trim().length > 0;
@@ -311,6 +403,8 @@ function ProposalQueueItem({
                 ? "Nowy projekt"
                 : planProposal
                   ? "Plan"
+                  : characterProposal
+                    ? "Postacie"
                   : "Pole"}
           </p>
           <h3>{label}</h3>
@@ -343,14 +437,17 @@ function ProposalQueueItem({
         <p className="muted-text">{proposal.progressMessage}</p>
       ) : null}
 
-      {coverProposal && (proposal.partialImageDataUrl || proposal.coverImagePath) ? (
+      {(coverProposal || characterImageProposal) &&
+      (proposal.partialImageDataUrl || proposal.coverImagePath || proposal.characterImagePath) ? (
         <button
           type="button"
           className="proposal-cover-preview proposal-cover-preview-button"
           onClick={() =>
             onPreview(
               coverImageSource(
-                proposal.partialImageDataUrl || proposal.coverImagePath
+                proposal.partialImageDataUrl ||
+                  proposal.coverImagePath ||
+                  proposal.characterImagePath
               ),
               "Podgląd okładki z AI"
             )
@@ -359,7 +456,9 @@ function ProposalQueueItem({
         >
           <img
             src={coverImageSource(
-              proposal.partialImageDataUrl || proposal.coverImagePath
+              proposal.partialImageDataUrl ||
+                proposal.coverImagePath ||
+                proposal.characterImagePath
             )}
             alt="Podgląd okładki z AI"
           />
@@ -374,7 +473,7 @@ function ProposalQueueItem({
         </div>
       ) : null}
 
-      {coverProposal && success ? (
+      {(coverProposal || characterImageProposal) && success ? (
         <p className="success-text">
           Okładka jest gotowa do akceptacji.
         </p>
@@ -411,7 +510,7 @@ function ProposalQueueItem({
         </div>
       ) : null}
 
-      {success && !structured && !coverProposal ? (
+      {success && !structured && !coverProposal && !characterImageProposal ? (
         <label className="field-label">
           {planProposal
             ? "Propozycja do zastosowania w widoku Plan"
@@ -581,6 +680,67 @@ function useAiQueueRunner() {
           return;
         }
 
+        if (isCharacterImageProposal(snapshot)) {
+          updateProposalProgress(proposalId, {
+            progressMessage: "Przygotowuje prompt obrazu postaci..."
+          });
+
+          if (!snapshot.coverPrompt || !snapshot.coverNegativePrompt) {
+            throw new QueueRunError("Brak promptu obrazu postaci w zadaniu kolejki.");
+          }
+
+          const context =
+            "context" in snapshot.promptPackageJson
+              ? snapshot.promptPackageJson.context
+              : {};
+          const scopedContext =
+            context && typeof context === "object"
+              ? (context as Record<string, unknown>)
+              : {};
+          const characterId =
+            typeof scopedContext.targetEntityId === "string"
+              ? scopedContext.targetEntityId
+              : "";
+          if (!characterId) {
+            throw new QueueRunError("Brak docelowej postaci dla obrazu.");
+          }
+
+          const result = await generateCharacterImage({
+            projectId: snapshot.projectId,
+            characterId,
+            promptPackageId: snapshot.promptPackageId,
+            promptPackageJson: snapshot.promptPackageJson,
+            prompt: snapshot.prompt,
+            imagePrompt: snapshot.coverPrompt,
+            negativePrompt: snapshot.coverNegativePrompt,
+            codexPath,
+            timeoutSeconds,
+            model,
+            reasoningEffort
+          });
+
+          if (result.aiRun.status !== "success") {
+            throw new QueueRunError(
+              result.aiRun.errorMessage || "Nie udalo sie utworzyc obrazu postaci.",
+              result.aiRun.rawOutput ?? ""
+            );
+          }
+
+          finishProposal(proposalId, {
+            aiRunId: result.aiRun.id,
+            rawOutput: result.aiRun.rawOutput ?? "",
+            editableValue: result.imagePath,
+            durationMs: result.aiRun.durationMs,
+            coverImagePath: result.imagePath,
+            characterImagePath: result.imagePath,
+            characterGeneratedAt: result.generatedAt,
+            progressMessage: "Obraz postaci gotowy do akceptacji.",
+            progress: 100,
+            partialImageDataUrl: null
+          });
+          return;
+        }
+
         const result =
           snapshot.scope === "newProject"
             ? await generateNewProjectTitle({
@@ -614,7 +774,7 @@ function useAiQueueRunner() {
 
         const parsed = parseProposalResult(
           result.rawOutput,
-          snapshot.field as ConceptFieldKey,
+          snapshot.field as ConceptFieldKey | PlanFieldKey | CharacterFieldKey,
           snapshot.action
         );
         finishProposal(proposalId, {
@@ -704,11 +864,15 @@ function useCoverGenerationProgressListener() {
 
 export function parseProposalResult(
   rawOutput: string,
-  expectedField: ConceptFieldKey | PlanFieldKey,
+  expectedField: ConceptFieldKey | PlanFieldKey | CharacterFieldKey,
   action: string
 ): ParsedAiProposal {
   if (isPlanAction(action)) {
     return parsePlanSuggestion(rawOutput, expectedField as PlanFieldKey);
+  }
+
+  if (isCharacterAction(action)) {
+    return parseCharacterSuggestion(rawOutput, expectedField as CharacterFieldKey);
   }
 
   if (action === "expand_premise") {
@@ -716,6 +880,159 @@ export function parseProposalResult(
   }
 
   return parseConceptFieldSuggestion(rawOutput, expectedField as ConceptFieldKey);
+}
+
+function parseCharacterSuggestion(
+  rawOutput: string,
+  expectedField: CharacterFieldKey
+): ParsedAiProposal {
+  const parsed = JSON.parse(rawOutput) as unknown;
+  const record =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  if (expectedField === "characterProfile" && record.kind === "character_profile") {
+    return {
+      kind: "book_plan_suggestion",
+      summary: typeof record.summary === "string" ? record.summary : "Nowa postac",
+      textValue: JSON.stringify(parsed, null, 2),
+      value: parsed,
+      warnings: Array.isArray(record.warnings)
+        ? record.warnings.filter((item): item is string => typeof item === "string")
+        : []
+    };
+  }
+
+  if (expectedField === "characterRelation" && record.kind === "character_relation") {
+    return {
+      kind: "book_plan_suggestion",
+      summary: typeof record.summary === "string" ? record.summary : "Nowa relacja",
+      textValue: JSON.stringify(parsed, null, 2),
+      value: parsed,
+      warnings: Array.isArray(record.warnings)
+        ? record.warnings.filter((item): item is string => typeof item === "string")
+        : []
+    };
+  }
+
+  if (expectedField === "characterMemory" && record.kind === "character_memory") {
+    return {
+      kind: "book_plan_suggestion",
+      summary: typeof record.summary === "string" ? record.summary : "Nowe wspomnienie",
+      textValue: JSON.stringify(parsed, null, 2),
+      value: parsed,
+      warnings: Array.isArray(record.warnings)
+        ? record.warnings.filter((item): item is string => typeof item === "string")
+        : []
+    };
+  }
+
+  if (record.kind !== "character_field_suggestion") {
+    throw new Error("AI zwrocilo nieprawidlowy typ propozycji postaci.");
+  }
+  if (record.field !== expectedField) {
+    throw new Error("AI zwrocilo propozycje dla innego pola postaci.");
+  }
+  const rawValue = record.value;
+  const textValue = Array.isArray(rawValue)
+    ? JSON.stringify(rawValue.filter((item) => typeof item === "string"))
+    : typeof rawValue === "string"
+      ? rawValue
+      : String(rawValue ?? "");
+
+  return {
+    kind: "book_plan_suggestion",
+    summary: typeof record.summary === "string" ? record.summary : "Propozycja postaci",
+    textValue,
+    value: parsed,
+    warnings: Array.isArray(record.warnings)
+      ? record.warnings.filter((item): item is string => typeof item === "string")
+      : []
+  };
+}
+
+function characterRelationInputFromProposal(
+  proposal: ActiveAiProposal,
+  packageContext: Record<string, unknown>
+): UpsertCharacterRelationInput {
+  const snapshot = recordValue(packageContext.targetEntitySnapshot);
+  const parsed = recordValue(JSON.parse(proposal.editableValue || proposal.rawOutput));
+  const relation = recordValue(parsed.relation);
+  const projectId = stringRecordValue(snapshot.projectId);
+  const fromCharacterId = stringRecordValue(snapshot.fromCharacterId);
+  const toCharacterId = stringRecordValue(snapshot.toCharacterId);
+
+  if (!projectId || !fromCharacterId || !toCharacterId) {
+    throw new Error("Brak danych postaci dla zapisu relacji AI.");
+  }
+
+  return {
+    id: optionalStringRecordValue(snapshot.id, "new-relation"),
+    projectId,
+    fromCharacterId,
+    toCharacterId,
+    relationType: stringRecordValue(relation.relationType, stringRecordValue(snapshot.relationType, "inne")),
+    description: stringRecordValue(relation.description, stringRecordValue(snapshot.description)),
+    history: stringRecordValue(relation.history, stringRecordValue(snapshot.history)),
+    conflict: stringRecordValue(relation.conflict, stringRecordValue(snapshot.conflict)),
+    opinion: stringRecordValue(relation.opinion, stringRecordValue(snapshot.opinion)),
+    trustLevel: boundedNumberRecordValue(relation.trustLevel, boundedNumberRecordValue(snapshot.trustLevel, 50)),
+    secret: stringRecordValue(relation.secret, stringRecordValue(snapshot.secret)),
+    changeOverTime: stringRecordValue(relation.changeOverTime, stringRecordValue(snapshot.changeOverTime)),
+    status: stringRecordValue(snapshot.status, "draft")
+  };
+}
+
+function characterMemoryInputFromProposal(
+  proposal: ActiveAiProposal,
+  packageContext: Record<string, unknown>
+): UpsertCharacterMemoryInput {
+  const snapshot = recordValue(packageContext.targetEntitySnapshot);
+  const parsed = recordValue(JSON.parse(proposal.editableValue || proposal.rawOutput));
+  const memory = recordValue(parsed.memory);
+  const projectId = stringRecordValue(snapshot.projectId);
+  const characterId = stringRecordValue(snapshot.characterId);
+
+  if (!projectId || !characterId) {
+    throw new Error("Brak danych postaci dla zapisu wspomnienia AI.");
+  }
+
+  return {
+    id: optionalStringRecordValue(snapshot.id, "new-memory"),
+    projectId,
+    characterId,
+    title: stringRecordValue(memory.title, stringRecordValue(snapshot.title)),
+    summary: stringRecordValue(memory.summary, stringRecordValue(snapshot.summary)),
+    details: stringRecordValue(memory.details, stringRecordValue(snapshot.details)),
+    memoryType: stringRecordValue(memory.memoryType, stringRecordValue(snapshot.memoryType, "wydarzenie")),
+    subject: stringRecordValue(memory.subject, stringRecordValue(snapshot.subject)),
+    emotion: stringRecordValue(memory.emotion, stringRecordValue(snapshot.emotion)),
+    importance: boundedNumberRecordValue(memory.importance, boundedNumberRecordValue(snapshot.importance, 50)),
+    status: stringRecordValue(snapshot.status, "draft")
+  };
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function stringRecordValue(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function optionalStringRecordValue(value: unknown, ignoredValue: string): string | undefined {
+  const parsed = stringRecordValue(value);
+  return parsed && parsed !== ignoredValue ? parsed : undefined;
+}
+
+function boundedNumberRecordValue(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
 function parsePlanSuggestion(
@@ -828,6 +1145,14 @@ function isPlanAction(action: string): boolean {
     "generate_chapter_field",
     "suggest_chapter_relations",
     "find_plan_gaps"
+  ].includes(action);
+}
+
+function isCharacterAction(action: string): boolean {
+  return [
+    "generate_character_field",
+    "generate_character_relation_field",
+    "generate_character_memory_field"
   ].includes(action);
 }
 
@@ -973,6 +1298,12 @@ function isBookCoverProposal(
   proposal: Pick<ActiveAiProposal, "field" | "scope">
 ): boolean {
   return proposal.scope === "bookCover" || proposal.field === BOOK_COVER_FIELD;
+}
+
+function isCharacterImageProposal(
+  proposal: Pick<ActiveAiProposal, "field" | "scope">
+): boolean {
+  return proposal.scope === "characters" && proposal.field === CHARACTER_IMAGE_FIELD;
 }
 
 function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {

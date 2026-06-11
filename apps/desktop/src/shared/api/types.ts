@@ -142,6 +142,166 @@ export type BookPlan = {
   chapterBeats: ChapterBeat[];
 };
 
+export type VisualAsset = {
+  id: string;
+  projectId: string;
+  relatedType: string;
+  relatedId: string;
+  assetType: string;
+  title: string;
+  prompt: string;
+  negativePrompt: string;
+  filePath: string;
+  source: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Character = {
+  id: string;
+  projectId: string;
+  characterType: string;
+  name: string;
+  aliasesJson: string;
+  role: string;
+  shortDescription: string;
+  externalGoal: string;
+  internalNeed: string;
+  wound: string;
+  falseBelief: string;
+  secret: string;
+  strengthsJson: string;
+  weaknessesJson: string;
+  voiceNotes: string;
+  arcSummary: string;
+  knowledgeNotes: string;
+  visualPrompt: string;
+  imageAssetId: string | null;
+  status: string;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CharacterRelation = {
+  id: string;
+  projectId: string;
+  fromCharacterId: string;
+  toCharacterId: string;
+  relationType: string;
+  description: string;
+  history: string;
+  conflict: string;
+  opinion: string;
+  trustLevel: number;
+  secret: string;
+  changeOverTime: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CharacterMemory = {
+  id: string;
+  projectId: string;
+  characterId: string;
+  title: string;
+  summary: string;
+  details: string;
+  memoryType: string;
+  subject: string;
+  emotion: string;
+  importance: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CharacterMemoryLink = {
+  id: string;
+  projectId: string;
+  fromMemoryId: string;
+  toMemoryId: string;
+  linkType: string;
+  description: string;
+  strength: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CharacterWorkspace = {
+  characters: Character[];
+  relations: CharacterRelation[];
+  memories: CharacterMemory[];
+  memoryLinks: CharacterMemoryLink[];
+  visualAssets: VisualAsset[];
+};
+
+export type UpsertCharacterInput = {
+  id?: string;
+  projectId: string;
+  characterType: string;
+  name: string;
+  aliasesJson: string;
+  role: string;
+  shortDescription: string;
+  externalGoal: string;
+  internalNeed: string;
+  wound: string;
+  falseBelief: string;
+  secret: string;
+  strengthsJson: string;
+  weaknessesJson: string;
+  voiceNotes: string;
+  arcSummary: string;
+  knowledgeNotes: string;
+  visualPrompt: string;
+  imageAssetId?: string | null;
+  status: string;
+  orderIndex: number;
+};
+
+export type UpsertCharacterRelationInput = {
+  id?: string;
+  projectId: string;
+  fromCharacterId: string;
+  toCharacterId: string;
+  relationType: string;
+  description: string;
+  history: string;
+  conflict: string;
+  opinion: string;
+  trustLevel: number;
+  secret: string;
+  changeOverTime: string;
+  status: string;
+};
+
+export type UpsertCharacterMemoryInput = {
+  id?: string;
+  projectId: string;
+  characterId: string;
+  title: string;
+  summary: string;
+  details: string;
+  memoryType: string;
+  subject: string;
+  emotion: string;
+  importance: number;
+  status: string;
+};
+
+export type UpsertCharacterMemoryLinkInput = {
+  id?: string;
+  projectId: string;
+  fromMemoryId: string;
+  toMemoryId: string;
+  linkType: string;
+  description: string;
+  strength: number;
+};
+
 export type SaveStoryStructureInput = {
   id?: string;
   bookId: string;
@@ -282,7 +442,11 @@ export type AIAction =
   | "generate_chapter_field"
   | "generate_thread_chapter_field"
   | "suggest_chapter_relations"
-  | "find_plan_gaps";
+  | "find_plan_gaps"
+  | "generate_character_field"
+  | "generate_character_relation_field"
+  | "generate_character_memory_field"
+  | "generate_character_image";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 
@@ -388,6 +552,39 @@ export type AcceptGeneratedBookCoverInput = {
 
 export type BookCoverResult = {
   book: Book;
+  aiRun: AiRunResult;
+  imagePath: string;
+  prompt: string;
+  negativePrompt: string;
+  generatedAt: string;
+};
+
+export type GenerateCharacterImageInput = {
+  projectId: string;
+  characterId: string;
+  promptPackageId: string;
+  promptPackageJson: unknown;
+  prompt: string;
+  imagePrompt: string;
+  negativePrompt: string;
+  codexPath?: string;
+  timeoutSeconds?: number;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
+};
+
+export type AcceptGeneratedCharacterImageInput = {
+  projectId: string;
+  characterId: string;
+  imagePath: string;
+  imagePrompt: string;
+  negativePrompt: string;
+  generatedAt: string;
+};
+
+export type CharacterImageResult = {
+  character: Character;
+  visualAsset: VisualAsset;
   aiRun: AiRunResult;
   imagePath: string;
   prompt: string;

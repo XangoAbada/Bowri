@@ -1,15 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   browserAcceptGeneratedBookCover,
+  browserAcceptGeneratedCharacterImage,
   browserCheckCodexCli,
   browserListCodexModels,
   browserListAiRuns,
   browserCreateProject,
+  browserDeleteCharacter,
+  browserDeleteCharacterMemory,
+  browserDeleteCharacterMemoryLink,
+  browserDeleteCharacterRelation,
+  browserGenerateCharacterImage,
   browserDeleteAct,
   browserDeleteBeat,
   browserDeleteChapter,
   browserDeletePlotThread,
   browserGetBookPlan,
+  browserGetCharacterWorkspace,
   browserGetProject,
   browserListProjects,
   browserMoveBeatToChapter,
@@ -17,6 +24,10 @@ import {
   browserRunCodexPrompt,
   browserSaveStoryStructure,
   browserUpsertChapterThreadRelation,
+  browserUpsertCharacter,
+  browserUpsertCharacterMemory,
+  browserUpsertCharacterMemoryLink,
+  browserUpsertCharacterRelation,
   browserUpsertAct,
   browserUpsertBeat,
   browserUpsertChapter,
@@ -28,6 +39,7 @@ import {
 } from "./browserDevCommands";
 import type {
   AcceptGeneratedBookCoverInput,
+  AcceptGeneratedCharacterImageInput,
   AiRunResult,
   AiLogEntry,
   Act,
@@ -37,10 +49,17 @@ import type {
   BookConceptInput,
   BookPlan,
   Chapter,
+  Character,
+  CharacterImageResult,
+  CharacterMemory,
+  CharacterMemoryLink,
+  CharacterRelation,
+  CharacterWorkspace,
   CodexCliStatus,
   CodexModelCatalog,
   CreateProjectInput,
   GenerateBookCoverInput,
+  GenerateCharacterImageInput,
   GenerateNewProjectTitleRequest,
   MoveBeatToChapterInput,
   PlotThread,
@@ -54,6 +73,10 @@ import type {
   UpsertBeatInput,
   UpsertChapterInput,
   UpsertChapterThreadInput,
+  UpsertCharacterInput,
+  UpsertCharacterMemoryInput,
+  UpsertCharacterMemoryLinkInput,
+  UpsertCharacterRelationInput,
   UpsertPlotThreadInput
 } from "./types";
 
@@ -87,6 +110,14 @@ export function getBookPlan(bookId: string): Promise<BookPlan> {
   }
 
   return invoke("get_book_plan", { bookId });
+}
+
+export function getCharacterWorkspace(projectId: string): Promise<CharacterWorkspace> {
+  if (!isTauriRuntime()) {
+    return browserGetCharacterWorkspace(projectId);
+  }
+
+  return invoke("get_character_workspace", { projectId });
 }
 
 export function saveStoryStructure(
@@ -183,6 +214,76 @@ export function deleteChapter(id: string): Promise<void> {
   return invoke("delete_chapter", { id });
 }
 
+export function upsertCharacter(input: UpsertCharacterInput): Promise<Character> {
+  if (!isTauriRuntime()) {
+    return browserUpsertCharacter(input);
+  }
+
+  return invoke("upsert_character", { input });
+}
+
+export function deleteCharacter(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteCharacter(id);
+  }
+
+  return invoke("delete_character", { id });
+}
+
+export function upsertCharacterRelation(
+  input: UpsertCharacterRelationInput
+): Promise<CharacterRelation> {
+  if (!isTauriRuntime()) {
+    return browserUpsertCharacterRelation(input);
+  }
+
+  return invoke("upsert_character_relation", { input });
+}
+
+export function deleteCharacterRelation(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteCharacterRelation(id);
+  }
+
+  return invoke("delete_character_relation", { id });
+}
+
+export function upsertCharacterMemory(
+  input: UpsertCharacterMemoryInput
+): Promise<CharacterMemory> {
+  if (!isTauriRuntime()) {
+    return browserUpsertCharacterMemory(input);
+  }
+
+  return invoke("upsert_character_memory", { input });
+}
+
+export function deleteCharacterMemory(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteCharacterMemory(id);
+  }
+
+  return invoke("delete_character_memory", { id });
+}
+
+export function upsertCharacterMemoryLink(
+  input: UpsertCharacterMemoryLinkInput
+): Promise<CharacterMemoryLink> {
+  if (!isTauriRuntime()) {
+    return browserUpsertCharacterMemoryLink(input);
+  }
+
+  return invoke("upsert_character_memory_link", { input });
+}
+
+export function deleteCharacterMemoryLink(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteCharacterMemoryLink(id);
+  }
+
+  return invoke("delete_character_memory_link", { id });
+}
+
 export function reorderPlanItems(input: ReorderPlanItemsInput): Promise<void> {
   if (!isTauriRuntime()) {
     return browserReorderPlanItems(input);
@@ -264,4 +365,24 @@ export function acceptGeneratedBookCover(
   }
 
   return invoke("accept_generated_book_cover", { input });
+}
+
+export function generateCharacterImage(
+  input: GenerateCharacterImageInput
+): Promise<CharacterImageResult> {
+  if (!isTauriRuntime()) {
+    return browserGenerateCharacterImage(input);
+  }
+
+  return invoke("generate_character_image", { input });
+}
+
+export function acceptGeneratedCharacterImage(
+  input: AcceptGeneratedCharacterImageInput
+): Promise<CharacterImageResult> {
+  if (!isTauriRuntime()) {
+    return browserAcceptGeneratedCharacterImage(input);
+  }
+
+  return invoke("accept_generated_character_image", { input });
 }

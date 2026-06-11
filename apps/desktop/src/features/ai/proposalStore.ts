@@ -9,6 +9,10 @@ import type {
   PromptPackage
 } from "./promptPackage";
 import type { PlanFieldKey, PlanPromptPackage } from "./planPromptPackage";
+import type {
+  CharacterFieldKey,
+  CharacterPromptPackage
+} from "./characterPromptPackage";
 
 export type AiProposalStatus = "queued" | "running" | "success" | "error";
 export type PendingAiProposalStatus = Extract<
@@ -19,10 +23,17 @@ export type AiProposalScope =
   | "bookConcept"
   | "newProject"
   | "bookCover"
-  | "bookPlan";
+  | "bookPlan"
+  | "characters";
 export const BOOK_COVER_FIELD = "__book_cover__";
+export const CHARACTER_IMAGE_FIELD = "__character_image__";
 export const NEW_PROJECT_PROPOSAL_ID = "__new_project__";
-export type AiTaskFieldKey = ConceptFieldKey | PlanFieldKey | typeof BOOK_COVER_FIELD;
+export type AiTaskFieldKey =
+  | ConceptFieldKey
+  | PlanFieldKey
+  | CharacterFieldKey
+  | typeof BOOK_COVER_FIELD
+  | typeof CHARACTER_IMAGE_FIELD;
 export type ParsedAiProposal =
   | NormalizedConceptFieldSuggestion
   | NormalizedPremiseDevelopment
@@ -47,7 +58,8 @@ export type AiPromptSnapshot = {
     | PromptPackage
     | NewProjectTitlePromptPackage
     | CoverPromptPackage
-    | PlanPromptPackage;
+    | PlanPromptPackage
+    | CharacterPromptPackage;
   prompt: string;
   coverPrompt?: string;
   coverNegativePrompt?: string;
@@ -66,6 +78,8 @@ export type ActiveAiProposal = AiPromptSnapshot & {
   durationMs?: number;
   coverImagePath?: string;
   coverGeneratedAt?: string;
+  characterImagePath?: string;
+  characterGeneratedAt?: string;
   progressMessage?: string;
   progress?: number | null;
   partialImageDataUrl?: string | null;
@@ -93,6 +107,8 @@ type ProposalResult = Pick<
       | "selectedFields"
       | "coverImagePath"
       | "coverGeneratedAt"
+      | "characterImagePath"
+      | "characterGeneratedAt"
       | "progressMessage"
       | "progress"
       | "partialImageDataUrl"
@@ -245,6 +261,8 @@ export const useProposalStore = create<ProposalState>((set) => ({
                 durationMs: undefined,
                 coverImagePath: undefined,
                 coverGeneratedAt: undefined,
+                characterImagePath: undefined,
+                characterGeneratedAt: undefined,
                 progressMessage: undefined,
                 progress: undefined,
                 partialImageDataUrl: undefined,
