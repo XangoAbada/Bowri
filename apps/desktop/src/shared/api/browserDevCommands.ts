@@ -1,6 +1,7 @@
 import type {
   AcceptGeneratedBookCoverInput,
   AcceptGeneratedCharacterImageInput,
+  AcceptGeneratedExportArtworkInput,
   Act,
   AiLogEntry,
   AiProposalRecord,
@@ -22,8 +23,13 @@ import type {
   CreatePlanVersionInput,
   DeletePlanVersionInput,
   CreateProjectInput,
+  ExportBookInput,
+  ExportBookResult,
+  ExportPreset,
+  ExportArtworkResult,
   GenerateBookCoverInput,
   GenerateCharacterImageInput,
+  GenerateExportArtworkInput,
   GenerateNewProjectTitleRequest,
   MoveBeatToChapterInput,
   PlanVersion,
@@ -35,6 +41,7 @@ import type {
   ReorderScenesInput,
   RunCodexPromptRequest,
   SaveStoryStructureInput,
+  SaveExportPresetInput,
   Scene,
   SetActivePlanVersionInput,
   SetSceneRelationsInput,
@@ -59,6 +66,10 @@ import type {
   WorldRule,
   WorldWorkspace
 } from "./types";
+import {
+  renderMarkdownExport,
+  renderPlainTextExport
+} from "../../features/export/exportFormatting";
 
 const STORAGE_KEY = "storyforge2.browserPreview.projects";
 
@@ -69,6 +80,7 @@ type BrowserPreviewState = {
   plans: Record<string, BookPlan>;
   characterWorkspaces: Record<string, CharacterWorkspace>;
   worldWorkspaces: Record<string, WorldWorkspace>;
+  exportPresets: ExportPreset[];
 };
 
 let memoryState: BrowserPreviewState = {
@@ -77,7 +89,8 @@ let memoryState: BrowserPreviewState = {
   aiProposals: [],
   plans: {},
   characterWorkspaces: {},
-  worldWorkspaces: {}
+  worldWorkspaces: {},
+  exportPresets: []
 };
 
 export function isTauriRuntime(): boolean {
@@ -1435,6 +1448,157 @@ export async function browserAcceptGeneratedCharacterImage(
   };
 }
 
+export async function browserExportBook(input: ExportBookInput): Promise<ExportBookResult> {
+  const state = readState();
+  const details = state.projects.find(({ project, book }) =>
+    project.id === input.projectId && book.id === input.bookId
+  );
+  if (!details) {
+    throw new Error("Nie znaleziono projektu do eksportu.");
+  }
+
+  const plan = normalizePlan(state.plans[input.bookId]);
+  const content =
+    input.format === "txt"
+      ? renderPlainTextExport({
+          book: details.book,
+          plan,
+          chapterIds: input.chapterIds,
+          contentMode: input.contentMode,
+          style: input.style
+        })
+      : renderMarkdownExport({
+          book: details.book,
+          plan,
+          chapterIds: input.chapterIds,
+          contentMode: input.contentMode,
+          style: input.style
+        });
+  if (!content.trim() || !plan.scenes.some((scene) => scene.manuscriptContent.trim())) {
+    throw new Error("Brak tekstu manuskryptu do eksportu.");
+  }
+
+  const extension = input.format === "markdown" ? "md" : input.format;
+  return {
+    filePath: `browser-preview://${slugify(details.book.workingTitle || details.project.name)}.${extension}`,
+    format: input.format,
+    fallbackFilePath: input.format === "mobi" ? `browser-preview://${slugify(details.book.workingTitle || details.project.name)}.epub` : null,
+    warning:
+      input.format === "mobi"
+        ? "Podgląd przeglądarkowy symuluje MOBI. W aplikacji desktopowej MOBI powstaje przez konwersję z EPUB."
+        : null
+  };
+}
+
+export async function browserListExportPresets(
+  projectId: string,
+  bookId: string
+): Promise<ExportPreset[]> {
+  return readState().exportPresets.filter(
+    (preset) => preset.projectId === projectId && preset.bookId === bookId
+  );
+}
+
+export async function browserSaveExportPreset(
+  input: SaveExportPresetInput
+): Promise<ExportPreset> {
+  const state = readState();
+  const now = new Date().toISOString();
+  const preset: ExportPreset = {
+    id: input.id ?? createId(),
+    projectId: input.projectId,
+    bookId: input.bookId,
+    name: input.name.trim() || "Preset eksportu",
+    settingsJson: input.settingsJson,
+    createdAt:
+      state.exportPresets.find((item) => item.id === input.id)?.createdAt ?? now,
+    updatedAt: now
+  };
+  state.exportPresets = upsertById(state.exportPresets, preset);
+  writeState(state);
+  return preset;
+}
+
+export async function browserGenerateExportArtwork(
+  input: GenerateExportArtworkInput
+): Promise<ExportArtworkResult> {
+  const aiRunId = createId();
+  const generatedAt = new Date().toISOString();
+  const imagePath = createExportArtworkDataUrl(input.relatedType, input.imagePrompt);
+  return {
+    visualAsset: {
+      id: createId(),
+      projectId: input.projectId,
+      relatedType: input.relatedType,
+      relatedId: input.relatedId,
+      assetType: "image",
+      title: "Grafika eksportu",
+      prompt: input.imagePrompt,
+      negativePrompt: input.negativePrompt,
+      filePath: imagePath,
+      source: "ai",
+      status: "proposed",
+      createdAt: generatedAt,
+      updatedAt: generatedAt
+    },
+    aiRun: {
+      id: aiRunId,
+      providerId: "browser-preview",
+      promptPackageId: input.promptPackageId,
+      action: "generate_export_artwork",
+      status: "success",
+      rawOutput: JSON.stringify({ imagePath }),
+      durationMs: 0
+    },
+    imagePath,
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    generatedAt
+  };
+}
+
+export async function browserAcceptGeneratedExportArtwork(
+  input: AcceptGeneratedExportArtworkInput
+): Promise<ExportArtworkResult> {
+  const state = readState();
+  const now = new Date().toISOString();
+  const asset: VisualAsset = {
+    id: createId(),
+    projectId: input.projectId,
+    relatedType: input.relatedType,
+    relatedId: input.relatedId,
+    assetType: "image",
+    title: "Grafika eksportu",
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    filePath: input.imagePath,
+    source: "ai",
+    status: "canon",
+    createdAt: input.generatedAt,
+    updatedAt: now
+  };
+
+  const world = ensureWorldWorkspace(state, input.projectId);
+  world.visualAssets = upsertById(world.visualAssets, asset);
+  writeState(state);
+
+  return {
+    visualAsset: asset,
+    aiRun: {
+      id: asset.id,
+      providerId: "browser-preview",
+      promptPackageId: "accepted-export-artwork",
+      action: "generate_export_artwork",
+      status: "success",
+      durationMs: 0
+    },
+    imagePath: input.imagePath,
+    prompt: input.imagePrompt,
+    negativePrompt: input.negativePrompt,
+    generatedAt: input.generatedAt
+  };
+}
+
 function readState(): BrowserPreviewState {
   if (typeof window === "undefined") {
     return memoryState;
@@ -1443,7 +1607,7 @@ function readState(): BrowserPreviewState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { projects: [], aiRuns: [], aiProposals: [], plans: {}, characterWorkspaces: {}, worldWorkspaces: {} };
+      return { projects: [], aiRuns: [], aiProposals: [], plans: {}, characterWorkspaces: {}, worldWorkspaces: {}, exportPresets: [] };
     }
 
     const parsed = JSON.parse(raw) as BrowserPreviewState;
@@ -1460,9 +1624,10 @@ function readState(): BrowserPreviewState {
           aiProposals: Array.isArray(parsed.aiProposals) ? parsed.aiProposals : [],
           plans: normalizePlans(parsed.plans),
           characterWorkspaces: normalizeCharacterWorkspaces(parsed.characterWorkspaces),
-          worldWorkspaces: normalizeWorldWorkspaces(parsed.worldWorkspaces)
+          worldWorkspaces: normalizeWorldWorkspaces(parsed.worldWorkspaces),
+          exportPresets: Array.isArray(parsed.exportPresets) ? parsed.exportPresets : []
         })
-      : { projects: [], aiRuns: [], aiProposals: [], plans: {}, characterWorkspaces: {}, worldWorkspaces: {} };
+      : { projects: [], aiRuns: [], aiProposals: [], plans: {}, characterWorkspaces: {}, worldWorkspaces: {}, exportPresets: [] };
   } catch {
     return memoryState;
   }
@@ -1784,6 +1949,25 @@ function createCharacterDataUrl(name: string, prompt: string): string {
   const safePrompt = escapeSvg(prompt.slice(0, 140));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1100" viewBox="0 0 900 1100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7f8f6"/><stop offset=".5" stop-color="#dfe8df"/><stop offset="1" stop-color="#2f8067"/></linearGradient></defs><rect width="900" height="1100" fill="url(#g)"/><circle cx="450" cy="390" r="210" fill="#fffdf8" opacity=".74"/><path d="M260 850c42-156 118-234 190-234s148 78 190 234" fill="#24463e" opacity=".82"/><circle cx="450" cy="340" r="128" fill="#24463e" opacity=".88"/><text x="450" y="940" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="58" fill="#fffdf8" font-weight="800">${safeName}</text><text x="450" y="1004" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="23" fill="#fffdf8" opacity=".78">${safePrompt}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function createExportArtworkDataUrl(kind: string, prompt: string): string {
+  const safeKind = escapeSvg(
+    kind === "scene" ? "Scena" : kind === "chapter" ? "Rozdział" : "Książka"
+  );
+  const safePrompt = escapeSvg(prompt.slice(0, 160));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffdf8"/><stop offset=".38" stop-color="#d8c9aa"/><stop offset="1" stop-color="#34483f"/></linearGradient><pattern id="p" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M0 24h48M24 0v48" stroke="#2b2721" stroke-opacity=".08"/></pattern></defs><rect width="1200" height="420" fill="url(#g)"/><rect width="1200" height="420" fill="url(#p)"/><path d="M80 210c110-94 219-94 328 0s218 94 328 0 219-94 384 0" fill="none" stroke="#fffdf8" stroke-width="18" stroke-linecap="round" opacity=".75"/><path d="M120 250h960" stroke="#2b2721" stroke-width="2" opacity=".35"/><text x="600" y="178" text-anchor="middle" font-family="Georgia, serif" font-size="54" fill="#2b2721" font-weight="700">${safeKind}</text><text x="600" y="292" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="25" fill="#2b2721" opacity=".72">${safePrompt}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function slugify(value: string): string {
+  return (value || "manuskrypt")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "manuskrypt";
 }
 
 function escapeSvg(value: string): string {

@@ -666,6 +666,7 @@ export type AIAction =
   | "generate_alternative_titles"
   | "generate_style_guide"
   | "generate_cover_image"
+  | "generate_export_artwork"
   | "suggest_story_structure"
   | "generate_acts"
   | "generate_act_field"
@@ -855,6 +856,97 @@ export type AcceptGeneratedCharacterImageInput = {
 
 export type CharacterImageResult = {
   character: Character;
+  visualAsset: VisualAsset;
+  aiRun: AiRunResult;
+  imagePath: string;
+  prompt: string;
+  negativePrompt: string;
+  generatedAt: string;
+};
+
+export type ExportFormat = "markdown" | "txt" | "docx" | "epub" | "mobi";
+
+export type ExportContentMode = "manuscript" | "manuscript_with_summaries";
+
+export type ExportSeparatorSettings = {
+  text: string;
+  fontSize: number;
+  align: "left" | "center" | "right";
+  spacingBefore: number;
+  spacingAfter: number;
+  line: boolean;
+  color: string;
+  background: string;
+  imageAssetId?: string | null;
+};
+
+export type ExportStyleSettings = {
+  chapterSeparator: ExportSeparatorSettings;
+  sceneSeparator: ExportSeparatorSettings;
+  pageNumbers: boolean;
+};
+
+export type ExportBookInput = {
+  projectId: string;
+  bookId: string;
+  format: ExportFormat;
+  chapterIds: string[];
+  contentMode: ExportContentMode;
+  style: ExportStyleSettings;
+};
+
+export type ExportBookResult = {
+  filePath: string;
+  format: ExportFormat;
+  fallbackFilePath?: string | null;
+  warning?: string | null;
+};
+
+export type ExportPreset = {
+  id: string;
+  projectId: string;
+  bookId: string;
+  name: string;
+  settingsJson: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SaveExportPresetInput = {
+  id?: string;
+  projectId: string;
+  bookId: string;
+  name: string;
+  settingsJson: string;
+};
+
+export type GenerateExportArtworkInput = {
+  projectId: string;
+  bookId: string;
+  relatedType: "book" | "chapter" | "scene";
+  relatedId: string;
+  promptPackageId: string;
+  promptPackageJson: unknown;
+  prompt: string;
+  imagePrompt: string;
+  negativePrompt: string;
+  codexPath?: string;
+  timeoutSeconds?: number;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
+};
+
+export type AcceptGeneratedExportArtworkInput = {
+  projectId: string;
+  relatedType: "book" | "chapter" | "scene";
+  relatedId: string;
+  imagePath: string;
+  imagePrompt: string;
+  negativePrompt: string;
+  generatedAt: string;
+};
+
+export type ExportArtworkResult = {
   visualAsset: VisualAsset;
   aiRun: AiRunResult;
   imagePath: string;

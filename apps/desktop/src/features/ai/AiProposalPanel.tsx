@@ -7,9 +7,11 @@ import { isTauriRuntime } from "../../shared/api/browserDevCommands";
 import {
   acceptGeneratedBookCover,
   acceptGeneratedCharacterImage,
+  acceptGeneratedExportArtwork,
   createPlanVersionFromActive,
   generateBookCover,
   generateCharacterImage,
+  generateExportArtwork,
   generateNewProjectTitle,
   getCharacterWorkspace,
   getProject,
@@ -100,6 +102,7 @@ import {
   ActiveAiProposal,
   BOOK_COVER_FIELD,
   CHARACTER_IMAGE_FIELD,
+  EXPORT_ARTWORK_FIELD,
   ParsedAiProposal,
   useProposalStore
 } from "./proposalStore";
@@ -182,6 +185,45 @@ export async function applyAiProposal(
       imagePrompt: proposal.coverPrompt,
       negativePrompt: proposal.coverNegativePrompt ?? "",
       generatedAt: proposal.characterGeneratedAt
+    });
+  }
+
+  if (isExportArtworkProposal(proposal)) {
+    const imagePath = (
+      proposal.exportArtworkPath ||
+      proposal.coverImagePath ||
+      proposal.editableValue
+    ).trim();
+    const packageContext =
+      "context" in proposal.promptPackageJson
+        ? proposal.promptPackageJson.context
+        : {};
+    const scopedPackageContext =
+      packageContext && typeof packageContext === "object"
+        ? (packageContext as Record<string, unknown>)
+        : {};
+    const relatedType =
+      scopedPackageContext.relatedType === "chapter" ||
+      scopedPackageContext.relatedType === "scene" ||
+      scopedPackageContext.relatedType === "book"
+        ? scopedPackageContext.relatedType
+        : "book";
+    const relatedId =
+      typeof scopedPackageContext.targetEntityId === "string"
+        ? scopedPackageContext.targetEntityId
+        : proposal.bookId;
+    if (!imagePath || !proposal.coverPrompt || !proposal.exportArtworkGeneratedAt) {
+      throw new Error("Brak kompletnej propozycji grafiki eksportu do akceptacji.");
+    }
+
+    return acceptGeneratedExportArtwork({
+      projectId: proposal.projectId,
+      relatedType,
+      relatedId,
+      imagePath,
+      imagePrompt: proposal.coverPrompt,
+      negativePrompt: proposal.coverNegativePrompt ?? "",
+      generatedAt: proposal.exportArtworkGeneratedAt
     });
   }
 
@@ -427,7 +469,7 @@ export function AiProposalPanel({
       if (proposal.scope === "newProject") {
         const value = proposal.editableValue.trim();
         if (!onAcceptValue) {
-          throw new Error("Brak obslugi akceptacji propozycji nowego projektu.");
+          throw new Error("Brak obsługi akceptacji propozycji nowego projektu.");
         }
 
         await onAcceptValue(value);
@@ -478,6 +520,45 @@ export function AiProposalPanel({
           imagePrompt: proposal.coverPrompt,
           negativePrompt: proposal.coverNegativePrompt ?? "",
           generatedAt: proposal.characterGeneratedAt
+        });
+      }
+
+      if (isExportArtworkProposal(proposal)) {
+        const imagePath = (
+          proposal.exportArtworkPath ||
+          proposal.coverImagePath ||
+          proposal.editableValue
+        ).trim();
+        const packageContext =
+          "context" in proposal.promptPackageJson
+            ? proposal.promptPackageJson.context
+            : {};
+        const scopedPackageContext =
+          packageContext && typeof packageContext === "object"
+            ? (packageContext as Record<string, unknown>)
+            : {};
+        const relatedType =
+          scopedPackageContext.relatedType === "chapter" ||
+          scopedPackageContext.relatedType === "scene" ||
+          scopedPackageContext.relatedType === "book"
+            ? scopedPackageContext.relatedType
+            : "book";
+        const relatedId =
+          typeof scopedPackageContext.targetEntityId === "string"
+            ? scopedPackageContext.targetEntityId
+            : proposal.bookId;
+        if (!imagePath || !proposal.coverPrompt || !proposal.exportArtworkGeneratedAt) {
+          throw new Error("Brak kompletnej propozycji grafiki eksportu do akceptacji.");
+        }
+
+        return acceptGeneratedExportArtwork({
+          projectId: proposal.projectId,
+          relatedType,
+          relatedId,
+          imagePath,
+          imagePrompt: proposal.coverPrompt,
+          negativePrompt: proposal.coverNegativePrompt ?? "",
+          generatedAt: proposal.exportArtworkGeneratedAt
         });
       }
 
@@ -1174,6 +1255,7 @@ function ProposalQueueItem({
 }: ProposalQueueItemProps) {
   const coverProposal = isBookCoverProposal(proposal);
   const characterImageProposal = isCharacterImageProposal(proposal);
+  const exportArtworkProposal = isExportArtworkProposal(proposal);
   const planProposal = proposal.scope === "bookPlan";
   const characterProposal = proposal.scope === "characters";
   const worldProposal = proposal.scope === "world";
@@ -1181,6 +1263,8 @@ function ProposalQueueItem({
   const sceneAuditProposal = proposal.field === SCENE_STORY_BIBLE_AUDIT_FIELD;
   const label = sceneAuditProposal
     ? "Analiza sceny"
+    : exportArtworkProposal
+    ? "Grafika eksportu"
     : coverProposal
     ? "Okładka"
     : planProposal
@@ -1204,6 +1288,7 @@ function ProposalQueueItem({
   const structured = premiseProposal !== null;
   const proposalRows =
     !coverProposal &&
+    !exportArtworkProposal &&
     !characterProposal &&
     !worldProposal &&
     !sceneAuditProposal &&
@@ -1268,8 +1353,8 @@ function ProposalQueueItem({
         <p className="muted-text">{proposal.progressMessage}</p>
       ) : null}
 
-      {(coverProposal || characterImageProposal) &&
-      (proposal.partialImageDataUrl || proposal.coverImagePath || proposal.characterImagePath) ? (
+      {(coverProposal || characterImageProposal || exportArtworkProposal) &&
+      (proposal.partialImageDataUrl || proposal.coverImagePath || proposal.characterImagePath || proposal.exportArtworkPath) ? (
         <button
           type="button"
           className="proposal-cover-preview proposal-cover-preview-button"
@@ -1278,7 +1363,8 @@ function ProposalQueueItem({
               coverImageSource(
                 proposal.partialImageDataUrl ||
                   proposal.coverImagePath ||
-                  proposal.characterImagePath
+                  proposal.characterImagePath ||
+                  proposal.exportArtworkPath
               ),
               "Podgląd okładki z AI"
             )
@@ -1289,7 +1375,8 @@ function ProposalQueueItem({
             src={coverImageSource(
               proposal.partialImageDataUrl ||
                 proposal.coverImagePath ||
-                proposal.characterImagePath
+                proposal.characterImagePath ||
+                proposal.exportArtworkPath
             )}
             alt="Podgląd okładki z AI"
           />
@@ -1304,7 +1391,7 @@ function ProposalQueueItem({
         </div>
       ) : null}
 
-      {(coverProposal || characterImageProposal) && success ? (
+      {(coverProposal || characterImageProposal || exportArtworkProposal) && success ? (
         <p className="success-text">
           Okładka jest gotowa do akceptacji.
         </p>
@@ -1592,6 +1679,72 @@ function useAiQueueRunner() {
             characterImagePath: result.imagePath,
             characterGeneratedAt: result.generatedAt,
             progressMessage: "Obraz postaci gotowy do akceptacji.",
+            progress: 100,
+            partialImageDataUrl: null
+          });
+          return;
+        }
+
+        if (isExportArtworkProposal(snapshot)) {
+          updateProposalProgress(proposalId, {
+            progressMessage: "Przygotowuję prompt grafiki eksportu..."
+          });
+
+          if (!snapshot.coverPrompt || !snapshot.coverNegativePrompt) {
+            throw new QueueRunError("Brak promptu grafiki eksportu w zadaniu kolejki.");
+          }
+
+          const context =
+            "context" in snapshot.promptPackageJson
+              ? snapshot.promptPackageJson.context
+              : {};
+          const scopedContext =
+            context && typeof context === "object"
+              ? (context as Record<string, unknown>)
+              : {};
+          const relatedType =
+            scopedContext.relatedType === "chapter" ||
+            scopedContext.relatedType === "scene" ||
+            scopedContext.relatedType === "book"
+              ? scopedContext.relatedType
+              : "book";
+          const relatedId =
+            typeof scopedContext.targetEntityId === "string"
+              ? scopedContext.targetEntityId
+              : snapshot.bookId;
+
+          const result = await generateExportArtwork({
+            projectId: snapshot.projectId,
+            bookId: snapshot.bookId,
+            relatedType,
+            relatedId,
+            promptPackageId: snapshot.promptPackageId,
+            promptPackageJson: snapshot.promptPackageJson,
+            prompt: snapshot.prompt,
+            imagePrompt: snapshot.coverPrompt,
+            negativePrompt: snapshot.coverNegativePrompt,
+            codexPath,
+            timeoutSeconds,
+            model,
+            reasoningEffort
+          });
+
+          if (result.aiRun.status !== "success") {
+            throw new QueueRunError(
+              result.aiRun.errorMessage || "Nie udało się utworzyć grafiki eksportu.",
+              result.aiRun.rawOutput ?? ""
+            );
+          }
+
+          finishProposal(proposalId, {
+            aiRunId: result.aiRun.id,
+            rawOutput: result.aiRun.rawOutput ?? "",
+            editableValue: result.imagePath,
+            durationMs: result.aiRun.durationMs,
+            coverImagePath: result.imagePath,
+            exportArtworkPath: result.imagePath,
+            exportArtworkGeneratedAt: result.generatedAt,
+            progressMessage: "Grafika eksportu gotowa do akceptacji.",
             progress: 100,
             partialImageDataUrl: null
           });
@@ -2604,6 +2757,12 @@ function isCharacterImageProposal(
   return proposal.scope === "characters" && proposal.field === CHARACTER_IMAGE_FIELD;
 }
 
+function isExportArtworkProposal(
+  proposal: Pick<ActiveAiProposal, "field" | "scope">
+): boolean {
+  return proposal.scope === "export" && proposal.field === EXPORT_ARTWORK_FIELD;
+}
+
 function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {
   return Object.entries(proposal.selectedFields).some(([field, selected]) => {
     const value = proposal.editableFields[field as ConceptFieldKey] ?? "";
@@ -2618,6 +2777,10 @@ export function proposalCanAccept(proposal: ActiveAiProposal): boolean {
 
   if (isCharacterImageProposal(proposal)) {
     return Boolean((proposal.characterImagePath || proposal.coverImagePath || proposal.editableValue).trim());
+  }
+
+  if (isExportArtworkProposal(proposal)) {
+    return Boolean((proposal.exportArtworkPath || proposal.coverImagePath || proposal.editableValue).trim());
   }
 
   if (proposal.field === SCENE_STORY_BIBLE_AUDIT_FIELD) {

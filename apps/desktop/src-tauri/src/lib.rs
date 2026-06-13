@@ -1039,6 +1039,111 @@ pub struct CharacterImageResult {
     pub generated_at: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSeparatorSettings {
+    pub text: String,
+    pub font_size: i64,
+    pub align: String,
+    pub spacing_before: i64,
+    pub spacing_after: i64,
+    pub line: bool,
+    pub color: String,
+    pub background: String,
+    pub image_asset_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportStyleSettings {
+    pub chapter_separator: ExportSeparatorSettings,
+    pub scene_separator: ExportSeparatorSettings,
+    pub page_numbers: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportBookInput {
+    pub project_id: String,
+    pub book_id: String,
+    pub format: String,
+    pub chapter_ids: Vec<String>,
+    pub content_mode: String,
+    pub style: ExportStyleSettings,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportBookResult {
+    pub file_path: String,
+    pub format: String,
+    pub fallback_file_path: Option<String>,
+    pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportPreset {
+    pub id: String,
+    pub project_id: String,
+    pub book_id: String,
+    pub name: String,
+    pub settings_json: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveExportPresetInput {
+    pub id: Option<String>,
+    pub project_id: String,
+    pub book_id: String,
+    pub name: String,
+    pub settings_json: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateExportArtworkInput {
+    pub project_id: String,
+    pub book_id: String,
+    pub related_type: String,
+    pub related_id: String,
+    pub prompt_package_id: String,
+    pub prompt_package_json: Value,
+    pub prompt: String,
+    pub image_prompt: String,
+    pub negative_prompt: String,
+    pub codex_path: Option<String>,
+    pub timeout_seconds: Option<u64>,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptGeneratedExportArtworkInput {
+    pub project_id: String,
+    pub related_type: String,
+    pub related_id: String,
+    pub image_path: String,
+    pub image_prompt: String,
+    pub negative_prompt: String,
+    pub generated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportArtworkResult {
+    pub visual_asset: VisualAsset,
+    pub ai_run: AiRunResult,
+    pub image_path: String,
+    pub prompt: String,
+    pub negative_prompt: String,
+    pub generated_at: String,
+}
+
 pub async fn init_database(app_data_dir: PathBuf) -> Result<SqlitePool, AppError> {
     tokio::fs::create_dir_all(&app_data_dir).await?;
     let database_path = app_data_dir.join("storyforge2.sqlite");
@@ -1423,7 +1528,9 @@ pub async fn save_story_structure_in_pool(
     input: SaveStoryStructureInput,
 ) -> Result<StoryStructure, AppError> {
     if input.structure_type.trim().is_empty() {
-        return Err(AppError::Process("Typ struktury nie moze byc pusty.".into()));
+        return Err(AppError::Process(
+            "Typ struktury nie moze byc pusty.".into(),
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
@@ -1460,18 +1567,17 @@ pub async fn save_story_structure_in_pool(
     touch_project_for_book(&mut tx, &input.book_id, &now).await?;
     tx.commit().await?;
 
-    sqlx::query_as::<_, StoryStructure>("SELECT * FROM story_structures WHERE book_id = ? AND plan_version_id = ?")
-        .bind(&input.book_id)
-        .bind(plan_version_id)
-        .fetch_one(pool)
-        .await
-        .map_err(AppError::from)
+    sqlx::query_as::<_, StoryStructure>(
+        "SELECT * FROM story_structures WHERE book_id = ? AND plan_version_id = ?",
+    )
+    .bind(&input.book_id)
+    .bind(plan_version_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::from)
 }
 
-pub async fn upsert_act_in_pool(
-    pool: &SqlitePool,
-    input: UpsertActInput,
-) -> Result<Act, AppError> {
+pub async fn upsert_act_in_pool(pool: &SqlitePool, input: UpsertActInput) -> Result<Act, AppError> {
     if input.name.trim().is_empty() {
         return Err(AppError::Process("Nazwa aktu nie moze byc pusta.".into()));
     }
@@ -1578,25 +1684,27 @@ pub async fn move_beat_to_chapter_in_pool(
     let mut tx = pool.begin().await?;
     let plan_version_id = active_plan_version_id_in_tx(&mut tx, &input.book_id).await?;
 
-    let beat_exists: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM beats WHERE id = ? AND book_id = ? AND plan_version_id = ?")
-            .bind(&input.beat_id)
-            .bind(&input.book_id)
-            .bind(&plan_version_id)
-            .fetch_one(&mut *tx)
-            .await?;
+    let beat_exists: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM beats WHERE id = ? AND book_id = ? AND plan_version_id = ?",
+    )
+    .bind(&input.beat_id)
+    .bind(&input.book_id)
+    .bind(&plan_version_id)
+    .fetch_one(&mut *tx)
+    .await?;
     if beat_exists.0 == 0 {
         return Err(AppError::Process("Nie znaleziono beatu.".into()));
     }
 
     if let Some(chapter_id) = &input.chapter_id {
-        let chapter_exists: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ? AND plan_version_id = ?")
-                .bind(chapter_id)
-                .bind(&input.book_id)
-                .bind(&plan_version_id)
-                .fetch_one(&mut *tx)
-                .await?;
+        let chapter_exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ? AND plan_version_id = ?",
+        )
+        .bind(chapter_id)
+        .bind(&input.book_id)
+        .bind(&plan_version_id)
+        .fetch_one(&mut *tx)
+        .await?;
         if chapter_exists.0 == 0 {
             return Err(AppError::Process("Nie znaleziono rozdzialu.".into()));
         }
@@ -1682,7 +1790,9 @@ pub async fn upsert_chapter_in_pool(
     input: UpsertChapterInput,
 ) -> Result<Chapter, AppError> {
     if input.working_title.trim().is_empty() {
-        return Err(AppError::Process("Tytul rozdzialu nie moze byc pusty.".into()));
+        return Err(AppError::Process(
+            "Tytul rozdzialu nie moze byc pusty.".into(),
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
@@ -1789,24 +1899,26 @@ pub async fn upsert_chapter_thread_relation_in_pool(
     let mut tx = pool.begin().await?;
     let plan_version_id = active_plan_version_id_in_tx(&mut tx, &input.book_id).await?;
 
-    let chapter_exists: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ? AND plan_version_id = ?")
-            .bind(&input.chapter_id)
-            .bind(&input.book_id)
-            .bind(&plan_version_id)
-            .fetch_one(&mut *tx)
-            .await?;
+    let chapter_exists: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ? AND plan_version_id = ?",
+    )
+    .bind(&input.chapter_id)
+    .bind(&input.book_id)
+    .bind(&plan_version_id)
+    .fetch_one(&mut *tx)
+    .await?;
     if chapter_exists.0 == 0 {
         return Err(AppError::Process("Nie znaleziono rozdzialu.".into()));
     }
 
-    let thread_exists: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM plot_threads WHERE id = ? AND book_id = ? AND plan_version_id = ?")
-            .bind(&input.thread_id)
-            .bind(&input.book_id)
-            .bind(&plan_version_id)
-            .fetch_one(&mut *tx)
-            .await?;
+    let thread_exists: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM plot_threads WHERE id = ? AND book_id = ? AND plan_version_id = ?",
+    )
+    .bind(&input.thread_id)
+    .bind(&input.book_id)
+    .bind(&plan_version_id)
+    .fetch_one(&mut *tx)
+    .await?;
     if thread_exists.0 == 0 {
         return Err(AppError::Process("Nie znaleziono watku.".into()));
     }
@@ -1835,7 +1947,9 @@ pub async fn create_plan_version_from_active_in_pool(
     input: CreatePlanVersionInput,
 ) -> Result<PlanVersion, AppError> {
     if input.name.trim().is_empty() {
-        return Err(AppError::Process("Nazwa wariantu planu nie moze byc pusta.".into()));
+        return Err(AppError::Process(
+            "Nazwa wariantu planu nie moze byc pusta.".into(),
+        ));
     }
 
     let active = ensure_active_plan_version_in_pool(pool, &input.book_id).await?;
@@ -1993,10 +2107,7 @@ pub async fn create_plan_version_from_active_in_pool(
     .await?;
     for chapter in chapters {
         let new_id = Uuid::new_v4().to_string();
-        let mapped_act_id = chapter
-            .act_id
-            .as_ref()
-            .and_then(|id| map_id(&act_ids, id));
+        let mapped_act_id = chapter.act_id.as_ref().and_then(|id| map_id(&act_ids, id));
         sqlx::query(
             r#"
             INSERT INTO chapters
@@ -2086,13 +2197,12 @@ pub async fn set_active_plan_version_in_pool(
 ) -> Result<PlanVersion, AppError> {
     let now = Utc::now().to_rfc3339();
     let mut tx = pool.begin().await?;
-    let exists: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM plan_versions WHERE id = ? AND book_id = ?",
-    )
-    .bind(&input.plan_version_id)
-    .bind(&input.book_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let exists: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM plan_versions WHERE id = ? AND book_id = ?")
+            .bind(&input.plan_version_id)
+            .bind(&input.book_id)
+            .fetch_one(&mut *tx)
+            .await?;
     if exists.0 == 0 {
         return Err(AppError::Process("Nie znaleziono wariantu planu.".into()));
     }
@@ -2134,17 +2244,20 @@ pub async fn delete_plan_version_in_pool(
         return Err(AppError::Process("Nie znaleziono wariantu planu.".into()));
     };
     if version.is_active != 0 {
-        return Err(AppError::Process("Nie można usunąć aktywnego wariantu planu.".into()));
+        return Err(AppError::Process(
+            "Nie można usunąć aktywnego wariantu planu.".into(),
+        ));
     }
 
-    let version_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM plan_versions WHERE book_id = ?",
-    )
-    .bind(&input.book_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let version_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM plan_versions WHERE book_id = ?")
+            .bind(&input.book_id)
+            .fetch_one(&mut *tx)
+            .await?;
     if version_count.0 <= 1 {
-        return Err(AppError::Process("Nie można usunąć ostatniego wariantu planu.".into()));
+        return Err(AppError::Process(
+            "Nie można usunąć ostatniego wariantu planu.".into(),
+        ));
     }
 
     sqlx::query(
@@ -2218,7 +2331,13 @@ pub async fn upsert_scene_in_pool(
     let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
     let mut tx = pool.begin().await?;
     let plan_version_id = active_plan_version_id_in_tx(&mut tx, &input.book_id).await?;
-    validate_optional_chapter_for_plan(&mut tx, &input.chapter_id, &input.book_id, &plan_version_id).await?;
+    validate_optional_chapter_for_plan(
+        &mut tx,
+        &input.chapter_id,
+        &input.book_id,
+        &plan_version_id,
+    )
+    .await?;
 
     if let Some(character_id) = &input.pov_character_id {
         validate_character_for_book(&mut tx, character_id, &input.book_id).await?;
@@ -2281,7 +2400,10 @@ pub async fn upsert_scene_in_pool(
 }
 
 pub async fn delete_scene_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
-    sqlx::query("DELETE FROM scenes WHERE id = ?").bind(id).execute(pool).await?;
+    sqlx::query("DELETE FROM scenes WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -2292,7 +2414,13 @@ pub async fn reorder_scenes_in_pool(
     let now = Utc::now().to_rfc3339();
     let mut tx = pool.begin().await?;
     let plan_version_id = active_plan_version_id_in_tx(&mut tx, &input.book_id).await?;
-    validate_optional_chapter_for_plan(&mut tx, &input.chapter_id, &input.book_id, &plan_version_id).await?;
+    validate_optional_chapter_for_plan(
+        &mut tx,
+        &input.chapter_id,
+        &input.book_id,
+        &plan_version_id,
+    )
+    .await?;
     for (index, id) in input.ordered_ids.iter().enumerate() {
         if let Some(chapter_id) = &input.chapter_id {
             sqlx::query(
@@ -2339,11 +2467,13 @@ pub async fn set_scene_relations_in_pool(
         .await?;
     for character_id in unique_ids(input.character_ids) {
         validate_character_for_book(&mut tx, &character_id, &input.book_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO scene_characters (scene_id, character_id) VALUES (?, ?)")
-            .bind(&input.scene_id)
-            .bind(character_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO scene_characters (scene_id, character_id) VALUES (?, ?)",
+        )
+        .bind(&input.scene_id)
+        .bind(character_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM scene_threads WHERE scene_id = ?")
@@ -2365,11 +2495,13 @@ pub async fn set_scene_relations_in_pool(
         .await?;
     for element_id in unique_ids(input.element_ids) {
         validate_world_element_for_book(&mut tx, &element_id, &input.book_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO scene_world_elements (scene_id, element_id) VALUES (?, ?)")
-            .bind(&input.scene_id)
-            .bind(element_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO scene_world_elements (scene_id, element_id) VALUES (?, ?)",
+        )
+        .bind(&input.scene_id)
+        .bind(element_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM scene_world_rules WHERE scene_id = ?")
@@ -2514,11 +2646,13 @@ async fn copy_mapped_scene_relations(
         .fetch_all(&mut **tx)
         .await?;
         for relation in characters {
-            sqlx::query("INSERT OR IGNORE INTO scene_characters (scene_id, character_id) VALUES (?, ?)")
-                .bind(new_scene_id)
-                .bind(relation.character_id)
-                .execute(&mut **tx)
-                .await?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO scene_characters (scene_id, character_id) VALUES (?, ?)",
+            )
+            .bind(new_scene_id)
+            .bind(relation.character_id)
+            .execute(&mut **tx)
+            .await?;
         }
 
         let threads = sqlx::query_as::<_, SceneThread>(
@@ -2529,11 +2663,13 @@ async fn copy_mapped_scene_relations(
         .await?;
         for relation in threads {
             if let Some(new_thread_id) = map_id(thread_ids, &relation.thread_id) {
-                sqlx::query("INSERT OR IGNORE INTO scene_threads (scene_id, thread_id) VALUES (?, ?)")
-                    .bind(new_scene_id)
-                    .bind(new_thread_id)
-                    .execute(&mut **tx)
-                    .await?;
+                sqlx::query(
+                    "INSERT OR IGNORE INTO scene_threads (scene_id, thread_id) VALUES (?, ?)",
+                )
+                .bind(new_scene_id)
+                .bind(new_thread_id)
+                .execute(&mut **tx)
+                .await?;
             }
         }
 
@@ -2544,11 +2680,13 @@ async fn copy_mapped_scene_relations(
         .fetch_all(&mut **tx)
         .await?;
         for relation in elements {
-            sqlx::query("INSERT OR IGNORE INTO scene_world_elements (scene_id, element_id) VALUES (?, ?)")
-                .bind(new_scene_id)
-                .bind(relation.element_id)
-                .execute(&mut **tx)
-                .await?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO scene_world_elements (scene_id, element_id) VALUES (?, ?)",
+            )
+            .bind(new_scene_id)
+            .bind(relation.element_id)
+            .execute(&mut **tx)
+            .await?;
         }
 
         let rules = sqlx::query_as::<_, SceneWorldRule>(
@@ -2558,11 +2696,13 @@ async fn copy_mapped_scene_relations(
         .fetch_all(&mut **tx)
         .await?;
         for relation in rules {
-            sqlx::query("INSERT OR IGNORE INTO scene_world_rules (scene_id, rule_id) VALUES (?, ?)")
-                .bind(new_scene_id)
-                .bind(relation.rule_id)
-                .execute(&mut **tx)
-                .await?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO scene_world_rules (scene_id, rule_id) VALUES (?, ?)",
+            )
+            .bind(new_scene_id)
+            .bind(relation.rule_id)
+            .execute(&mut **tx)
+            .await?;
         }
     }
     Ok(())
@@ -2583,7 +2723,9 @@ async fn validate_chapter_for_plan(
     .fetch_one(&mut **tx)
     .await?;
     if exists.0 == 0 {
-        return Err(AppError::Process("Nie znaleziono rozdziału w aktywnym wariancie planu.".into()));
+        return Err(AppError::Process(
+            "Nie znaleziono rozdziału w aktywnym wariancie planu.".into(),
+        ));
     }
     Ok(())
 }
@@ -2616,7 +2758,9 @@ async fn validate_thread_for_plan(
     .fetch_one(&mut **tx)
     .await?;
     if exists.0 == 0 {
-        return Err(AppError::Process("Nie znaleziono wątku w aktywnym wariancie planu.".into()));
+        return Err(AppError::Process(
+            "Nie znaleziono wątku w aktywnym wariancie planu.".into(),
+        ));
     }
     Ok(())
 }
@@ -2636,7 +2780,9 @@ async fn validate_scene_for_plan(
     .fetch_one(&mut **tx)
     .await?;
     if exists.0 == 0 {
-        return Err(AppError::Process("Nie znaleziono sceny w aktywnym wariancie planu.".into()));
+        return Err(AppError::Process(
+            "Nie znaleziono sceny w aktywnym wariancie planu.".into(),
+        ));
     }
     Ok(())
 }
@@ -2659,7 +2805,9 @@ async fn validate_character_for_book(
     .fetch_one(&mut **tx)
     .await?;
     if exists.0 == 0 {
-        return Err(AppError::Process("Nie znaleziono postaci dla tej książki.".into()));
+        return Err(AppError::Process(
+            "Nie znaleziono postaci dla tej książki.".into(),
+        ));
     }
     Ok(())
 }
@@ -2682,7 +2830,9 @@ async fn validate_world_element_for_book(
     .fetch_one(&mut **tx)
     .await?;
     if exists.0 == 0 {
-        return Err(AppError::Process("Nie znaleziono elementu świata dla tej książki.".into()));
+        return Err(AppError::Process(
+            "Nie znaleziono elementu świata dla tej książki.".into(),
+        ));
     }
     Ok(())
 }
@@ -2705,7 +2855,9 @@ async fn validate_world_rule_for_book(
     .fetch_one(&mut **tx)
     .await?;
     if exists.0 == 0 {
-        return Err(AppError::Process("Nie znaleziono reguły świata dla tej książki.".into()));
+        return Err(AppError::Process(
+            "Nie znaleziono reguły świata dla tej książki.".into(),
+        ));
     }
     Ok(())
 }
@@ -2970,7 +3122,9 @@ pub async fn upsert_character_in_pool(
     input: UpsertCharacterInput,
 ) -> Result<Character, AppError> {
     if input.name.trim().is_empty() {
-        return Err(AppError::Process("Nazwa postaci nie moze byc pusta.".into()));
+        return Err(AppError::Process(
+            "Nazwa postaci nie moze byc pusta.".into(),
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
@@ -3113,7 +3267,9 @@ pub async fn upsert_character_memory_in_pool(
     input: UpsertCharacterMemoryInput,
 ) -> Result<CharacterMemory, AppError> {
     if input.title.trim().is_empty() {
-        return Err(AppError::Process("Tytul wspomnienia nie moze byc pusty.".into()));
+        return Err(AppError::Process(
+            "Tytul wspomnienia nie moze byc pusty.".into(),
+        ));
     }
 
     let now = Utc::now().to_rfc3339();
@@ -3241,10 +3397,7 @@ pub async fn delete_character_relation_in_pool(
     Ok(())
 }
 
-pub async fn delete_character_memory_in_pool(
-    pool: &SqlitePool,
-    id: &str,
-) -> Result<(), AppError> {
+pub async fn delete_character_memory_in_pool(pool: &SqlitePool, id: &str) -> Result<(), AppError> {
     sqlx::query("DELETE FROM character_memories WHERE id = ?")
         .bind(id)
         .execute(pool)
@@ -3426,11 +3579,13 @@ pub async fn set_world_element_relations_in_pool(
         .await?;
     for thread_id in unique_ids(input.thread_ids) {
         validate_thread_in_project(&mut tx, &thread_id, &input.project_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO world_element_threads (element_id, thread_id) VALUES (?, ?)")
-            .bind(&input.element_id)
-            .bind(thread_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO world_element_threads (element_id, thread_id) VALUES (?, ?)",
+        )
+        .bind(&input.element_id)
+        .bind(thread_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM world_element_chapters WHERE element_id = ?")
@@ -3439,11 +3594,13 @@ pub async fn set_world_element_relations_in_pool(
         .await?;
     for chapter_id in unique_ids(input.chapter_ids) {
         validate_chapter_in_project(&mut tx, &chapter_id, &input.project_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO world_element_chapters (element_id, chapter_id) VALUES (?, ?)")
-            .bind(&input.element_id)
-            .bind(chapter_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO world_element_chapters (element_id, chapter_id) VALUES (?, ?)",
+        )
+        .bind(&input.element_id)
+        .bind(chapter_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM scene_world_elements WHERE element_id = ?")
@@ -3452,11 +3609,13 @@ pub async fn set_world_element_relations_in_pool(
         .await?;
     for scene_id in unique_ids(input.scene_ids) {
         validate_scene_in_project(&mut tx, &scene_id, &input.project_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO scene_world_elements (scene_id, element_id) VALUES (?, ?)")
-            .bind(scene_id)
-            .bind(&input.element_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO scene_world_elements (scene_id, element_id) VALUES (?, ?)",
+        )
+        .bind(scene_id)
+        .bind(&input.element_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM world_element_rules WHERE element_id = ?")
@@ -3465,11 +3624,13 @@ pub async fn set_world_element_relations_in_pool(
         .await?;
     for rule_id in unique_ids(input.rule_ids) {
         validate_world_rule_in_project(&mut tx, &rule_id, &input.project_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO world_element_rules (element_id, rule_id) VALUES (?, ?)")
-            .bind(&input.element_id)
-            .bind(rule_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO world_element_rules (element_id, rule_id) VALUES (?, ?)",
+        )
+        .bind(&input.element_id)
+        .bind(rule_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     touch_project_by_id(&mut tx, &input.project_id, &now).await?;
@@ -3491,11 +3652,13 @@ pub async fn set_world_rule_relations_in_pool(
         .await?;
     for element_id in unique_ids(input.element_ids) {
         validate_world_element_in_project(&mut tx, &element_id, &input.project_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO world_element_rules (element_id, rule_id) VALUES (?, ?)")
-            .bind(element_id)
-            .bind(&input.rule_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO world_element_rules (element_id, rule_id) VALUES (?, ?)",
+        )
+        .bind(element_id)
+        .bind(&input.rule_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM world_rule_threads WHERE rule_id = ?")
@@ -3517,11 +3680,13 @@ pub async fn set_world_rule_relations_in_pool(
         .await?;
     for chapter_id in unique_ids(input.chapter_ids) {
         validate_chapter_in_project(&mut tx, &chapter_id, &input.project_id).await?;
-        sqlx::query("INSERT OR IGNORE INTO world_rule_chapters (rule_id, chapter_id) VALUES (?, ?)")
-            .bind(&input.rule_id)
-            .bind(chapter_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO world_rule_chapters (rule_id, chapter_id) VALUES (?, ?)",
+        )
+        .bind(&input.rule_id)
+        .bind(chapter_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     sqlx::query("DELETE FROM scene_world_rules WHERE rule_id = ?")
@@ -4168,13 +4333,12 @@ pub async fn generate_character_image_in_pool(
         ));
     }
 
-    let character = sqlx::query_as::<_, Character>(
-        "SELECT * FROM characters WHERE id = ? AND project_id = ?",
-    )
-    .bind(&input.character_id)
-    .bind(&input.project_id)
-    .fetch_one(pool)
-    .await?;
+    let character =
+        sqlx::query_as::<_, Character>("SELECT * FROM characters WHERE id = ? AND project_id = ?")
+            .bind(&input.character_id)
+            .bind(&input.project_id)
+            .fetch_one(pool)
+            .await?;
 
     let ai_run_id = Uuid::new_v4().to_string();
     let created_at = Utc::now().to_rfc3339();
@@ -4226,8 +4390,7 @@ pub async fn generate_character_image_in_pool(
         }
     };
 
-    verify_generated_png_file(&generated_image_path, "Codex CLI generated character image")
-        .await?;
+    verify_generated_png_file(&generated_image_path, "Codex CLI generated character image").await?;
 
     let app_data_dir = app.path().app_data_dir().map_err(|error| {
         AppError::Process(format!(
@@ -4306,13 +4469,12 @@ pub async fn accept_generated_character_image_in_pool(
     let mut tx = pool.begin().await?;
     validate_character_in_project(&mut tx, &input.character_id, &input.project_id).await?;
 
-    let character = sqlx::query_as::<_, Character>(
-        "SELECT * FROM characters WHERE id = ? AND project_id = ?",
-    )
-    .bind(&input.character_id)
-    .bind(&input.project_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let character =
+        sqlx::query_as::<_, Character>("SELECT * FROM characters WHERE id = ? AND project_id = ?")
+            .bind(&input.character_id)
+            .bind(&input.project_id)
+            .fetch_one(&mut *tx)
+            .await?;
 
     sqlx::query(
         r#"
@@ -4373,6 +4535,769 @@ pub async fn accept_generated_character_image_in_pool(
         negative_prompt: input.negative_prompt,
         generated_at: input.generated_at,
     })
+}
+
+pub async fn export_book_in_pool(
+    app: &AppHandle,
+    pool: &SqlitePool,
+    input: ExportBookInput,
+) -> Result<ExportBookResult, AppError> {
+    let details = get_project_details(pool, &input.project_id).await?;
+    if details.book.id != input.book_id {
+        return Err(AppError::Process(
+            "Książka nie należy do wybranego projektu.".into(),
+        ));
+    }
+    let plan = get_book_plan_in_pool(pool, &input.book_id).await?;
+    let export_doc = build_export_document(&details.book, &plan, &input)?;
+    if export_doc.body_plain.trim().is_empty() {
+        return Err(AppError::Process(
+            "Brak tekstu manuskryptu do eksportu.".into(),
+        ));
+    }
+
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        AppError::Process(format!(
+            "Nie udało się ustalić katalogu danych aplikacji: {error}"
+        ))
+    })?;
+    let export_dir = app_data_dir
+        .join("exports")
+        .join(&input.project_id)
+        .join(&input.book_id);
+    tokio::fs::create_dir_all(&export_dir).await?;
+    let base_name = export_file_stem(&details.book);
+    let format = input.format.to_lowercase();
+
+    match format.as_str() {
+        "markdown" => {
+            let path = export_dir.join(format!("{base_name}.md"));
+            tokio::fs::write(&path, export_doc.markdown.as_bytes()).await?;
+            Ok(export_result(path, "markdown", None, None))
+        }
+        "txt" => {
+            let path = export_dir.join(format!("{base_name}.txt"));
+            tokio::fs::write(&path, export_doc.plain_text.as_bytes()).await?;
+            Ok(export_result(path, "txt", None, None))
+        }
+        "docx" => {
+            let path = export_dir.join(format!("{base_name}.docx"));
+            let bytes = build_docx(&export_doc, input.style.page_numbers)?;
+            tokio::fs::write(&path, bytes).await?;
+            Ok(export_result(path, "docx", None, None))
+        }
+        "epub" => {
+            let path = export_dir.join(format!("{base_name}.epub"));
+            let bytes = build_epub(&export_doc, &details.book)?;
+            tokio::fs::write(&path, bytes).await?;
+            Ok(export_result(path, "epub", None, None))
+        }
+        "mobi" => {
+            let epub_path = export_dir.join(format!("{base_name}.epub"));
+            let bytes = build_epub(&export_doc, &details.book)?;
+            tokio::fs::write(&epub_path, bytes).await?;
+            let mobi_path = export_dir.join(format!("{base_name}.mobi"));
+            match convert_epub_to_mobi(&epub_path, &mobi_path).await {
+                Ok(()) => Ok(export_result(mobi_path, "mobi", Some(epub_path), None)),
+                Err(message) => Ok(export_result(
+                    epub_path.clone(),
+                    "mobi",
+                    Some(epub_path),
+                    Some(format!(
+                        "Nie znaleziono konwertera MOBI lub konwersja się nie powiodła: {message}. Zapisano EPUB."
+                    )),
+                )),
+            }
+        }
+        _ => Err(AppError::Process("Nieobsługiwany format eksportu.".into())),
+    }
+}
+
+pub async fn list_export_presets_in_pool(
+    pool: &SqlitePool,
+    project_id: &str,
+    book_id: &str,
+) -> Result<Vec<ExportPreset>, AppError> {
+    let presets = sqlx::query_as::<_, ExportPreset>(
+        "SELECT * FROM export_presets WHERE project_id = ? AND book_id = ? ORDER BY updated_at DESC",
+    )
+    .bind(project_id)
+    .bind(book_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(presets)
+}
+
+pub async fn save_export_preset_in_pool(
+    pool: &SqlitePool,
+    input: SaveExportPresetInput,
+) -> Result<ExportPreset, AppError> {
+    serde_json::from_str::<Value>(&input.settings_json)?;
+    let now = Utc::now().to_rfc3339();
+    let id = input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let existing = sqlx::query_as::<_, ExportPreset>("SELECT * FROM export_presets WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(pool)
+        .await?;
+    let created_at = existing
+        .as_ref()
+        .map(|preset| preset.created_at.clone())
+        .unwrap_or_else(|| now.clone());
+    let name = if input.name.trim().is_empty() {
+        "Preset eksportu"
+    } else {
+        input.name.trim()
+    };
+
+    sqlx::query(
+        r#"
+        INSERT INTO export_presets
+          (id, project_id, book_id, name, settings_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          settings_json = excluded.settings_json,
+          updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.project_id)
+    .bind(&input.book_id)
+    .bind(name)
+    .bind(&input.settings_json)
+    .bind(&created_at)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    let preset = sqlx::query_as::<_, ExportPreset>("SELECT * FROM export_presets WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await?;
+    Ok(preset)
+}
+
+pub async fn generate_export_artwork_in_pool(
+    app: &AppHandle,
+    pool: &SqlitePool,
+    input: GenerateExportArtworkInput,
+) -> Result<ExportArtworkResult, AppError> {
+    if input.image_prompt.trim().is_empty() {
+        return Err(AppError::Process(
+            "Prompt grafiki eksportu nie może być pusty.".into(),
+        ));
+    }
+    validate_export_artwork_target(
+        pool,
+        &input.project_id,
+        &input.book_id,
+        &input.related_type,
+        &input.related_id,
+    )
+    .await?;
+
+    let ai_run_id = Uuid::new_v4().to_string();
+    let created_at = Utc::now().to_rfc3339();
+    let prompt_package_json = serde_json::to_string(&input.prompt_package_json)?;
+    let timeout_seconds = cover_timeout_seconds(input.timeout_seconds);
+
+    sqlx::query(
+        r#"
+        INSERT INTO ai_runs
+          (id, project_id, provider_id, model, reasoning_effort, action, prompt_package_json, prompt, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'generate_export_artwork', ?, ?, 'running', ?)
+        "#,
+    )
+    .bind(&ai_run_id)
+    .bind(&input.project_id)
+    .bind(PROVIDER_ID)
+    .bind(input.model.as_deref().unwrap_or(""))
+    .bind(input.reasoning_effort.as_deref().unwrap_or(""))
+    .bind(&prompt_package_json)
+    .bind(&input.prompt)
+    .bind(&created_at)
+    .execute(pool)
+    .await?;
+
+    let started_at = Instant::now();
+    let run_result =
+        execute_codex_export_artwork_generation(app, &input, &ai_run_id, timeout_seconds).await;
+    let duration_ms = started_at.elapsed().as_millis();
+    let completed_at = Utc::now().to_rfc3339();
+    let (stdout, stderr, generated_image_path) = match run_result {
+        Ok(result) => result,
+        Err(error) => {
+            let error_message = error.to_string();
+            complete_ai_run(
+                pool,
+                &ai_run_id,
+                if matches!(error, AppError::Timeout(_)) {
+                    "timeout"
+                } else {
+                    "error"
+                },
+                None,
+                Some(&error_message),
+                &completed_at,
+            )
+            .await?;
+            return Err(error);
+        }
+    };
+    verify_generated_png_file(&generated_image_path, "Codex CLI generated export artwork").await?;
+
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        AppError::Process(format!(
+            "Nie udało się ustalić katalogu danych aplikacji: {error}"
+        ))
+    })?;
+    let final_dir = app_data_dir
+        .join("exports")
+        .join("artwork")
+        .join(&input.project_id)
+        .join(&input.related_type)
+        .join(&input.related_id);
+    tokio::fs::create_dir_all(&final_dir).await?;
+    let final_image_path = final_dir.join(format!("export-artwork-{ai_run_id}.png"));
+    tokio::fs::copy(&generated_image_path, &final_image_path).await?;
+    verify_generated_png_file(&final_image_path, "Saved export artwork").await?;
+    let raw_output = codex_image_raw_output(&stdout, &stderr, &generated_image_path);
+    complete_ai_run(
+        pool,
+        &ai_run_id,
+        "success",
+        Some(&raw_output),
+        None,
+        &completed_at,
+    )
+    .await?;
+
+    let file_path = final_image_path.to_string_lossy().to_string();
+    let visual_asset = VisualAsset {
+        id: Uuid::new_v4().to_string(),
+        project_id: input.project_id.clone(),
+        related_type: input.related_type.clone(),
+        related_id: input.related_id.clone(),
+        asset_type: "image".into(),
+        title: "Grafika eksportu".into(),
+        prompt: input.image_prompt.clone(),
+        negative_prompt: input.negative_prompt.clone(),
+        file_path: file_path.clone(),
+        source: "ai".into(),
+        status: "proposed".into(),
+        created_at: completed_at.clone(),
+        updated_at: completed_at.clone(),
+    };
+
+    Ok(ExportArtworkResult {
+        visual_asset,
+        ai_run: AiRunResult {
+            id: ai_run_id,
+            provider_id: PROVIDER_ID.into(),
+            prompt_package_id: input.prompt_package_id,
+            action: "generate_export_artwork".into(),
+            status: "success".into(),
+            raw_output: Some(raw_output),
+            stderr: if stderr.trim().is_empty() {
+                None
+            } else {
+                Some(stderr)
+            },
+            error_message: None,
+            duration_ms,
+        },
+        image_path: file_path,
+        prompt: input.image_prompt,
+        negative_prompt: input.negative_prompt,
+        generated_at: completed_at,
+    })
+}
+
+pub async fn accept_generated_export_artwork_in_pool(
+    pool: &SqlitePool,
+    input: AcceptGeneratedExportArtworkInput,
+) -> Result<ExportArtworkResult, AppError> {
+    verify_generated_png_file(Path::new(&input.image_path), "Accepted export artwork").await?;
+    validate_export_artwork_related_type(&input.related_type)?;
+
+    let now = Utc::now().to_rfc3339();
+    let asset_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO visual_assets
+          (id, project_id, related_type, related_id, asset_type, title, prompt, negative_prompt, file_path, source, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'image', 'Grafika eksportu', ?, ?, ?, 'ai', 'canon', ?, ?)
+        "#,
+    )
+    .bind(&asset_id)
+    .bind(&input.project_id)
+    .bind(&input.related_type)
+    .bind(&input.related_id)
+    .bind(&input.image_prompt)
+    .bind(&input.negative_prompt)
+    .bind(&input.image_path)
+    .bind(&input.generated_at)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+    let visual_asset = sqlx::query_as::<_, VisualAsset>("SELECT * FROM visual_assets WHERE id = ?")
+        .bind(&asset_id)
+        .fetch_one(pool)
+        .await?;
+    Ok(ExportArtworkResult {
+        visual_asset,
+        ai_run: AiRunResult {
+            id: asset_id.clone(),
+            provider_id: PROVIDER_ID.into(),
+            prompt_package_id: "accepted-export-artwork".into(),
+            action: "generate_export_artwork".into(),
+            status: "success".into(),
+            raw_output: None,
+            stderr: None,
+            error_message: None,
+            duration_ms: 0,
+        },
+        image_path: input.image_path,
+        prompt: input.image_prompt,
+        negative_prompt: input.negative_prompt,
+        generated_at: input.generated_at,
+    })
+}
+
+#[derive(Debug)]
+struct ExportDocument {
+    title: String,
+    markdown: String,
+    plain_text: String,
+    body_plain: String,
+    html_body: String,
+}
+
+fn build_export_document(
+    book: &Book,
+    plan: &BookPlan,
+    input: &ExportBookInput,
+) -> Result<ExportDocument, AppError> {
+    let selected = if input.chapter_ids.is_empty() {
+        plan.chapters.iter().collect::<Vec<_>>()
+    } else {
+        plan.chapters
+            .iter()
+            .filter(|chapter| input.chapter_ids.iter().any(|id| id == &chapter.id))
+            .collect::<Vec<_>>()
+    };
+    let mut chapters = selected;
+    chapters.sort_by(|left, right| {
+        left.order_index
+            .cmp(&right.order_index)
+            .then(left.number.cmp(&right.number))
+    });
+    if chapters.is_empty() {
+        return Err(AppError::Process(
+            "Nie wybrano rozdziałów do eksportu.".into(),
+        ));
+    }
+
+    let title = if book.title.trim().is_empty() {
+        book.working_title.clone()
+    } else {
+        book.title.clone()
+    };
+    let mut markdown = format!("# {}\n\n", title);
+    let mut plain = format!("{title}\n\n");
+    let mut body_plain = String::new();
+    let mut html = format!("<h1>{}</h1>", escape_xml(&title));
+
+    for chapter in chapters {
+        let chapter_heading =
+            render_export_separator(&input.style.chapter_separator, book, chapter, None);
+        markdown.push_str(&format!("## {chapter_heading}\n\n"));
+        plain.push_str(&format!("{chapter_heading}\n\n"));
+        html.push_str(&format!("<h2>{}</h2>", escape_xml(&chapter_heading)));
+        if input.content_mode == "manuscript_with_summaries" && !chapter.summary.trim().is_empty() {
+            markdown.push_str(&format!("> {}\n\n", chapter.summary.trim()));
+            plain.push_str(&format!("Streszczenie: {}\n\n", chapter.summary.trim()));
+            html.push_str(&format!(
+                "<blockquote>{}</blockquote>",
+                escape_xml(chapter.summary.trim())
+            ));
+        }
+        let mut scenes = plan
+            .scenes
+            .iter()
+            .filter(|scene| scene.chapter_id.as_deref() == Some(chapter.id.as_str()))
+            .collect::<Vec<_>>();
+        scenes.sort_by(|left, right| {
+            left.order_index
+                .cmp(&right.order_index)
+                .then(left.created_at.cmp(&right.created_at))
+        });
+        for (index, scene) in scenes.iter().enumerate() {
+            if index > 0 || !input.style.scene_separator.text.trim().is_empty() {
+                let scene_separator = render_export_separator(
+                    &input.style.scene_separator,
+                    book,
+                    chapter,
+                    Some(scene),
+                );
+                if !scene_separator.trim().is_empty() {
+                    markdown.push_str(&format!("{scene_separator}\n\n"));
+                    plain.push_str(&format!("{scene_separator}\n\n"));
+                    html.push_str(&format!(
+                        "<p class=\"scene-separator\">{}</p>",
+                        escape_xml(&scene_separator)
+                    ));
+                }
+            }
+            let scene_text = html_to_plain_text(&scene.manuscript_content);
+            if !scene_text.trim().is_empty() {
+                markdown.push_str(&format!("{}\n\n", scene_text.trim()));
+                plain.push_str(&format!("{}\n\n", scene_text.trim()));
+                body_plain.push_str(scene_text.trim());
+                body_plain.push_str("\n\n");
+                html.push_str(&plain_paragraphs_to_html(&scene_text));
+            }
+        }
+    }
+
+    Ok(ExportDocument {
+        title,
+        markdown,
+        plain_text: plain,
+        body_plain,
+        html_body: html,
+    })
+}
+
+fn render_export_separator(
+    settings: &ExportSeparatorSettings,
+    book: &Book,
+    chapter: &Chapter,
+    scene: Option<&&Scene>,
+) -> String {
+    settings
+        .text
+        .replace("{number}", &chapter.number.to_string())
+        .replace(
+            "{title}",
+            if chapter.working_title.is_empty() {
+                "Bez tytułu"
+            } else {
+                &chapter.working_title
+            },
+        )
+        .replace(
+            "{book}",
+            if book.title.is_empty() {
+                &book.working_title
+            } else {
+                &book.title
+            },
+        )
+        .replace(
+            "{scene}",
+            scene.map(|item| item.title.as_str()).unwrap_or(""),
+        )
+}
+
+fn export_result(
+    path: PathBuf,
+    format: &str,
+    fallback: Option<PathBuf>,
+    warning: Option<String>,
+) -> ExportBookResult {
+    ExportBookResult {
+        file_path: path.to_string_lossy().to_string(),
+        format: format.into(),
+        fallback_file_path: fallback.map(|path| path.to_string_lossy().to_string()),
+        warning,
+    }
+}
+
+fn export_file_stem(book: &Book) -> String {
+    let raw = if book.title.trim().is_empty() {
+        book.working_title.trim()
+    } else {
+        book.title.trim()
+    };
+    let mut stem = String::new();
+    for character in raw.to_lowercase().chars() {
+        if character.is_ascii_alphanumeric() {
+            stem.push(character);
+        } else if character.is_whitespace() || character == '-' || character == '_' {
+            if !stem.ends_with('-') {
+                stem.push('-');
+            }
+        }
+    }
+    let stem = stem.trim_matches('-');
+    if stem.is_empty() {
+        "manuskrypt".into()
+    } else {
+        stem.into()
+    }
+}
+
+fn html_to_plain_text(value: &str) -> String {
+    let mut text = value
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n")
+        .replace("</p>", "\n\n")
+        .replace("</h1>", "\n\n")
+        .replace("</h2>", "\n\n")
+        .replace("<li>", "- ")
+        .replace("</li>", "\n");
+    let mut out = String::new();
+    let mut in_tag = false;
+    for character in text.drain(..) {
+        match character {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(character),
+            _ => {}
+        }
+    }
+    out.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+}
+
+fn plain_paragraphs_to_html(value: &str) -> String {
+    value
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| format!("<p>{}</p>", escape_xml(part)))
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+fn build_docx(document: &ExportDocument, page_numbers: bool) -> Result<Vec<u8>, AppError> {
+    let mut body = String::new();
+    body.push_str(&format!(
+        "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t>{}</w:t></w:r></w:p>",
+        escape_xml(&document.title)
+    ));
+    for paragraph in document
+        .plain_text
+        .split("\n\n")
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+    {
+        body.push_str(&format!(
+            "<w:p><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
+            escape_xml(paragraph)
+        ));
+    }
+    if false && page_numbers {
+        body.push_str("<w:p><w:r><w:t>Numeracja stron: włączona w ustawieniach eksportu DOCX.</w:t></w:r></w:p>");
+    }
+    let section_properties = if page_numbers {
+        r#"<w:sectPr><w:footerReference w:type="default" r:id="rIdFooter1"/></w:sectPr>"#
+    } else {
+        "<w:sectPr/>"
+    };
+    let document_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>{body}{section_properties}</w:body></w:document>"#
+    );
+    let footer_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>"#;
+    let content_types = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>"#;
+    let rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#;
+    let document_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>"#;
+    Ok(zip_store(vec![
+        ("[Content_Types].xml", content_types.as_bytes().to_vec()),
+        ("_rels/.rels", rels.as_bytes().to_vec()),
+        ("word/document.xml", document_xml.into_bytes()),
+        (
+            "word/_rels/document.xml.rels",
+            document_rels.as_bytes().to_vec(),
+        ),
+        ("word/footer1.xml", footer_xml.as_bytes().to_vec()),
+    ]))
+}
+
+fn build_epub(document: &ExportDocument, book: &Book) -> Result<Vec<u8>, AppError> {
+    let title = escape_xml(&document.title);
+    let identifier = escape_xml(&book.id);
+    let content = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" lang="pl"><head><title>{title}</title><link href="style.css" rel="stylesheet" type="text/css"/></head><body>{}</body></html>"#,
+        document.html_body
+    );
+    let opf = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">{identifier}</dc:identifier><dc:title>{title}</dc:title><dc:language>pl</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="content" href="content.xhtml" media-type="application/xhtml+xml"/><item id="style" href="style.css" media-type="text/css"/></manifest><spine><itemref idref="content"/></spine></package>"#
+    );
+    let nav = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" lang="pl"><head><title>{title}</title></head><body><nav epub:type="toc" xmlns:epub="http://www.idpf.org/2007/ops"><ol><li><a href="content.xhtml">{title}</a></li></ol></nav></body></html>"#
+    );
+    let container = r#"<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#;
+    let css = "body{font-family:serif;line-height:1.6;margin:5%;}h1,h2{text-align:center;}.scene-separator{text-align:center;margin:2em 0;color:#6f5c42;}";
+    Ok(zip_store(vec![
+        ("mimetype", b"application/epub+zip".to_vec()),
+        ("META-INF/container.xml", container.as_bytes().to_vec()),
+        ("OEBPS/content.opf", opf.into_bytes()),
+        ("OEBPS/nav.xhtml", nav.into_bytes()),
+        ("OEBPS/content.xhtml", content.into_bytes()),
+        ("OEBPS/style.css", css.as_bytes().to_vec()),
+    ]))
+}
+
+async fn convert_epub_to_mobi(epub_path: &Path, mobi_path: &Path) -> Result<(), String> {
+    let ebook_convert = Command::new("ebook-convert")
+        .arg(epub_path)
+        .arg(mobi_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .status()
+        .await;
+    match ebook_convert {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!("ebook-convert zakończył się kodem {status}")),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn escape_xml(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+fn zip_store(files: Vec<(&str, Vec<u8>)>) -> Vec<u8> {
+    let mut output = Vec::new();
+    let mut central = Vec::new();
+    for (name, data) in files {
+        let offset = output.len() as u32;
+        let crc = crc32(&data);
+        let name_bytes = name.as_bytes();
+        write_u32(&mut output, 0x04034b50);
+        write_u16(&mut output, 20);
+        write_u16(&mut output, 0);
+        write_u16(&mut output, 0);
+        write_u16(&mut output, 0);
+        write_u16(&mut output, 0);
+        write_u32(&mut output, crc);
+        write_u32(&mut output, data.len() as u32);
+        write_u32(&mut output, data.len() as u32);
+        write_u16(&mut output, name_bytes.len() as u16);
+        write_u16(&mut output, 0);
+        output.extend_from_slice(name_bytes);
+        output.extend_from_slice(&data);
+
+        write_u32(&mut central, 0x02014b50);
+        write_u16(&mut central, 20);
+        write_u16(&mut central, 20);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u32(&mut central, crc);
+        write_u32(&mut central, data.len() as u32);
+        write_u32(&mut central, data.len() as u32);
+        write_u16(&mut central, name_bytes.len() as u16);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u32(&mut central, 0);
+        write_u32(&mut central, offset);
+        central.extend_from_slice(name_bytes);
+    }
+    let central_offset = output.len() as u32;
+    let central_size = central.len() as u32;
+    let file_count = files_len_from_central(&central);
+    output.extend_from_slice(&central);
+    write_u32(&mut output, 0x06054b50);
+    write_u16(&mut output, 0);
+    write_u16(&mut output, 0);
+    write_u16(&mut output, file_count);
+    write_u16(&mut output, file_count);
+    write_u32(&mut output, central_size);
+    write_u32(&mut output, central_offset);
+    write_u16(&mut output, 0);
+    output
+}
+
+fn files_len_from_central(central: &[u8]) -> u16 {
+    central
+        .windows(4)
+        .filter(|window| *window == [0x50, 0x4b, 0x01, 0x02])
+        .count() as u16
+}
+
+fn write_u16(output: &mut Vec<u8>, value: u16) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_u32(output: &mut Vec<u8>, value: u32) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xffff_ffffu32;
+    for byte in data {
+        crc ^= *byte as u32;
+        for _ in 0..8 {
+            let mask = if crc & 1 == 1 { 0xedb8_8320 } else { 0 };
+            crc = (crc >> 1) ^ mask;
+        }
+    }
+    !crc
+}
+
+async fn validate_export_artwork_target(
+    pool: &SqlitePool,
+    project_id: &str,
+    book_id: &str,
+    related_type: &str,
+    related_id: &str,
+) -> Result<(), AppError> {
+    validate_export_artwork_related_type(related_type)?;
+    let count: (i64,) = match related_type {
+        "book" => {
+            sqlx::query_as("SELECT COUNT(*) FROM books WHERE id = ? AND project_id = ?")
+                .bind(related_id)
+                .bind(project_id)
+                .fetch_one(pool)
+                .await?
+        }
+        "chapter" => {
+            sqlx::query_as("SELECT COUNT(*) FROM chapters WHERE id = ? AND book_id = ?")
+                .bind(related_id)
+                .bind(book_id)
+                .fetch_one(pool)
+                .await?
+        }
+        "scene" => {
+            sqlx::query_as("SELECT COUNT(*) FROM scenes WHERE id = ? AND book_id = ?")
+                .bind(related_id)
+                .bind(book_id)
+                .fetch_one(pool)
+                .await?
+        }
+        _ => unreachable!(),
+    };
+    if count.0 == 0 {
+        return Err(AppError::Process(
+            "Nie znaleziono celu grafiki eksportu.".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_export_artwork_related_type(related_type: &str) -> Result<(), AppError> {
+    match related_type {
+        "book" | "chapter" | "scene" => Ok(()),
+        _ => Err(AppError::Process(
+            "Nieobsługiwany typ celu grafiki eksportu.".into(),
+        )),
+    }
 }
 
 #[tauri::command]
@@ -4448,7 +5373,9 @@ async fn upsert_act(state: State<'_, AppState>, input: UpsertActInput) -> Result
 
 #[tauri::command]
 async fn delete_act(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    delete_act_in_pool(&state.db, &id).await.map_err(command_error)
+    delete_act_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
 }
 
 #[tauri::command]
@@ -4560,7 +5487,10 @@ async fn delete_plan_version(
 }
 
 #[tauri::command]
-async fn upsert_scene(state: State<'_, AppState>, input: UpsertSceneInput) -> Result<Scene, String> {
+async fn upsert_scene(
+    state: State<'_, AppState>,
+    input: UpsertSceneInput,
+) -> Result<Scene, String> {
     upsert_scene_in_pool(&state.db, input)
         .await
         .map_err(command_error)
@@ -4574,7 +5504,10 @@ async fn delete_scene(state: State<'_, AppState>, id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-async fn reorder_scenes(state: State<'_, AppState>, input: ReorderScenesInput) -> Result<(), String> {
+async fn reorder_scenes(
+    state: State<'_, AppState>,
+    input: ReorderScenesInput,
+) -> Result<(), String> {
     reorder_scenes_in_pool(&state.db, input)
         .await
         .map_err(command_error)
@@ -4756,20 +5689,14 @@ async fn upsert_ai_proposal_snapshot(
 }
 
 #[tauri::command]
-async fn mark_ai_proposal_accepted(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), String> {
+async fn mark_ai_proposal_accepted(state: State<'_, AppState>, id: String) -> Result<(), String> {
     mark_ai_proposal_decision_in_pool(&state.db, &id, "accepted")
         .await
         .map_err(command_error)
 }
 
 #[tauri::command]
-async fn mark_ai_proposal_rejected(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<(), String> {
+async fn mark_ai_proposal_rejected(state: State<'_, AppState>, id: String) -> Result<(), String> {
     mark_ai_proposal_decision_in_pool(&state.db, &id, "rejected")
         .await
         .map_err(command_error)
@@ -4835,6 +5762,59 @@ async fn accept_generated_character_image(
     input: AcceptGeneratedCharacterImageInput,
 ) -> Result<CharacterImageResult, String> {
     accept_generated_character_image_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn export_book(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: ExportBookInput,
+) -> Result<ExportBookResult, String> {
+    export_book_in_pool(&app, &state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn list_export_presets(
+    state: State<'_, AppState>,
+    project_id: String,
+    book_id: String,
+) -> Result<Vec<ExportPreset>, String> {
+    list_export_presets_in_pool(&state.db, &project_id, &book_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn save_export_preset(
+    state: State<'_, AppState>,
+    input: SaveExportPresetInput,
+) -> Result<ExportPreset, String> {
+    save_export_preset_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn generate_export_artwork(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: GenerateExportArtworkInput,
+) -> Result<ExportArtworkResult, String> {
+    generate_export_artwork_in_pool(&app, &state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn accept_generated_export_artwork(
+    state: State<'_, AppState>,
+    input: AcceptGeneratedExportArtworkInput,
+) -> Result<ExportArtworkResult, String> {
+    accept_generated_export_artwork_in_pool(&state.db, input)
         .await
         .map_err(command_error)
 }
@@ -5459,6 +6439,142 @@ async fn execute_codex_character_image_generation(
 
     let actual_image_path = actual_image_path_result?;
     verify_generated_png_file(&actual_image_path, "Codex CLI generated character image").await?;
+
+    Ok((stdout, stderr, actual_image_path))
+}
+
+async fn execute_codex_export_artwork_generation(
+    app: &AppHandle,
+    request: &GenerateExportArtworkInput,
+    ai_run_id: &str,
+    timeout_seconds: u64,
+) -> Result<(String, String, PathBuf), AppError> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        AppError::Process(format!(
+            "Nie udało się ustalić katalogu danych aplikacji: {error}"
+        ))
+    })?;
+    let workspace = app_data_dir
+        .join("codex-workspaces")
+        .join(&request.project_id)
+        .join("export-artwork-runs")
+        .join(ai_run_id);
+    tokio::fs::create_dir_all(&workspace).await?;
+    ensure_git_workspace(&workspace).await;
+
+    let image_path = workspace.join("export-artwork.png");
+    let image_path_text = image_path.to_string_lossy().to_string();
+    let prompt = format!(
+        "{}\nFresh generation nonce: {ai_run_id}. Use this only to randomize the image generation; do not render it as visible text.\n",
+        request.prompt.replace("{OUTPUT_FILE}", &image_path_text)
+    );
+    match tokio::fs::remove_file(&image_path).await {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(AppError::from(error)),
+    }
+    let generation_started_at = SystemTime::now()
+        .checked_sub(Duration::from_secs(2))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+
+    tokio::fs::write(workspace.join("prompt.md"), prompt.as_bytes()).await?;
+    tokio::fs::write(
+        workspace.join("context.json"),
+        serde_json::to_string_pretty(&request.prompt_package_json)?.as_bytes(),
+    )
+    .await?;
+
+    let codex_path = request
+        .codex_path
+        .clone()
+        .unwrap_or_else(|| "codex".to_string());
+    let command_spec = resolve_codex_command(&codex_path).await;
+    let instruction = "Run the StoryForge2 export artwork prompt from stdin. You must invoke the built-in $imagegen/image_generation tool to create a brand-new PNG decorative separator, ornament, or editorial illustration from scratch before returning. Do not make a book cover or character portrait unless the prompt explicitly asks for it. Do not render text, labels, watermarks, signatures, or logos inside the image. Do not edit, extend, inpaint, upscale, vary, reuse, or derive from any previous image. Do not run shell commands, inspect the filesystem, copy files, or move files. Never return placeholder paths such as _image_id_.png. Return only compact JSON with imagePath set to the actual generated PNG path; if the exact filename is unavailable, return the generated_images session directory. StoryForge2 will resolve and copy the final PNG.";
+
+    let mut command = Command::new(command_spec.program);
+    command
+        .args(command_spec.prefix_args)
+        .arg("exec")
+        .arg("--enable")
+        .arg("image_generation")
+        .arg("--disable")
+        .arg("hooks")
+        .arg("--disable")
+        .arg("shell_tool");
+
+    if let Some(model) = request
+        .model
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        command.arg("--model").arg(model);
+    }
+
+    if let Some(reasoning_effort) = request
+        .reasoning_effort
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        command
+            .arg("-c")
+            .arg(format!("model_reasoning_effort=\"{reasoning_effort}\""));
+    }
+
+    command
+        .arg("--ephemeral")
+        .arg("--sandbox")
+        .arg("workspace-write")
+        .arg(instruction)
+        .current_dir(&workspace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let output = timeout(Duration::from_secs(timeout_seconds), async {
+        let mut child = command.spawn()?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(prompt.as_bytes()).await?;
+        }
+        child.wait_with_output().await.map_err(AppError::from)
+    })
+    .await
+    .map_err(|_| AppError::Timeout(timeout_seconds))??;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
+    tokio::fs::write(
+        workspace.join("last-run.json"),
+        serde_json::json!({
+            "action": "generate_export_artwork",
+            "model": request.model,
+            "reasoningEffort": request.reasoning_effort,
+            "status": output.status.code(),
+            "stderr": stderr,
+            "imagePath": image_path_text,
+            "completedAt": Utc::now().to_rfc3339()
+        })
+        .to_string()
+        .as_bytes(),
+    )
+    .await?;
+
+    let actual_image_path_result =
+        resolve_generated_cover_path(&image_path, &stdout, &stderr, generation_started_at).await;
+
+    if !output.status.success() {
+        return Err(AppError::Process(if stderr.trim().is_empty() {
+            "Codex CLI zwrócił niezerowy status podczas generowania grafiki eksportu.".into()
+        } else {
+            stderr
+        }));
+    }
+
+    let actual_image_path = actual_image_path_result?;
+    verify_generated_png_file(&actual_image_path, "Codex CLI generated export artwork").await?;
 
     Ok((stdout, stderr, actual_image_path))
 }
@@ -6102,6 +7218,11 @@ pub fn run() {
             accept_generated_book_cover,
             generate_character_image,
             accept_generated_character_image,
+            export_book,
+            list_export_presets,
+            save_export_preset,
+            generate_export_artwork,
+            accept_generated_export_artwork,
             check_codex_cli,
             list_codex_models,
             generate_new_project_title,
@@ -6522,7 +7643,9 @@ mod tests {
         .await
         .unwrap();
 
-        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        let plan = get_book_plan_in_pool(&pool, &created.book.id)
+            .await
+            .unwrap();
         assert_eq!(plan.structure.unwrap().id, structure.id);
         assert_eq!(plan.acts[0].id, act.id);
         assert_eq!(plan.beats[0].id, beat.id);
@@ -6610,7 +7733,9 @@ mod tests {
         .await
         .unwrap();
 
-        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        let plan = get_book_plan_in_pool(&pool, &created.book.id)
+            .await
+            .unwrap();
         assert_eq!(plan.beats[0].order_index, 7);
         assert_eq!(plan.chapter_beats.len(), 1);
         assert_eq!(plan.chapter_beats[0].beat_id, beat.id);
@@ -6629,7 +7754,9 @@ mod tests {
         .await
         .unwrap();
 
-        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        let plan = get_book_plan_in_pool(&pool, &created.book.id)
+            .await
+            .unwrap();
         assert!(plan.chapter_beats.is_empty());
         assert_eq!(plan.beats[0].order_index, 8);
     }
@@ -6695,22 +7822,22 @@ mod tests {
         .unwrap();
 
         delete_chapter_in_pool(&pool, &chapter.id).await.unwrap();
-        let chapter_thread_count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM chapter_threads")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        let chapter_beat_count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM chapter_beats")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let chapter_thread_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM chapter_threads")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let chapter_beat_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM chapter_beats")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(chapter_thread_count.0, 0);
         assert_eq!(chapter_beat_count.0, 0);
 
         delete_beat_in_pool(&pool, &beat.id).await.unwrap();
         delete_plot_thread_in_pool(&pool, &thread.id).await.unwrap();
-        let plan = get_book_plan_in_pool(&pool, &created.book.id).await.unwrap();
+        let plan = get_book_plan_in_pool(&pool, &created.book.id)
+            .await
+            .unwrap();
         assert!(plan.threads.is_empty());
     }
 
@@ -7095,7 +8222,9 @@ mod tests {
         .await
         .unwrap();
 
-        delete_character_in_pool(&pool, &character.id).await.unwrap();
+        delete_character_in_pool(&pool, &character.id)
+            .await
+            .unwrap();
         let workspace = get_character_workspace_in_pool(&pool, &created.project.id)
             .await
             .unwrap();

@@ -1,11 +1,10 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Boxes,
-  Brain,
   CheckCircle2,
   ChevronDown,
   CircleDot,
-  FileText,
+  Download,
   History,
   Lightbulb,
   Map,
@@ -35,14 +34,9 @@ import storyforgeLogo from "../assets/storyforge-logo-full.png";
 
 type ProjectShellProps = {
   projectId: string;
-  activeSection: "concept" | "plan" | "characters" | "world" | "editor" | "ai" | "aiLog";
+  activeSection: "concept" | "plan" | "characters" | "world" | "editor" | "export" | "ai" | "aiLog";
   children: ReactNode;
 };
-
-const disabledSections = [
-  { label: "Rozdziały", icon: FileText },
-  { label: "Ciągłość", icon: Brain }
-];
 
 const reasoningLevels: Array<{
   value: ReasoningEffort;
@@ -50,9 +44,9 @@ const reasoningLevels: Array<{
   hint: string;
 }> = [
   { value: "low", label: "Low", hint: "Szybciej, mniej analizy." },
-  { value: "medium", label: "Medium", hint: "Balans jakosci i czasu." },
-  { value: "high", label: "High", hint: "Glebsze rozumowanie dla trudnych pol." },
-  { value: "xhigh", label: "XHigh", hint: "Najglebsze rozumowanie, wolniejsze." }
+  { value: "medium", label: "Medium", hint: "Balans jakości i czasu." },
+  { value: "high", label: "High", hint: "Głębsze rozumowanie dla trudnych pól." },
+  { value: "xhigh", label: "XHigh", hint: "Najgłębsze rozumowanie, wolniejsze." }
 ];
 
 export function ProjectShell({
@@ -113,6 +107,8 @@ export function ProjectShell({
             ? "Faza 5: Świat i reguły"
             : activeSection === "editor"
               ? "Faza 7: Edytor scen i rozdziałów"
+              : activeSection === "export"
+                ? "Eksport książki"
           : activeSection === "aiLog"
           ? "Log AI"
           : "Ustawienia AI";
@@ -259,12 +255,14 @@ export function ProjectShell({
             Edytor
           </Link>
 
-          {disabledSections.map(({ label, icon: Icon }) => (
-            <span className="nav-item disabled" key={label}>
-              <Icon size={18} />
-              {label}
-            </span>
-          ))}
+          <Link
+            to="/projects/$projectId/export"
+            params={{ projectId }}
+            className={activeSection === "export" ? "nav-item active" : "nav-item"}
+          >
+            <Download size={18} />
+            Eksport
+          </Link>
         </nav>
 
         <div className="sidebar-bottom-nav">
@@ -321,7 +319,7 @@ export function ProjectShell({
                 <select
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
-                  title="Model uzywany przez codex exec przy generowaniu tresci pol."
+                  title="Model używany przez codex exec przy generowaniu treści pól."
                 >
                   {modelOptions.map((option) => (
                     <option value={option.value} key={option.value} title={option.title}>

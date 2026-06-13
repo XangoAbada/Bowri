@@ -40,9 +40,11 @@ export type AiProposalScope =
   | "bookPlan"
   | "characters"
   | "world"
-  | "sceneEditor";
+  | "sceneEditor"
+  | "export";
 export const BOOK_COVER_FIELD = "__book_cover__";
 export const CHARACTER_IMAGE_FIELD = "__character_image__";
+export const EXPORT_ARTWORK_FIELD = "__export_artwork__";
 export const NEW_PROJECT_PROPOSAL_ID = "__new_project__";
 export type AiTaskFieldKey =
   | ConceptFieldKey
@@ -52,6 +54,7 @@ export type AiTaskFieldKey =
   | SceneEditorFieldKey
   | typeof BOOK_COVER_FIELD
   | typeof CHARACTER_IMAGE_FIELD
+  | typeof EXPORT_ARTWORK_FIELD
   | typeof SCENE_STORY_BIBLE_AUDIT_FIELD;
 export type ParsedAiProposal =
   | NormalizedConceptFieldSuggestion
@@ -82,7 +85,8 @@ export type AiPromptSnapshot = {
     | CharacterPromptPackage
     | WorldPromptPackage
     | SceneEditorPromptPackage
-    | SceneStoryBibleAuditPromptPackage;
+    | SceneStoryBibleAuditPromptPackage
+    | Record<string, unknown>;
   prompt: string;
   coverPrompt?: string;
   coverNegativePrompt?: string;
@@ -103,6 +107,8 @@ export type ActiveAiProposal = AiPromptSnapshot & {
   coverGeneratedAt?: string;
   characterImagePath?: string;
   characterGeneratedAt?: string;
+  exportArtworkPath?: string;
+  exportArtworkGeneratedAt?: string;
   progressMessage?: string;
   progress?: number | null;
   partialImageDataUrl?: string | null;
@@ -132,6 +138,8 @@ type ProposalResult = Pick<
       | "coverGeneratedAt"
       | "characterImagePath"
       | "characterGeneratedAt"
+      | "exportArtworkPath"
+      | "exportArtworkGeneratedAt"
       | "progressMessage"
       | "progress"
       | "partialImageDataUrl"
@@ -302,6 +310,8 @@ export const useProposalStore = create<ProposalState>((set) => ({
                 coverGeneratedAt: undefined,
                 characterImagePath: undefined,
                 characterGeneratedAt: undefined,
+                exportArtworkPath: undefined,
+                exportArtworkGeneratedAt: undefined,
                 progressMessage: undefined,
                 progress: undefined,
                 partialImageDataUrl: undefined,

@@ -18,6 +18,11 @@ import {
   browserDeleteCharacterMemoryLink,
   browserDeleteCharacterRelation,
   browserGenerateCharacterImage,
+  browserGenerateExportArtwork,
+  browserAcceptGeneratedExportArtwork,
+  browserExportBook,
+  browserListExportPresets,
+  browserSaveExportPreset,
   browserDeleteAct,
   browserDeleteBeat,
   browserDeleteChapter,
@@ -59,6 +64,7 @@ import {
 import type {
   AcceptGeneratedBookCoverInput,
   AcceptGeneratedCharacterImageInput,
+  AcceptGeneratedExportArtworkInput,
   AiRunResult,
   AiLogEntry,
   AiProposalRecord,
@@ -80,8 +86,13 @@ import type {
   CreatePlanVersionInput,
   DeletePlanVersionInput,
   CreateProjectInput,
+  ExportBookInput,
+  ExportBookResult,
+  ExportPreset,
+  ExportArtworkResult,
   GenerateBookCoverInput,
   GenerateCharacterImageInput,
+  GenerateExportArtworkInput,
   GenerateNewProjectTitleRequest,
   MoveBeatToChapterInput,
   PlotThread,
@@ -92,6 +103,7 @@ import type {
   ReorderScenesInput,
   RunCodexPromptRequest,
   SaveStoryStructureInput,
+  SaveExportPresetInput,
   Scene,
   SetActivePlanVersionInput,
   SetSceneRelationsInput,
@@ -583,4 +595,53 @@ export function acceptGeneratedCharacterImage(
   }
 
   return invoke("accept_generated_character_image", { input });
+}
+
+export function exportBook(input: ExportBookInput): Promise<ExportBookResult> {
+  if (!isTauriRuntime()) {
+    return browserExportBook(input);
+  }
+
+  return invoke("export_book", { input });
+}
+
+export function listExportPresets(
+  projectId: string,
+  bookId: string
+): Promise<ExportPreset[]> {
+  if (!isTauriRuntime()) {
+    return browserListExportPresets(projectId, bookId);
+  }
+
+  return invoke("list_export_presets", { projectId, bookId });
+}
+
+export function saveExportPreset(
+  input: SaveExportPresetInput
+): Promise<ExportPreset> {
+  if (!isTauriRuntime()) {
+    return browserSaveExportPreset(input);
+  }
+
+  return invoke("save_export_preset", { input });
+}
+
+export function generateExportArtwork(
+  input: GenerateExportArtworkInput
+): Promise<ExportArtworkResult> {
+  if (!isTauriRuntime()) {
+    return browserGenerateExportArtwork(input);
+  }
+
+  return invoke("generate_export_artwork", { input });
+}
+
+export function acceptGeneratedExportArtwork(
+  input: AcceptGeneratedExportArtworkInput
+): Promise<ExportArtworkResult> {
+  if (!isTauriRuntime()) {
+    return browserAcceptGeneratedExportArtwork(input);
+  }
+
+  return invoke("accept_generated_export_artwork", { input });
 }
