@@ -23,6 +23,7 @@ import {
   upsertAct,
   upsertBeat,
   upsertChapter,
+  upsertCharacter,
   upsertCharacterMemory,
   upsertCharacterRelation,
   upsertChapterThreadRelation,
@@ -36,9 +37,11 @@ import type {
   BookConceptInput,
   Character,
   CharacterMemory,
+  CharacterRelation,
   CoverGenerationProgressEvent,
   WorldElement,
   WorldRule,
+  UpsertCharacterInput,
   UpsertCharacterMemoryInput,
   UpsertCharacterRelationInput,
   UpsertWorldElementInput,
@@ -98,6 +101,13 @@ import {
   useProposalStore
 } from "./proposalStore";
 import { CoverImageLightbox } from "./CoverImageLightbox";
+import {
+  characterPromptContextTargetId,
+  conceptPromptContextTargetId,
+  planPromptContextTargetId,
+  useAiPromptContextStore,
+  worldPromptContextTargetId
+} from "./aiPromptContextStore";
 
 type AiProposalPanelProps = {
   projectId: string;
@@ -303,6 +313,12 @@ export function AiProposalPanel({
           );
         }
 
+        if (proposal.field === "characterProfile") {
+          return upsertCharacter(
+            characterProfileInputFromProposal(proposal, scopedPackageContext)
+          );
+        }
+
         if (proposal.field === "characterMemory") {
           return upsertCharacterMemory(
             characterMemoryInputFromProposal(proposal, scopedPackageContext)
@@ -400,6 +416,7 @@ export function AiProposalPanel({
       }
 
       clearProposal(proposalId);
+      closePromptContextForProposal(proposal);
       if (proposal.scope !== "newProject") {
         await queryClient.invalidateQueries({ queryKey: ["book-plan", proposal.bookId] });
         await queryClient.invalidateQueries({ queryKey: ["character-workspace", projectId] });
@@ -635,6 +652,32 @@ function SceneDiscoveryPanel({
       return;
     }
 
+    if (discovery.kind === "characterRelation") {
+      const target = characterRelationDraftFromDiscovery(discovery, characters.characters);
+      if (!target) {
+        return;
+      }
+      const promptPackage = buildCharacterPromptPackage(
+        project,
+        book,
+        characters,
+        "characterRelation",
+        target
+      );
+      enqueueProposal({
+        scope: "characters",
+        projectId,
+        bookId: book.id,
+        field: "characterRelation",
+        action: promptPackage.action,
+        promptPackageId: promptPackage.id,
+        promptPackageJson: promptPackage,
+        prompt: renderCharacterPromptPackage(promptPackage)
+      });
+      removeDiscovery(discovery.id);
+      return;
+    }
+
     if (discovery.kind === "worldElement") {
       const target = worldElementDraftFromDiscovery(discovery);
       const promptPackage = buildWorldPromptPackage(
@@ -693,11 +736,7 @@ function SceneDiscoveryPanel({
       </div>
       {discoveries.map((discovery) => {
         const canGenerate =
-          discovery.kind !== "characterMemory" ||
-          Boolean(
-            discovery.targetExistingCharacterId &&
-              characterQuery.data?.characters.some((item) => item.id === discovery.targetExistingCharacterId)
-          );
+          discoveryCanGenerate(discovery, characterQuery.data?.characters ?? []);
         return (
           <article className="scene-discovery-card" key={discovery.id}>
             <div>
@@ -718,11 +757,7 @@ function SceneDiscoveryPanel({
                   characterQuery.isLoading ||
                   worldQuery.isLoading
                 }
-                title={
-                  canGenerate
-                    ? "Dodaj pełną propozycję do kolejki AI"
-                    : "Wspomnienie wymaga wskazania istniejącej postaci."
-                }
+                title={canGenerate ? "Dodaj pełną propozycję do kolejki AI" : discoveryGenerateDisabledReason(discovery)}
               >
                 <Sparkles size={14} />
                 Generuj
@@ -895,23 +930,7 @@ function ProposalQueueItem({
     (longConceptFields.includes(proposal.field as ConceptFieldKey) || structured)
       ? 8
       : 3;
-  const canAccept = coverProposal
-    ? Boolean((proposal.coverImagePath || proposal.editableValue).trim())
-    : characterImageProposal
-      ? Boolean((proposal.characterImagePath || proposal.coverImagePath || proposal.editableValue).trim())
-    : sceneAuditProposal
-      ? false
-    : sceneEditorProposal
-      ? proposal.editableValue.trim().length > 0
-    : planProposal
-      ? proposal.editableValue.trim().length > 0
-      : characterProposal
-        ? proposal.editableValue.trim().length > 0
-      : worldProposal
-        ? proposal.editableValue.trim().length > 0
-      : structured
-        ? hasSelectedEditableField(proposal)
-        : proposal.editableValue.trim().length > 0;
+  const canAccept = proposalCanAccept(proposal);
   const canAcceptAsPlanVersion =
     planProposal &&
     isLargePlanField(proposal.field as PlanFieldKey) &&
@@ -1109,6 +1128,7 @@ function ProposalQueueItem({
       ) : null}
 
       <div className="button-row">
+        {!sceneAuditProposal ? (
         <button
           type="button"
           className="primary-button"
@@ -1118,6 +1138,7 @@ function ProposalQueueItem({
           <Check size={16} />
           {accepting ? "Zapisuję" : "Akceptuj"}
         </button>
+        ) : null}
         {canAcceptAsPlanVersion ? (
           <button
             type="button"
@@ -1136,7 +1157,7 @@ function ProposalQueueItem({
           disabled={accepting || running}
         >
           <X size={16} />
-          Odrzuć
+          {sceneAuditProposal ? "Zamknij" : "Odrzuć"}
         </button>
         <button
           type="button"
@@ -1593,7 +1614,45 @@ function parseWorldSuggestion(
   };
 }
 
-function characterRelationInputFromProposal(
+export function characterProfileInputFromProposal(
+  proposal: ActiveAiProposal,
+  packageContext: Record<string, unknown>
+): UpsertCharacterInput {
+  const snapshot = recordValue(packageContext.targetEntitySnapshot);
+  const parsed = recordValue(JSON.parse(proposal.editableValue || proposal.rawOutput));
+  const character = recordValue(parsed.character);
+  const projectId = stringRecordValue(snapshot.projectId, proposal.projectId);
+
+  if (!projectId) {
+    throw new Error("Brak projektu dla zapisu postaci AI.");
+  }
+
+  return {
+    id: optionalStringRecordValue(snapshot.id, "new-character"),
+    projectId,
+    characterType: stringRecordValue(character.characterType, stringRecordValue(snapshot.characterType, "person")),
+    name: stringRecordValue(character.name, stringRecordValue(snapshot.name, "Nowa postać")),
+    aliasesJson: arrayJsonRecordValue(character.aliases, stringRecordValue(snapshot.aliasesJson, "[]")),
+    role: stringRecordValue(character.role, stringRecordValue(snapshot.role)),
+    shortDescription: stringRecordValue(character.shortDescription, stringRecordValue(snapshot.shortDescription)),
+    externalGoal: stringRecordValue(character.externalGoal, stringRecordValue(snapshot.externalGoal)),
+    internalNeed: stringRecordValue(character.internalNeed, stringRecordValue(snapshot.internalNeed)),
+    wound: stringRecordValue(character.wound, stringRecordValue(snapshot.wound)),
+    falseBelief: stringRecordValue(character.falseBelief, stringRecordValue(snapshot.falseBelief)),
+    secret: stringRecordValue(character.secret, stringRecordValue(snapshot.secret)),
+    strengthsJson: arrayJsonRecordValue(character.strengths, stringRecordValue(snapshot.strengthsJson, "[]")),
+    weaknessesJson: arrayJsonRecordValue(character.weaknesses, stringRecordValue(snapshot.weaknessesJson, "[]")),
+    voiceNotes: stringRecordValue(character.voiceNotes, stringRecordValue(snapshot.voiceNotes)),
+    arcSummary: stringRecordValue(character.arcSummary, stringRecordValue(snapshot.arcSummary)),
+    knowledgeNotes: stringRecordValue(character.knowledgeNotes, stringRecordValue(snapshot.knowledgeNotes)),
+    visualPrompt: stringRecordValue(character.visualPrompt, stringRecordValue(snapshot.visualPrompt)),
+    imageAssetId: stringRecordValue(snapshot.imageAssetId) || null,
+    status: stringRecordValue(snapshot.status, "draft"),
+    orderIndex: boundedNumberRecordValue(snapshot.orderIndex, 0)
+  };
+}
+
+export function characterRelationInputFromProposal(
   proposal: ActiveAiProposal,
   packageContext: Record<string, unknown>
 ): UpsertCharacterRelationInput {
@@ -1723,6 +1782,14 @@ function stringRecordValue(value: unknown, fallback = ""): string {
 function optionalStringRecordValue(value: unknown, ignoredValue: string): string | undefined {
   const parsed = stringRecordValue(value);
   return parsed && parsed !== ignoredValue ? parsed : undefined;
+}
+
+function arrayJsonRecordValue(value: unknown, fallback = "[]"): string {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  return JSON.stringify(value.filter((item): item is string => typeof item === "string"));
 }
 
 function boundedNumberRecordValue(value: unknown, fallback: number): number {
@@ -2042,6 +2109,52 @@ function isBookCoverProposal(
   return proposal.scope === "bookCover" || proposal.field === BOOK_COVER_FIELD;
 }
 
+function closePromptContextForProposal(proposal: ActiveAiProposal): void {
+  const targetId = promptContextTargetIdFromProposal(proposal);
+  if (!targetId) {
+    return;
+  }
+
+  useAiPromptContextStore.getState().closeTarget(targetId);
+}
+
+function promptContextTargetIdFromProposal(proposal: ActiveAiProposal): string | null {
+  const packageContext =
+    "context" in proposal.promptPackageJson
+      ? proposal.promptPackageJson.context
+      : {};
+  const scopedContext =
+    packageContext && typeof packageContext === "object"
+      ? (packageContext as Record<string, unknown>)
+      : {};
+  const targetEntityId =
+    typeof scopedContext.targetEntityId === "string"
+      ? scopedContext.targetEntityId
+      : undefined;
+
+  if (proposal.scope === "bookConcept" || !proposal.scope) {
+    return conceptPromptContextTargetId(proposal.projectId, proposal.field as ConceptFieldKey);
+  }
+
+  if (proposal.scope === "bookPlan") {
+    return planPromptContextTargetId(proposal.projectId, proposal.field as PlanFieldKey, targetEntityId);
+  }
+
+  if (proposal.scope === "characters" && proposal.field !== CHARACTER_IMAGE_FIELD) {
+    return characterPromptContextTargetId(proposal.projectId, proposal.field as CharacterFieldKey, targetEntityId);
+  }
+
+  if (proposal.scope === "world") {
+    return worldPromptContextTargetId(proposal.projectId, proposal.field as WorldFieldKey, targetEntityId);
+  }
+
+  if (proposal.scope === "sceneEditor" && targetEntityId) {
+    return `project:${proposal.projectId}:scene-editor:continueScene:${targetEntityId}`;
+  }
+
+  return null;
+}
+
 function isCharacterImageProposal(
   proposal: Pick<ActiveAiProposal, "field" | "scope">
 ): boolean {
@@ -2053,6 +2166,26 @@ function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {
     const value = proposal.editableFields[field as ConceptFieldKey] ?? "";
     return selected && value.trim().length > 0;
   });
+}
+
+export function proposalCanAccept(proposal: ActiveAiProposal): boolean {
+  if (isBookCoverProposal(proposal)) {
+    return Boolean((proposal.coverImagePath || proposal.editableValue).trim());
+  }
+
+  if (isCharacterImageProposal(proposal)) {
+    return Boolean((proposal.characterImagePath || proposal.coverImagePath || proposal.editableValue).trim());
+  }
+
+  if (proposal.field === SCENE_STORY_BIBLE_AUDIT_FIELD) {
+    return false;
+  }
+
+  if (isPremiseDevelopment(proposal.parsed)) {
+    return hasSelectedEditableField(proposal);
+  }
+
+  return proposal.editableValue.trim().length > 0;
 }
 
 function parseTargetWordCount(value: string): number | null {
@@ -2123,6 +2256,74 @@ function characterMemoryDraftFromDiscovery(
     createdAt: now,
     updatedAt: now
   };
+}
+
+export function characterRelationDraftFromDiscovery(
+  discovery: SceneDiscovery,
+  characters: Character[]
+): CharacterRelation | null {
+  const [fromCharacterId, toCharacterId] = relationCharacterIdsFromDiscovery(discovery, characters);
+  if (!fromCharacterId || !toCharacterId) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  return {
+    id: `audit-relation:${discovery.id}`,
+    projectId: discovery.projectId,
+    fromCharacterId,
+    toCharacterId,
+    relationType: discovery.suggestedType || "inne",
+    description: discovery.reason,
+    history: discovery.evidence,
+    conflict: "",
+    opinion: "",
+    trustLevel: 50,
+    secret: "",
+    changeOverTime: "",
+    status: "draft",
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+export function discoveryCanGenerate(
+  discovery: SceneDiscovery,
+  characters: Character[]
+): boolean {
+  if (discovery.kind === "characterMemory") {
+    return Boolean(
+      discovery.targetExistingCharacterId &&
+        characters.some((item) => item.id === discovery.targetExistingCharacterId)
+    );
+  }
+
+  if (discovery.kind === "characterRelation") {
+    const [fromCharacterId, toCharacterId] = relationCharacterIdsFromDiscovery(discovery, characters);
+    return Boolean(fromCharacterId && toCharacterId);
+  }
+
+  return true;
+}
+
+function discoveryGenerateDisabledReason(discovery: SceneDiscovery): string {
+  if (discovery.kind === "characterRelation") {
+    return "Relacja wymaga dwóch istniejących postaci wskazanych przez analizę.";
+  }
+
+  return "Wspomnienie wymaga wskazania istniejącej postaci.";
+}
+
+function relationCharacterIdsFromDiscovery(
+  discovery: SceneDiscovery,
+  characters: Character[]
+): [string | null, string | null] {
+  const characterIds = new Set(characters.map((character) => character.id));
+  const relatedIds = (discovery.relatedCharacterIds ?? [])
+    .filter((id, index, ids) => characterIds.has(id) && ids.indexOf(id) === index)
+    .slice(0, 2);
+
+  return [relatedIds[0] ?? null, relatedIds[1] ?? null];
 }
 
 function worldElementDraftFromDiscovery(discovery: SceneDiscovery): WorldElement {

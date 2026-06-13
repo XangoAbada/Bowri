@@ -152,6 +152,9 @@ Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
 ${promptPackage.userInstruction}
 
 # Hard Rules
+- Formatuj wynik jako gotowy fragment manuskryptu: czytelny Markdown, akapity oddzielone pustą linią, bez list i nagłówków w treści prozy.
+- Każdą wypowiedź dialogową zaczynaj od nowego akapitu i nie zlewaj dialogu z narracją.
+- Stosuj naturalny polski zapis dialogów, w tym półpauzy dialogowe, jeśli pasują do stylu sceny.
 - Pisz po polsku, chyba że projekt ma inny język.
 - Dla locale "pl" używaj poprawnych polskich znaków.
 - Nie zapisuj kanonu i nie zmieniaj danych projektu bez decyzji autora.
@@ -185,7 +188,7 @@ ${context.currentTextWindow || "(scena jest pusta)"}
 Zwróć Markdown:
 
 ## Result
-Tekst do wstawienia albo zastąpienia.
+Gotowy tekst prozy do wstawienia albo zastąpienia. Nie dodawaj tutaj nagłówków, list ani komentarzy autora. Oddzielaj akapity pustą linią, a dialogi zapisuj jako osobne akapity.
 
 ## Notes
 - Opcjonalnie: krótkie uwagi dla autora.`;
