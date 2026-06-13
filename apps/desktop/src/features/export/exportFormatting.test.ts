@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Book, BookPlan, Chapter, Scene } from "../../shared/api/types";
 import {
+  buildExportPreviewBlocks,
   defaultExportStyle,
   renderPlainTextExport,
   selectedExportChapters
@@ -38,6 +39,51 @@ describe("exportFormatting", () => {
     expect(text).toContain("Widoczny tekst sceny.");
     expect(text).not.toContain("Tajny styl Story Bible");
     expect(text).not.toContain("Tajna premisa");
+  });
+
+  it("starts preview with a cover block using the accepted cover image", () => {
+    const book = {
+      ...baseBook(),
+      coverImagePath: "D:\\covers\\cover.png"
+    };
+    const plan = planWith([chapter("c1", 1, 0, "Start")]);
+
+    const blocks = buildExportPreviewBlocks({
+      book,
+      plan,
+      chapterIds: [],
+      contentMode: "manuscript",
+      style: defaultExportStyle
+    });
+
+    expect(blocks[0]).toMatchObject({
+      kind: "cover",
+      title: "Książka",
+      imagePath: "D:\\covers\\cover.png"
+    });
+  });
+
+  it("starts preview with a title cover fallback when no cover image exists", () => {
+    const book = {
+      ...baseBook(),
+      title: "Gotowy tytuł",
+      coverImagePath: ""
+    };
+    const plan = planWith([chapter("c1", 1, 0, "Start")]);
+
+    const blocks = buildExportPreviewBlocks({
+      book,
+      plan,
+      chapterIds: [],
+      contentMode: "manuscript",
+      style: defaultExportStyle
+    });
+
+    expect(blocks[0]).toMatchObject({
+      kind: "cover",
+      title: "Gotowy tytuł",
+      imagePath: null
+    });
   });
 });
 

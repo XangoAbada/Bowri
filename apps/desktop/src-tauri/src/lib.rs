@@ -4895,6 +4895,7 @@ pub async fn accept_generated_export_artwork_in_pool(
 #[derive(Debug)]
 struct ExportDocument {
     title: String,
+    cover_image_path: Option<String>,
     markdown: String,
     plain_text: String,
     body_plain: String,
@@ -4990,6 +4991,7 @@ fn build_export_document(
 
     Ok(ExportDocument {
         title,
+        cover_image_path: non_empty_string(&book.cover_image_path),
         markdown,
         plain_text: plain,
         body_plain,
@@ -5104,8 +5106,66 @@ fn plain_paragraphs_to_html(value: &str) -> String {
         .join("")
 }
 
+struct ExportCoverImage {
+    data: Vec<u8>,
+    extension: &'static str,
+    content_type: &'static str,
+}
+
+fn docx_cover_page(document: &ExportDocument, cover_image: Option<&ExportCoverImage>) -> String {
+    let content = if cover_image.is_some() {
+        r#"<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0"><wp:extent cx="3657600" cy="5486400"/><wp:docPr id="1" name="Okładka"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="1" name="cover"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdCoverImage"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="3657600" cy="5486400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>"#.to_string()
+    } else {
+        format!(
+            r#"<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="48"/></w:rPr><w:t>{}</w:t></w:r></w:p>"#,
+            escape_xml(&document.title)
+        )
+    };
+    format!(r#"{content}<w:p><w:r><w:br w:type="page"/></w:r></w:p>"#)
+}
+
+fn read_export_cover_image(path: Option<&str>) -> Option<ExportCoverImage> {
+    let path = path?.trim();
+    if path.is_empty() || path.starts_with("data:") || path.starts_with("asset:") {
+        return None;
+    }
+    let data = std::fs::read(path).ok()?;
+    let (extension, content_type) = export_cover_image_type(path, &data)?;
+    Some(ExportCoverImage {
+        data,
+        extension,
+        content_type,
+    })
+}
+
+fn export_cover_image_type(path: &str, data: &[u8]) -> Option<(&'static str, &'static str)> {
+    let extension = Path::new(path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if data.starts_with(PNG_SIGNATURE) || extension == "png" {
+        return Some(("png", "image/png"));
+    }
+    if data.starts_with(&[0xff, 0xd8, 0xff]) || extension == "jpg" || extension == "jpeg" {
+        return Some(("jpg", "image/jpeg"));
+    }
+    None
+}
+
+fn non_empty_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 fn build_docx(document: &ExportDocument, page_numbers: bool) -> Result<Vec<u8>, AppError> {
+    let cover_image = read_export_cover_image(document.cover_image_path.as_deref());
     let mut body = String::new();
+    body.push_str(&docx_cover_page(document, cover_image.as_ref()));
     body.push_str(&format!(
         "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t>{}</w:t></w:r></w:p>",
         escape_xml(&document.title)
@@ -5133,44 +5193,110 @@ fn build_docx(document: &ExportDocument, page_numbers: bool) -> Result<Vec<u8>, 
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>{body}{section_properties}</w:body></w:document>"#
     );
     let footer_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>"#;
-    let content_types = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>"#;
+    let cover_content_type = cover_image
+        .as_ref()
+        .map(|image| {
+            format!(
+                r#"<Default Extension="{}" ContentType="{}"/>"#,
+                image.extension, image.content_type
+            )
+        })
+        .unwrap_or_default();
+    let content_types = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>{cover_content_type}<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>"#
+    );
     let rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#;
-    let document_rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>"#;
-    Ok(zip_store(vec![
-        ("[Content_Types].xml", content_types.as_bytes().to_vec()),
-        ("_rels/.rels", rels.as_bytes().to_vec()),
-        ("word/document.xml", document_xml.into_bytes()),
+    let cover_relationship = cover_image
+        .as_ref()
+        .map(|image| {
+            format!(
+                r#"<Relationship Id="rIdCoverImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.{}"/>"#,
+                image.extension
+            )
+        })
+        .unwrap_or_default();
+    let document_rels = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>{cover_relationship}</Relationships>"#
+    );
+    let mut files = vec![
         (
-            "word/_rels/document.xml.rels",
-            document_rels.as_bytes().to_vec(),
+            "[Content_Types].xml".to_string(),
+            content_types.into_bytes(),
         ),
-        ("word/footer1.xml", footer_xml.as_bytes().to_vec()),
-    ]))
+        ("_rels/.rels".to_string(), rels.as_bytes().to_vec()),
+        ("word/document.xml".to_string(), document_xml.into_bytes()),
+        (
+            "word/_rels/document.xml.rels".to_string(),
+            document_rels.into_bytes(),
+        ),
+        (
+            "word/footer1.xml".to_string(),
+            footer_xml.as_bytes().to_vec(),
+        ),
+    ];
+    if let Some(image) = cover_image {
+        files.push((format!("word/media/cover.{}", image.extension), image.data));
+    }
+    Ok(zip_store(files))
 }
 
 fn build_epub(document: &ExportDocument, book: &Book) -> Result<Vec<u8>, AppError> {
     let title = escape_xml(&document.title);
     let identifier = escape_xml(&book.id);
+    let cover_image = read_export_cover_image(document.cover_image_path.as_deref());
+    let (cover_manifest, cover_metadata, cover_body) = if let Some(image) = cover_image.as_ref() {
+        (
+            format!(
+                r#"<item id="cover-image" href="images/cover.{}" media-type="{}" properties="cover-image"/>"#,
+                image.extension, image.content_type
+            ),
+            r#"<meta name="cover" content="cover-image"/>"#.to_string(),
+            format!(
+                r#"<section class="cover-page"><img src="images/cover.{}" alt="{}"/></section>"#,
+                image.extension, title
+            ),
+        )
+    } else {
+        (
+            String::new(),
+            String::new(),
+            format!(r#"<section class="cover-page"><h1>{title}</h1></section>"#),
+        )
+    };
+    let cover = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" lang="pl"><head><title>{title}</title><link href="style.css" rel="stylesheet" type="text/css"/></head><body>{cover_body}</body></html>"#
+    );
     let content = format!(
         r#"<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" lang="pl"><head><title>{title}</title><link href="style.css" rel="stylesheet" type="text/css"/></head><body>{}</body></html>"#,
         document.html_body
     );
     let opf = format!(
-        r#"<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">{identifier}</dc:identifier><dc:title>{title}</dc:title><dc:language>pl</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="content" href="content.xhtml" media-type="application/xhtml+xml"/><item id="style" href="style.css" media-type="text/css"/></manifest><spine><itemref idref="content"/></spine></package>"#
+        r#"<?xml version="1.0" encoding="utf-8"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">{identifier}</dc:identifier><dc:title>{title}</dc:title><dc:language>pl</dc:language>{cover_metadata}</metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/><item id="content" href="content.xhtml" media-type="application/xhtml+xml"/><item id="style" href="style.css" media-type="text/css"/>{cover_manifest}</manifest><spine><itemref idref="cover"/><itemref idref="content"/></spine></package>"#
     );
     let nav = format!(
         r#"<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" lang="pl"><head><title>{title}</title></head><body><nav epub:type="toc" xmlns:epub="http://www.idpf.org/2007/ops"><ol><li><a href="content.xhtml">{title}</a></li></ol></nav></body></html>"#
     );
     let container = r#"<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#;
-    let css = "body{font-family:serif;line-height:1.6;margin:5%;}h1,h2{text-align:center;}.scene-separator{text-align:center;margin:2em 0;color:#6f5c42;}";
-    Ok(zip_store(vec![
-        ("mimetype", b"application/epub+zip".to_vec()),
-        ("META-INF/container.xml", container.as_bytes().to_vec()),
-        ("OEBPS/content.opf", opf.into_bytes()),
-        ("OEBPS/nav.xhtml", nav.into_bytes()),
-        ("OEBPS/content.xhtml", content.into_bytes()),
-        ("OEBPS/style.css", css.as_bytes().to_vec()),
-    ]))
+    let css = "body{font-family:serif;line-height:1.6;margin:5%;}h1,h2{text-align:center;}.cover-page{display:block;text-align:center;page-break-after:always;}.cover-page img{display:block;max-width:100%;max-height:95vh;margin:0 auto;}.cover-page h1{margin-top:35vh;font-size:2.4em;}.scene-separator{text-align:center;margin:2em 0;color:#6f5c42;}";
+    let mut files = vec![
+        ("mimetype".to_string(), b"application/epub+zip".to_vec()),
+        (
+            "META-INF/container.xml".to_string(),
+            container.as_bytes().to_vec(),
+        ),
+        ("OEBPS/content.opf".to_string(), opf.into_bytes()),
+        ("OEBPS/nav.xhtml".to_string(), nav.into_bytes()),
+        ("OEBPS/cover.xhtml".to_string(), cover.into_bytes()),
+        ("OEBPS/content.xhtml".to_string(), content.into_bytes()),
+        ("OEBPS/style.css".to_string(), css.as_bytes().to_vec()),
+    ];
+    if let Some(image) = cover_image {
+        files.push((
+            format!("OEBPS/images/cover.{}", image.extension),
+            image.data,
+        ));
+    }
+    Ok(zip_store(files))
 }
 
 async fn convert_epub_to_mobi(epub_path: &Path, mobi_path: &Path) -> Result<(), String> {
@@ -5197,7 +5323,7 @@ fn escape_xml(value: &str) -> String {
         .replace('\'', "&apos;")
 }
 
-fn zip_store(files: Vec<(&str, Vec<u8>)>) -> Vec<u8> {
+fn zip_store(files: Vec<(String, Vec<u8>)>) -> Vec<u8> {
     let mut output = Vec::new();
     let mut central = Vec::new();
     for (name, data) in files {
@@ -8572,6 +8698,69 @@ mod tests {
         let _ = tokio::fs::remove_dir_all(session_dir).await;
     }
 
+    #[test]
+    fn docx_export_starts_with_cover_image_when_available() {
+        let cover_path =
+            std::env::temp_dir().join(format!("storyforge2-docx-cover-{}.png", Uuid::new_v4()));
+        std::fs::write(&cover_path, tiny_png()).unwrap();
+        let mut document = export_test_document();
+        document.cover_image_path = Some(cover_path.to_string_lossy().to_string());
+
+        let bytes = build_docx(&document, false).unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+
+        assert!(text.contains("word/media/cover.png"));
+        assert!(text.contains("rIdCoverImage"));
+        assert!(text.contains(r#"<w:br w:type="page"/>"#));
+        let _ = std::fs::remove_file(cover_path);
+    }
+
+    #[test]
+    fn docx_export_uses_title_cover_fallback_without_image() {
+        let mut document = export_test_document();
+        document.cover_image_path = None;
+
+        let bytes = build_docx(&document, false).unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+
+        assert!(text.contains("Testowa książka"));
+        assert!(text.contains(r#"<w:br w:type="page"/>"#));
+        assert!(!text.contains("word/media/cover.png"));
+    }
+
+    #[test]
+    fn epub_export_starts_with_cover_xhtml_and_image_when_available() {
+        let cover_path =
+            std::env::temp_dir().join(format!("storyforge2-epub-cover-{}.png", Uuid::new_v4()));
+        std::fs::write(&cover_path, tiny_png()).unwrap();
+        let mut document = export_test_document();
+        document.cover_image_path = Some(cover_path.to_string_lossy().to_string());
+        let book = export_test_book();
+
+        let bytes = build_epub(&document, &book).unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+
+        assert!(text.contains("OEBPS/cover.xhtml"));
+        assert!(text.contains("OEBPS/images/cover.png"));
+        assert!(text.contains(r#"<itemref idref="cover"/><itemref idref="content"/>"#));
+        assert!(text.contains(r#"<meta name="cover" content="cover-image"/>"#));
+        let _ = std::fs::remove_file(cover_path);
+    }
+
+    #[test]
+    fn epub_export_uses_title_cover_fallback_without_image() {
+        let mut document = export_test_document();
+        document.cover_image_path = None;
+        let book = export_test_book();
+
+        let bytes = build_epub(&document, &book).unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+
+        assert!(text.contains("OEBPS/cover.xhtml"));
+        assert!(text.contains(r#"<section class="cover-page"><h1>Testowa książka</h1></section>"#));
+        assert!(!text.contains("OEBPS/images/cover.png"));
+    }
+
     #[tokio::test]
     async fn generated_png_validation_rejects_missing_or_empty_files() {
         let missing_path =
@@ -8591,5 +8780,60 @@ mod tests {
             .to_string();
         assert!(empty_error.contains("is empty"));
         let _ = tokio::fs::remove_file(empty_path).await;
+    }
+
+    fn export_test_document() -> ExportDocument {
+        ExportDocument {
+            title: "Testowa książka".into(),
+            cover_image_path: None,
+            markdown: "# Testowa książka\n".into(),
+            plain_text: "Testowa książka\n\nRozdział 1".into(),
+            body_plain: "Treść".into(),
+            html_body: "<h1>Testowa książka</h1><p>Treść</p>".into(),
+        }
+    }
+
+    fn export_test_book() -> Book {
+        Book {
+            id: "book-test".into(),
+            project_id: "project-test".into(),
+            title: "Testowa książka".into(),
+            working_title: "Robocza książka".into(),
+            premise: String::new(),
+            protagonist_summary: String::new(),
+            protagonist_goal: String::new(),
+            expanded_premise: String::new(),
+            logline: String::new(),
+            central_conflict: String::new(),
+            antagonist_force: String::new(),
+            stakes: String::new(),
+            setting_sketch: String::new(),
+            ending_direction: String::new(),
+            genre: String::new(),
+            subgenre: String::new(),
+            target_audience: String::new(),
+            tone: String::new(),
+            style_guide: String::new(),
+            point_of_view: String::new(),
+            target_word_count: None,
+            themes_json: "[]".into(),
+            unwanted_themes: String::new(),
+            alternative_titles_json: "[]".into(),
+            cover_image_path: String::new(),
+            cover_prompt: String::new(),
+            cover_negative_prompt: String::new(),
+            cover_generated_at: None,
+            status: "draft".into(),
+            created_at: String::new(),
+            updated_at: String::new(),
+        }
+    }
+
+    fn tiny_png() -> &'static [u8] {
+        &[
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0,
+            5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+        ]
     }
 }

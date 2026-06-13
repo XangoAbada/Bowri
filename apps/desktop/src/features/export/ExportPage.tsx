@@ -777,6 +777,17 @@ type PreviewBlockProps = {
 };
 
 function PreviewBlock({ block, chapterStyle, sceneStyle }: PreviewBlockProps) {
+  if (block.kind === "cover") {
+    return (
+      <div className={block.imagePath ? "preview-cover has-image" : "preview-cover"}>
+        {block.imagePath ? (
+          <img src={coverImageSource(block.imagePath)} alt={`Okładka książki ${block.title}`} />
+        ) : (
+          <strong>{block.title}</strong>
+        )}
+      </div>
+    );
+  }
   const style = block.kind === "chapter" ? chapterStyle : sceneStyle;
   if (block.kind === "body") {
     return <p className="preview-body">{block.text}</p>;

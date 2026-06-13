@@ -50,6 +50,7 @@ export type ExportRenderOptions = {
 };
 
 export type ExportPreviewBlock =
+  | { kind: "cover"; id: string; title: string; imagePath?: string | null }
   | { kind: "chapter"; id: string; text: string; image?: VisualAsset | null }
   | { kind: "summary"; id: string; text: string }
   | { kind: "scene"; id: string; text: string; image?: VisualAsset | null }
@@ -80,7 +81,14 @@ export function buildExportPreviewBlocks({
   visualAssets = [],
   previewLimit
 }: ExportRenderOptions): ExportPreviewBlock[] {
-  const blocks: ExportPreviewBlock[] = [];
+  const blocks: ExportPreviewBlock[] = [
+    {
+      kind: "cover",
+      id: `${book.id}:cover`,
+      title: exportTitle(book),
+      imagePath: book.coverImagePath?.trim() || null
+    }
+  ];
   const chapters = selectedExportChapters(plan, chapterIds);
   const limitedChapters =
     previewLimit && previewLimit > 0 ? chapters.slice(0, previewLimit) : chapters;
@@ -128,10 +136,12 @@ export function buildExportPreviewBlocks({
 
 export function renderMarkdownExport(options: ExportRenderOptions): string {
   const blocks = buildExportPreviewBlocks(options);
-  const parts = [`# ${options.book.title || options.book.workingTitle || "Manuskrypt"}`];
+  const parts = [`# ${exportTitle(options.book)}`];
 
   for (const block of blocks) {
-    if (block.kind === "chapter") {
+    if (block.kind === "cover") {
+      continue;
+    } else if (block.kind === "chapter") {
       parts.push(`\n## ${block.text}`);
     } else if (block.kind === "summary") {
       parts.push(`\n> ${block.text}`);
@@ -149,10 +159,12 @@ export function renderMarkdownExport(options: ExportRenderOptions): string {
 
 export function renderPlainTextExport(options: ExportRenderOptions): string {
   const blocks = buildExportPreviewBlocks(options);
-  const parts = [options.book.title || options.book.workingTitle || "Manuskrypt"];
+  const parts = [exportTitle(options.book)];
 
   for (const block of blocks) {
-    if (block.kind === "summary") {
+    if (block.kind === "cover") {
+      continue;
+    } else if (block.kind === "summary") {
       parts.push(`Streszczenie: ${block.text}`);
     } else {
       parts.push(block.text);
@@ -174,6 +186,10 @@ export function renderSeparator(
     .replaceAll("{title}", title)
     .replaceAll("{scene}", scene?.title || "")
     .replaceAll("{book}", book.title || book.workingTitle || "");
+}
+
+export function exportTitle(book: Pick<Book, "title" | "workingTitle">): string {
+  return book.title || book.workingTitle || "Manuskrypt";
 }
 
 export function htmlToPlainText(value: string): string {
