@@ -1,4 +1,4 @@
-import { Check, Clock3, FileJson, GitBranch, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
+import { Check, CircleStop, Clock3, FileJson, GitBranch, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
@@ -8,6 +8,7 @@ import {
   acceptGeneratedBookCover,
   acceptGeneratedCharacterImage,
   acceptGeneratedExportArtwork,
+  cancelActiveCodexRun,
   createPlanVersionFromActive,
   generateBookCover,
   generateCharacterImage,
@@ -17,6 +18,7 @@ import {
   getProject,
   getWorldWorkspace,
   getBookPlan,
+  listActiveCodexRuns,
   listAiProposals,
   markAiProposalAccepted,
   markAiProposalRejected,
@@ -44,6 +46,7 @@ import type {
   CharacterMemory,
   CharacterRelation,
   CoverGenerationProgressEvent,
+  ActiveCodexRun,
   WorldElement,
   WorldRule,
   UpsertCharacterInput,
@@ -430,6 +433,7 @@ export function AiProposalPanel({
   const hydratePersistentProposals = useProposalStore((state) => state.hydratePersistentProposals);
   const clearProposal = useProposalStore((state) => state.clearProposal);
   const retryProposal = useProposalStore((state) => state.retryProposal);
+  const cancelProposal = useProposalStore((state) => state.cancelProposal);
   const addAuditPrompt = useSceneDiscoveryStore((state) => state.addAuditPrompt);
   const pendingAuditPrompts = useSceneDiscoveryStore((state) => state.pendingAuditPrompts);
   const visibleProposals = proposals
@@ -448,6 +452,12 @@ export function AiProposalPanel({
     queryKey: ["ai-proposals", projectId],
     queryFn: () => listAiProposals(projectId),
     retry: 0
+  });
+  const activeRunsQuery = useQuery({
+    queryKey: ["active-codex-runs", projectId],
+    queryFn: () => listActiveCodexRuns(projectId),
+    retry: 0,
+    refetchInterval: 1500
   });
 
   useEffect(() => {
@@ -787,6 +797,28 @@ export function AiProposalPanel({
     }
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: async (proposalId: string) => {
+      const proposal = useProposalStore
+        .getState()
+        .proposals.find((item) => item.id === proposalId);
+      if (!proposal || proposal.status !== "running") {
+        return false;
+      }
+
+      const activeRun = activeRunsQuery.data?.find((run) =>
+        runMatchesProposal(run, proposal)
+      );
+      const cancelled = await cancelActiveCodexRun({
+        projectId: proposal.projectId,
+        aiRunId: activeRun?.aiRunId ?? proposal.aiRunId
+      });
+      cancelProposal(proposalId, "Generowanie Codex CLI zostało przerwane.");
+      await queryClient.invalidateQueries({ queryKey: ["active-codex-runs", projectId] });
+      return cancelled;
+    }
+  });
+
   if (visibleProposals.length === 0 && visibleDiscoveries.length === 0 && visibleAuditPrompts.length === 0) {
     return (
       <section className="context-section compact">
@@ -798,7 +830,7 @@ export function AiProposalPanel({
           <FileJson size={18} aria-hidden="true" />
         </div>
         <p className="muted-text">
-          Wyniki AI pojawią się tutaj od razu po kliknięciu przycisku pola.
+          Wyniki AI pojawią się tutaj po wysłaniu promptu z panelu kontekstu.
         </p>
       </section>
     );
@@ -827,8 +859,11 @@ export function AiProposalPanel({
             proposal={proposal}
             accepting={acceptMutation.isPending && acceptMutation.variables?.proposalId === proposal.id}
             retrying={proposal.status === "queued"}
+            cancelling={cancelMutation.isPending && cancelMutation.variables === proposal.id}
+            activeRun={activeRunsQuery.data?.find((run) => runMatchesProposal(run, proposal)) ?? null}
             onAccept={() => acceptMutation.mutate({ proposalId: proposal.id })}
             onAcceptAsPlanVersion={() => acceptMutation.mutate({ proposalId: proposal.id, asNewPlanVersion: true })}
+            onCancel={() => cancelMutation.mutate(proposal.id)}
             onClear={() => {
               void markAiProposalRejected(proposal.id).finally(() => {
                 clearProposal(proposal.id);
@@ -863,8 +898,11 @@ type ProposalQueueItemProps = {
   proposal: ActiveAiProposal;
   accepting: boolean;
   retrying: boolean;
+  cancelling: boolean;
+  activeRun: ActiveCodexRun | null;
   onAccept: () => void;
   onAcceptAsPlanVersion: () => void;
+  onCancel: () => void;
   onClear: () => void;
   onRetry: () => void;
   onPreview: (src: string, alt: string) => void;
@@ -1244,8 +1282,11 @@ function ProposalQueueItem({
   proposal,
   accepting,
   retrying,
+  cancelling,
+  activeRun,
   onAccept,
   onAcceptAsPlanVersion,
+  onCancel,
   onClear,
   onRetry,
   onPreview,
@@ -1346,6 +1387,12 @@ function ProposalQueueItem({
           {coverProposal
             ? proposal.progressMessage ?? "Codex CLI generuje okładkę."
             : "Codex CLI generuje wynik. Propozycja nie zapisze się bez akceptacji."}
+        </p>
+      ) : null}
+
+      {running && activeRun ? (
+        <p className="muted-text">
+          Aktywny proces: {activeRun.action} / {activeRun.phase}
         </p>
       ) : null}
 
@@ -1528,6 +1575,22 @@ function ProposalQueueItem({
           <X size={16} />
           {sceneAuditProposal ? "Zamknij" : "Odrzuć"}
         </button>
+        {running ? (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={onCancel}
+            disabled={cancelling}
+            title="Przerwij aktualną generację Codex CLI."
+          >
+            {cancelling ? (
+              <Loader2 size={16} className="spin-icon" />
+            ) : (
+              <CircleStop size={16} />
+            )}
+            Przerwij
+          </button>
+        ) : null}
         <button
           type="button"
           className="ghost-button"
@@ -1553,6 +1616,7 @@ function useAiQueueRunner() {
   const startQueuedProposal = useProposalStore((state) => state.startQueuedProposal);
   const finishProposal = useProposalStore((state) => state.finishProposal);
   const failProposal = useProposalStore((state) => state.failProposal);
+  const cancelProposal = useProposalStore((state) => state.cancelProposal);
   const updateProposalProgress = useProposalStore(
     (state) => state.updateProposalProgress
   );
@@ -1604,6 +1668,10 @@ function useAiQueueRunner() {
           });
 
           if (result.aiRun.status !== "success") {
+            if (result.aiRun.status === "cancelled") {
+              cancelProposal(proposalId, result.aiRun.errorMessage ?? "Generowanie Codex CLI zostało przerwane.");
+              return;
+            }
             throw new QueueRunError(
               result.aiRun.errorMessage || "Nie udało się utworzyć okładki.",
               result.aiRun.rawOutput ?? ""
@@ -1664,6 +1732,10 @@ function useAiQueueRunner() {
           });
 
           if (result.aiRun.status !== "success") {
+            if (result.aiRun.status === "cancelled") {
+              cancelProposal(proposalId, result.aiRun.errorMessage ?? "Generowanie Codex CLI zostało przerwane.");
+              return;
+            }
             throw new QueueRunError(
               result.aiRun.errorMessage || "Nie udało się utworzyć obrazu postaci.",
               result.aiRun.rawOutput ?? ""
@@ -1730,6 +1802,10 @@ function useAiQueueRunner() {
           });
 
           if (result.aiRun.status !== "success") {
+            if (result.aiRun.status === "cancelled") {
+              cancelProposal(proposalId, result.aiRun.errorMessage ?? "Generowanie Codex CLI zostało przerwane.");
+              return;
+            }
             throw new QueueRunError(
               result.aiRun.errorMessage || "Nie udało się utworzyć grafiki eksportu.",
               result.aiRun.rawOutput ?? ""
@@ -1776,6 +1852,10 @@ function useAiQueueRunner() {
               });
 
         if (result.status !== "success" || !result.rawOutput) {
+          if (result.status === "cancelled") {
+            cancelProposal(proposalId, result.errorMessage ?? "Generowanie Codex CLI zostało przerwane.");
+            return;
+          }
           throw new QueueRunError(
             result.errorMessage || "Codex CLI nie zwrócił wyniku.",
             result.rawOutput ?? ""
@@ -1832,6 +1912,7 @@ function useAiQueueRunner() {
     startQueuedProposal,
     finishProposal,
     failProposal,
+    cancelProposal,
     updateProposalProgress,
     codexPath,
     timeoutSeconds,
@@ -2714,6 +2795,14 @@ function closePromptContextForProposal(proposal: ActiveAiProposal): void {
   useAiPromptContextStore.getState().closeTarget(targetId);
 }
 
+function runMatchesProposal(run: ActiveCodexRun, proposal: ActiveAiProposal): boolean {
+  if (proposal.aiRunId) {
+    return run.aiRunId === proposal.aiRunId;
+  }
+
+  return run.projectId === proposal.projectId && run.action === proposal.action;
+}
+
 function promptContextTargetIdFromProposal(proposal: ActiveAiProposal): string | null {
   const packageContext =
     "context" in proposal.promptPackageJson
@@ -2771,6 +2860,10 @@ function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {
 }
 
 export function proposalCanAccept(proposal: ActiveAiProposal): boolean {
+  if (proposal.status !== "success") {
+    return false;
+  }
+
   if (isBookCoverProposal(proposal)) {
     return Boolean((proposal.coverImagePath || proposal.editableValue).trim());
   }
@@ -2989,6 +3082,8 @@ function statusLabel(status: ActiveAiProposal["status"]): string {
       return "Generuje";
     case "success":
       return "Gotowe";
+    case "cancelled":
+      return "Przerwane";
     case "error":
       return "Błąd";
   }
@@ -2999,7 +3094,7 @@ function statusClassName(status: ActiveAiProposal["status"]): string {
     return "status-pill ready";
   }
 
-  if (status === "error") {
+  if (status === "error" || status === "cancelled") {
     return "status-pill muted";
   }
 
@@ -3026,8 +3121,10 @@ function statusRank(status: ActiveAiProposal["status"]): number {
       return 1;
     case "success":
       return 2;
-    case "error":
+    case "cancelled":
       return 3;
+    case "error":
+      return 4;
   }
 }
 

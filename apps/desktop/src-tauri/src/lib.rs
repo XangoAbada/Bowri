@@ -3,16 +3,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{FromRow, Sqlite, SqlitePool, Transaction};
+use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::{Command as StdCommand, Stdio};
+use std::process::{Command as StdCommand, ExitStatus, Stdio};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use tokio::time::timeout;
+use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
 
 const PROVIDER_ID: &str = "codex-cli-bridge";
@@ -23,6 +25,27 @@ const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 #[derive(Clone)]
 pub struct AppState {
     db: SqlitePool,
+    active_codex_runs: ActiveCodexRunRegistry,
+}
+
+type ActiveCodexRunRegistry = Arc<Mutex<HashMap<String, ActiveCodexRunHandle>>>;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCodexRun {
+    pub ai_run_id: String,
+    pub project_id: String,
+    pub action: String,
+    pub started_at: String,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub phase: String,
+}
+
+#[derive(Clone)]
+struct ActiveCodexRunHandle {
+    run: ActiveCodexRun,
+    cancel: watch::Sender<bool>,
 }
 
 #[derive(Debug, Error)]
@@ -39,6 +62,8 @@ pub enum AppError {
     Process(String),
     #[error("Codex CLI przekroczył limit czasu po {0} sekundach")]
     Timeout(u64),
+    #[error("Generowanie Codex CLI zostało przerwane")]
+    Cancelled,
 }
 
 fn command_error(error: AppError) -> String {
@@ -4197,9 +4222,10 @@ pub async fn update_book_cover_metadata_in_pool(
         .map_err(AppError::from)
 }
 
-pub async fn generate_book_cover_in_pool(
+pub(crate) async fn generate_book_cover_in_pool(
     app: &AppHandle,
     pool: &SqlitePool,
+    active_codex_runs: &ActiveCodexRunRegistry,
     input: GenerateBookCoverInput,
 ) -> Result<BookCoverResult, AppError> {
     if input.cover_prompt.trim().is_empty() {
@@ -4249,7 +4275,9 @@ pub async fn generate_book_cover_in_pool(
     );
 
     let started_at = Instant::now();
-    let run_result = execute_codex_image_generation(app, &input, &ai_run_id, timeout_seconds).await;
+    let run_result =
+        execute_codex_image_generation(app, active_codex_runs, &input, &ai_run_id, timeout_seconds)
+            .await;
     let duration_ms = started_at.elapsed().as_millis();
     let completed_at = Utc::now().to_rfc3339();
 
@@ -4263,6 +4291,8 @@ pub async fn generate_book_cover_in_pool(
                 &ai_run_id,
                 if matches!(error, AppError::Timeout(_)) {
                     "timeout"
+                } else if matches!(error, AppError::Cancelled) {
+                    "cancelled"
                 } else {
                     "error"
                 },
@@ -4338,9 +4368,10 @@ pub async fn generate_book_cover_in_pool(
     })
 }
 
-pub async fn generate_character_image_in_pool(
+pub(crate) async fn generate_character_image_in_pool(
     app: &AppHandle,
     pool: &SqlitePool,
+    active_codex_runs: &ActiveCodexRunRegistry,
     input: GenerateCharacterImageInput,
 ) -> Result<CharacterImageResult, AppError> {
     if input.image_prompt.trim().is_empty() {
@@ -4380,8 +4411,14 @@ pub async fn generate_character_image_in_pool(
     .await?;
 
     let started_at = Instant::now();
-    let run_result =
-        execute_codex_character_image_generation(app, &input, &ai_run_id, timeout_seconds).await;
+    let run_result = execute_codex_character_image_generation(
+        app,
+        active_codex_runs,
+        &input,
+        &ai_run_id,
+        timeout_seconds,
+    )
+    .await;
     let duration_ms = started_at.elapsed().as_millis();
     let completed_at = Utc::now().to_rfc3339();
 
@@ -4394,6 +4431,8 @@ pub async fn generate_character_image_in_pool(
                 &ai_run_id,
                 if matches!(error, AppError::Timeout(_)) {
                     "timeout"
+                } else if matches!(error, AppError::Cancelled) {
+                    "cancelled"
                 } else {
                     "error"
                 },
@@ -4705,9 +4744,10 @@ pub async fn save_export_preset_in_pool(
     Ok(preset)
 }
 
-pub async fn generate_export_artwork_in_pool(
+pub(crate) async fn generate_export_artwork_in_pool(
     app: &AppHandle,
     pool: &SqlitePool,
+    active_codex_runs: &ActiveCodexRunRegistry,
     input: GenerateExportArtworkInput,
 ) -> Result<ExportArtworkResult, AppError> {
     if input.image_prompt.trim().is_empty() {
@@ -4748,8 +4788,14 @@ pub async fn generate_export_artwork_in_pool(
     .await?;
 
     let started_at = Instant::now();
-    let run_result =
-        execute_codex_export_artwork_generation(app, &input, &ai_run_id, timeout_seconds).await;
+    let run_result = execute_codex_export_artwork_generation(
+        app,
+        active_codex_runs,
+        &input,
+        &ai_run_id,
+        timeout_seconds,
+    )
+    .await;
     let duration_ms = started_at.elapsed().as_millis();
     let completed_at = Utc::now().to_rfc3339();
     let (stdout, stderr, generated_image_path) = match run_result {
@@ -4761,6 +4807,8 @@ pub async fn generate_export_artwork_in_pool(
                 &ai_run_id,
                 if matches!(error, AppError::Timeout(_)) {
                     "timeout"
+                } else if matches!(error, AppError::Cancelled) {
+                    "cancelled"
                 } else {
                     "error"
                 },
@@ -5905,7 +5953,7 @@ async fn generate_book_cover(
     state: State<'_, AppState>,
     input: GenerateBookCoverInput,
 ) -> Result<BookCoverResult, String> {
-    generate_book_cover_in_pool(&app, &state.db, input)
+    generate_book_cover_in_pool(&app, &state.db, &state.active_codex_runs, input)
         .await
         .map_err(command_error)
 }
@@ -5937,7 +5985,7 @@ async fn generate_character_image(
     state: State<'_, AppState>,
     input: GenerateCharacterImageInput,
 ) -> Result<CharacterImageResult, String> {
-    generate_character_image_in_pool(&app, &state.db, input)
+    generate_character_image_in_pool(&app, &state.db, &state.active_codex_runs, input)
         .await
         .map_err(command_error)
 }
@@ -6019,7 +6067,7 @@ async fn generate_export_artwork(
     state: State<'_, AppState>,
     input: GenerateExportArtworkInput,
 ) -> Result<ExportArtworkResult, String> {
-    generate_export_artwork_in_pool(&app, &state.db, input)
+    generate_export_artwork_in_pool(&app, &state.db, &state.active_codex_runs, input)
         .await
         .map_err(command_error)
 }
@@ -6141,23 +6189,47 @@ async fn run_codex_prompt(
     state: State<'_, AppState>,
     request: RunCodexPromptRequest,
 ) -> Result<AiRunResult, String> {
-    run_codex_prompt_in_pool(&app, &state.db, request)
+    run_codex_prompt_in_pool(&app, &state.db, &state.active_codex_runs, request)
         .await
         .map_err(command_error)
 }
 
 #[tauri::command]
+async fn list_active_codex_runs(
+    state: State<'_, AppState>,
+    project_id: Option<String>,
+) -> Result<Vec<ActiveCodexRun>, String> {
+    Ok(list_active_codex_runs_in_registry(&state.active_codex_runs, project_id.as_deref()).await)
+}
+
+#[tauri::command]
+async fn cancel_active_codex_run(
+    state: State<'_, AppState>,
+    project_id: Option<String>,
+    ai_run_id: Option<String>,
+) -> Result<bool, String> {
+    Ok(cancel_active_codex_run_in_registry(
+        &state.active_codex_runs,
+        project_id.as_deref(),
+        ai_run_id.as_deref(),
+    )
+    .await)
+}
+
+#[tauri::command]
 async fn generate_new_project_title(
     app: AppHandle,
+    state: State<'_, AppState>,
     request: GenerateNewProjectTitleRequest,
 ) -> Result<AiRunResult, String> {
-    generate_new_project_title_with_codex(&app, request)
+    generate_new_project_title_with_codex(&app, &state.active_codex_runs, request)
         .await
         .map_err(command_error)
 }
 
-pub async fn generate_new_project_title_with_codex(
+pub(crate) async fn generate_new_project_title_with_codex(
     app: &AppHandle,
+    active_codex_runs: &ActiveCodexRunRegistry,
     request: GenerateNewProjectTitleRequest,
 ) -> Result<AiRunResult, AppError> {
     if request.prompt.trim().is_empty() {
@@ -6167,7 +6239,7 @@ pub async fn generate_new_project_title_with_codex(
     let ai_run_id = Uuid::new_v4().to_string();
     let timeout_seconds = request.timeout_seconds.unwrap_or(180);
     let codex_request = RunCodexPromptRequest {
-        project_id: "new-project-title".into(),
+        project_id: "__new_project__".into(),
         action: request.action,
         prompt_package_id: request.prompt_package_id,
         prompt_package_json: request.prompt_package_json,
@@ -6179,7 +6251,14 @@ pub async fn generate_new_project_title_with_codex(
     };
 
     let started_at = Instant::now();
-    let run_result = execute_codex(app, &codex_request, timeout_seconds).await;
+    let run_result = execute_codex(
+        app,
+        active_codex_runs,
+        &ai_run_id,
+        &codex_request,
+        timeout_seconds,
+    )
+    .await;
     let duration_ms = started_at.elapsed().as_millis();
 
     let (status, raw_output, stderr, error_message) = match run_result {
@@ -6201,6 +6280,12 @@ pub async fn generate_new_project_title_with_codex(
                 "Codex CLI przekroczył limit czasu po {seconds} sekundach"
             )),
         ),
+        Err(AppError::Cancelled) => (
+            "cancelled".to_string(),
+            None,
+            None,
+            Some("Generowanie Codex CLI zostało przerwane.".to_string()),
+        ),
         Err(error) => ("error".to_string(), None, None, Some(error.to_string())),
     };
 
@@ -6217,9 +6302,10 @@ pub async fn generate_new_project_title_with_codex(
     })
 }
 
-pub async fn run_codex_prompt_in_pool(
+pub(crate) async fn run_codex_prompt_in_pool(
     app: &AppHandle,
     pool: &SqlitePool,
+    active_codex_runs: &ActiveCodexRunRegistry,
     request: RunCodexPromptRequest,
 ) -> Result<AiRunResult, AppError> {
     let ai_run_id = Uuid::new_v4().to_string();
@@ -6247,7 +6333,14 @@ pub async fn run_codex_prompt_in_pool(
     .await?;
 
     let started_at = Instant::now();
-    let run_result = execute_codex(app, &request, timeout_seconds).await;
+    let run_result = execute_codex(
+        app,
+        active_codex_runs,
+        &ai_run_id,
+        &request,
+        timeout_seconds,
+    )
+    .await;
     let duration_ms = started_at.elapsed().as_millis();
     let completed_at = Utc::now().to_rfc3339();
 
@@ -6269,6 +6362,12 @@ pub async fn run_codex_prompt_in_pool(
             Some(format!(
                 "Codex CLI przekroczył limit czasu po {seconds} sekundach"
             )),
+        ),
+        Err(AppError::Cancelled) => (
+            "cancelled".to_string(),
+            None,
+            None,
+            Some("Generowanie Codex CLI zostało przerwane.".to_string()),
         ),
         Err(error) => ("error".to_string(), None, None, Some(error.to_string())),
     };
@@ -6327,6 +6426,120 @@ async fn complete_ai_run(
     Ok(())
 }
 
+async fn list_active_codex_runs_in_registry(
+    registry: &ActiveCodexRunRegistry,
+    project_id: Option<&str>,
+) -> Vec<ActiveCodexRun> {
+    let runs = registry.lock().await;
+    runs.values()
+        .filter(|handle| {
+            project_id
+                .map(|id| handle.run.project_id == id)
+                .unwrap_or(true)
+        })
+        .map(|handle| handle.run.clone())
+        .collect()
+}
+
+async fn cancel_active_codex_run_in_registry(
+    registry: &ActiveCodexRunRegistry,
+    project_id: Option<&str>,
+    ai_run_id: Option<&str>,
+) -> bool {
+    let runs = registry.lock().await;
+    let handle = runs.values().find(|handle| {
+        project_id
+            .map(|id| handle.run.project_id == id)
+            .unwrap_or(true)
+            && ai_run_id
+                .map(|id| handle.run.ai_run_id == id)
+                .unwrap_or(true)
+    });
+
+    if let Some(handle) = handle {
+        let _ = handle.cancel.send(true);
+        return true;
+    }
+
+    false
+}
+
+async fn run_registered_codex_command(
+    registry: &ActiveCodexRunRegistry,
+    run: ActiveCodexRun,
+    command: &mut Command,
+    stdin_text: &str,
+    timeout_seconds: u64,
+) -> Result<(ExitStatus, String, String), AppError> {
+    let (cancel, mut cancel_rx) = watch::channel(false);
+    registry.lock().await.insert(
+        run.ai_run_id.clone(),
+        ActiveCodexRunHandle {
+            run: run.clone(),
+            cancel,
+        },
+    );
+
+    let result = async {
+        let mut child = command.spawn()?;
+        let mut stdout = child.stdout.take();
+        let mut stderr = child.stderr.take();
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(stdin_text.as_bytes()).await?;
+        }
+
+        let stdout_task = tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            if let Some(mut reader) = stdout.take() {
+                reader.read_to_end(&mut buffer).await?;
+            }
+            Ok::<Vec<u8>, std::io::Error>(buffer)
+        });
+        let stderr_task = tokio::spawn(async move {
+            let mut buffer = Vec::new();
+            if let Some(mut reader) = stderr.take() {
+                reader.read_to_end(&mut buffer).await?;
+            }
+            Ok::<Vec<u8>, std::io::Error>(buffer)
+        });
+
+        let timeout_sleep = tokio::time::sleep(Duration::from_secs(timeout_seconds));
+        tokio::pin!(timeout_sleep);
+        let wait_result = tokio::select! {
+            status = child.wait() => {
+                status.map_err(AppError::from)
+            }
+            _ = &mut timeout_sleep => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                Err(AppError::Timeout(timeout_seconds))
+            }
+            _ = cancel_rx.changed() => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                Err(AppError::Cancelled)
+            }
+        };
+
+        let stdout_bytes = stdout_task.await.map_err(|error| {
+            AppError::Process(format!("Nie udało się odczytać stdout Codex CLI: {error}"))
+        })??;
+        let stderr_bytes = stderr_task.await.map_err(|error| {
+            AppError::Process(format!("Nie udało się odczytać stderr Codex CLI: {error}"))
+        })??;
+
+        let status = wait_result?;
+        let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
+        let stderr = String::from_utf8_lossy(&stderr_bytes).to_string();
+        Ok((status, stdout, stderr))
+    }
+    .await;
+
+    registry.lock().await.remove(&run.ai_run_id);
+    result
+}
+
 fn emit_cover_progress(
     app: &AppHandle,
     request: &GenerateBookCoverInput,
@@ -6358,6 +6571,7 @@ fn cover_timeout_seconds(requested: Option<u64>) -> u64 {
 
 async fn execute_codex_image_generation(
     app: &AppHandle,
+    active_codex_runs: &ActiveCodexRunRegistry,
     request: &GenerateBookCoverInput,
     ai_run_id: &str,
     timeout_seconds: u64,
@@ -6466,18 +6680,22 @@ async fn execute_codex_image_generation(
         Some(25),
     );
 
-    let output = timeout(Duration::from_secs(timeout_seconds), async {
-        let mut child = command.spawn()?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-        }
-        child.wait_with_output().await.map_err(AppError::from)
-    })
-    .await
-    .map_err(|_| AppError::Timeout(timeout_seconds))??;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let (status, stdout, stderr) = run_registered_codex_command(
+        active_codex_runs,
+        ActiveCodexRun {
+            ai_run_id: ai_run_id.to_string(),
+            project_id: request.project_id.clone(),
+            action: "generate_cover_image".into(),
+            started_at: Utc::now().to_rfc3339(),
+            model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort.clone(),
+            phase: "image_generation".into(),
+        },
+        &mut command,
+        &prompt,
+        timeout_seconds,
+    )
+    .await?;
     tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
     tokio::fs::write(
         workspace.join("last-run.json"),
@@ -6485,7 +6703,7 @@ async fn execute_codex_image_generation(
             "action": "generate_cover_image",
             "model": request.model,
             "reasoningEffort": request.reasoning_effort,
-            "status": output.status.code(),
+            "status": status.code(),
             "stderr": stderr,
             "imagePath": image_path_text,
             "completedAt": Utc::now().to_rfc3339()
@@ -6498,7 +6716,7 @@ async fn execute_codex_image_generation(
     let actual_image_path_result =
         resolve_generated_cover_path(&image_path, &stdout, &stderr, generation_started_at).await;
 
-    if !output.status.success() {
+    if !status.success() {
         return Err(AppError::Process(if stderr.trim().is_empty() {
             "Codex CLI zwrĂłciĹ‚ niezerowy status podczas generowania okĹ‚adki.".into()
         } else {
@@ -6524,6 +6742,7 @@ async fn execute_codex_image_generation(
 
 async fn execute_codex_character_image_generation(
     app: &AppHandle,
+    active_codex_runs: &ActiveCodexRunRegistry,
     request: &GenerateCharacterImageInput,
     ai_run_id: &str,
     timeout_seconds: u64,
@@ -6612,18 +6831,22 @@ async fn execute_codex_character_image_generation(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let output = timeout(Duration::from_secs(timeout_seconds), async {
-        let mut child = command.spawn()?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-        }
-        child.wait_with_output().await.map_err(AppError::from)
-    })
-    .await
-    .map_err(|_| AppError::Timeout(timeout_seconds))??;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let (status, stdout, stderr) = run_registered_codex_command(
+        active_codex_runs,
+        ActiveCodexRun {
+            ai_run_id: ai_run_id.to_string(),
+            project_id: request.project_id.clone(),
+            action: "generate_character_image".into(),
+            started_at: Utc::now().to_rfc3339(),
+            model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort.clone(),
+            phase: "image_generation".into(),
+        },
+        &mut command,
+        &prompt,
+        timeout_seconds,
+    )
+    .await?;
     tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
     tokio::fs::write(
         workspace.join("last-run.json"),
@@ -6631,7 +6854,7 @@ async fn execute_codex_character_image_generation(
             "action": "generate_character_image",
             "model": request.model,
             "reasoningEffort": request.reasoning_effort,
-            "status": output.status.code(),
+            "status": status.code(),
             "stderr": stderr,
             "imagePath": image_path_text,
             "completedAt": Utc::now().to_rfc3339()
@@ -6644,7 +6867,7 @@ async fn execute_codex_character_image_generation(
     let actual_image_path_result =
         resolve_generated_cover_path(&image_path, &stdout, &stderr, generation_started_at).await;
 
-    if !output.status.success() {
+    if !status.success() {
         return Err(AppError::Process(if stderr.trim().is_empty() {
             "Codex CLI zwrocil niezerowy status podczas generowania obrazu postaci.".into()
         } else {
@@ -6660,6 +6883,7 @@ async fn execute_codex_character_image_generation(
 
 async fn execute_codex_export_artwork_generation(
     app: &AppHandle,
+    active_codex_runs: &ActiveCodexRunRegistry,
     request: &GenerateExportArtworkInput,
     ai_run_id: &str,
     timeout_seconds: u64,
@@ -6748,18 +6972,22 @@ async fn execute_codex_export_artwork_generation(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let output = timeout(Duration::from_secs(timeout_seconds), async {
-        let mut child = command.spawn()?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-        }
-        child.wait_with_output().await.map_err(AppError::from)
-    })
-    .await
-    .map_err(|_| AppError::Timeout(timeout_seconds))??;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let (status, stdout, stderr) = run_registered_codex_command(
+        active_codex_runs,
+        ActiveCodexRun {
+            ai_run_id: ai_run_id.to_string(),
+            project_id: request.project_id.clone(),
+            action: "generate_export_artwork".into(),
+            started_at: Utc::now().to_rfc3339(),
+            model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort.clone(),
+            phase: "image_generation".into(),
+        },
+        &mut command,
+        &prompt,
+        timeout_seconds,
+    )
+    .await?;
     tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
     tokio::fs::write(
         workspace.join("last-run.json"),
@@ -6767,7 +6995,7 @@ async fn execute_codex_export_artwork_generation(
             "action": "generate_export_artwork",
             "model": request.model,
             "reasoningEffort": request.reasoning_effort,
-            "status": output.status.code(),
+            "status": status.code(),
             "stderr": stderr,
             "imagePath": image_path_text,
             "completedAt": Utc::now().to_rfc3339()
@@ -6780,7 +7008,7 @@ async fn execute_codex_export_artwork_generation(
     let actual_image_path_result =
         resolve_generated_cover_path(&image_path, &stdout, &stderr, generation_started_at).await;
 
-    if !output.status.success() {
+    if !status.success() {
         return Err(AppError::Process(if stderr.trim().is_empty() {
             "Codex CLI zwrócił niezerowy status podczas generowania grafiki eksportu.".into()
         } else {
@@ -7110,6 +7338,8 @@ fn extract_json_candidate(output: &str) -> Option<&str> {
 
 async fn execute_codex(
     app: &AppHandle,
+    active_codex_runs: &ActiveCodexRunRegistry,
+    ai_run_id: &str,
     request: &RunCodexPromptRequest,
     timeout_seconds: u64,
 ) -> Result<(String, String), AppError> {
@@ -7172,18 +7402,22 @@ async fn execute_codex(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let output = timeout(Duration::from_secs(timeout_seconds), async {
-        let mut child = command.spawn()?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(request.prompt.as_bytes()).await?;
-        }
-        child.wait_with_output().await.map_err(AppError::from)
-    })
-    .await
-    .map_err(|_| AppError::Timeout(timeout_seconds))??;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let (status, stdout, stderr) = run_registered_codex_command(
+        active_codex_runs,
+        ActiveCodexRun {
+            ai_run_id: ai_run_id.to_string(),
+            project_id: request.project_id.clone(),
+            action: request.action.clone(),
+            started_at: Utc::now().to_rfc3339(),
+            model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort.clone(),
+            phase: "running".into(),
+        },
+        &mut command,
+        &request.prompt,
+        timeout_seconds,
+    )
+    .await?;
     tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
     tokio::fs::write(
         workspace.join("last-run.json"),
@@ -7191,7 +7425,7 @@ async fn execute_codex(
             "action": request.action,
             "model": request.model,
             "reasoningEffort": request.reasoning_effort,
-            "status": output.status.code(),
+            "status": status.code(),
             "stderr": stderr,
             "completedAt": Utc::now().to_rfc3339()
         })
@@ -7200,7 +7434,7 @@ async fn execute_codex(
     )
     .await?;
 
-    if output.status.success() {
+    if status.success() {
         Ok((stdout, stderr))
     } else {
         Err(AppError::Process(if stderr.trim().is_empty() {
@@ -7379,7 +7613,10 @@ pub fn run() {
                         error.to_string(),
                     ))
                 })?;
-            app.manage(AppState { db: pool });
+            app.manage(AppState {
+                db: pool,
+                active_codex_runs: Arc::new(Mutex::new(HashMap::new())),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -7443,6 +7680,8 @@ pub fn run() {
             accept_generated_export_artwork,
             check_codex_cli,
             list_codex_models,
+            list_active_codex_runs,
+            cancel_active_codex_run,
             generate_new_project_title,
             run_codex_prompt
         ])

@@ -470,7 +470,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
   function generateField(field: ConceptFieldKey) {
     setAiError("");
-    queueFieldGeneration(field);
+    activateFieldPromptContext(field);
   }
 
   function activateFieldPromptContext(field: ConceptFieldKey) {
@@ -1546,6 +1546,8 @@ function coverTaskStatusRank(status: AiProposalStatus): number {
     case "queued":
       return 1;
     case "error":
+      return 2;
+    case "cancelled":
       return 2;
     case "success":
       return 3;

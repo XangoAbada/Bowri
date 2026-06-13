@@ -3,12 +3,14 @@ import {
   browserAcceptGeneratedBookCover,
   browserAcceptGeneratedCharacterImage,
   browserCheckCodexCli,
+  browserCancelActiveCodexRun,
   browserCreatePlanVersionFromActive,
   browserDeletePlanVersion,
   browserListCodexModels,
   browserListPlanVersions,
   browserListAiRuns,
   browserListAiProposals,
+  browserListActiveCodexRuns,
   browserMarkAiProposalAccepted,
   browserMarkAiProposalRejected,
   browserUpsertAiProposalSnapshot,
@@ -69,6 +71,7 @@ import type {
   AcceptGeneratedCharacterImageInput,
   AcceptGeneratedExportArtworkInput,
   AiRunResult,
+  ActiveCodexRun,
   AiLogEntry,
   AiProposalRecord,
   Act,
@@ -556,6 +559,29 @@ export function runCodexPrompt(
   }
 
   return invoke("run_codex_prompt", { request });
+}
+
+export function listActiveCodexRuns(
+  projectId?: string
+): Promise<ActiveCodexRun[]> {
+  if (!isTauriRuntime()) {
+    return browserListActiveCodexRuns(projectId);
+  }
+
+  return invoke("list_active_codex_runs", { projectId: projectId || undefined });
+}
+
+export function cancelActiveCodexRun(
+  input: { projectId?: string; aiRunId?: string } = {}
+): Promise<boolean> {
+  if (!isTauriRuntime()) {
+    return browserCancelActiveCodexRun(input);
+  }
+
+  return invoke("cancel_active_codex_run", {
+    projectId: input.projectId || undefined,
+    aiRunId: input.aiRunId || undefined
+  });
 }
 
 export function generateNewProjectTitle(

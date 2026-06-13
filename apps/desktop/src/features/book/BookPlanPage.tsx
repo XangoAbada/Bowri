@@ -707,7 +707,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         plan={plan}
         saving={structureMutation.isPending}
         onSave={(input) => structureMutation.mutate(input)}
-        onGenerate={(field) => queuePlanGeneration(field)}
+        onGenerate={(field) => activatePlanPromptContext(field)}
         onActivatePrompt={activatePlanPromptContext}
       />
     ) : activeStep === "acts" ? (
@@ -718,7 +718,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onSave={(input) => actMutation.mutate(input)}
         onDelete={(item) => deleteMutation.mutate(item)}
         onSelect={setSelectedItem}
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
     ) : activeStep === "chapters" ? (
@@ -730,7 +730,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onCreateChapter={openNewChapterModal}
         onSaveChapter={(input) => chapterMutation.mutate(input)}
         onReorderChapters={(inputs) => chapterReorderMutation.mutate(inputs)}
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
     ) : activeStep === "scenes" ? (
@@ -752,7 +752,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onDuplicatePlan={() => duplicatePlanMutation.mutate()}
         onSetActivePlan={(planVersionId) => activePlanMutation.mutate(planVersionId)}
         onDeletePlanVersion={(planVersionId) => deletePlanVersionMutation.mutate(planVersionId)}
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
       />
     ) : activeStep === "beats" ? (
       <BeatsStep
@@ -764,7 +764,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onDelete={(item) => deleteMutation.mutate(item)}
         onOpenBeat={openBeatModal}
         onCreateBeat={openNewBeatModal}
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
     ) : (
@@ -777,7 +777,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onSaveChapterThreadRelation={(input) => chapterThreadMutation.mutate(input)}
         onDelete={(item) => deleteMutation.mutate(item)}
         onSelect={setSelectedItem}
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
     );
@@ -854,7 +854,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
             onSuccess: () => setChapterModal(null)
           })
         }
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
       <BeatEditModal
@@ -873,7 +873,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
             onSuccess: () => setBeatModal(null)
           })
         }
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
       <SceneEditModal
@@ -897,7 +897,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
           })
         }
         onDelete={(sceneId) => sceneDeleteMutation.mutate(sceneId)}
-        onGenerate={queuePlanGeneration}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
     </section>

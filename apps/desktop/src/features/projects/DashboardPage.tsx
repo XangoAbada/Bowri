@@ -17,6 +17,7 @@ import { CodexStatusPanel } from "../ai/CodexStatusPanel";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
 import {
   NEW_PROJECT_TITLE_PROMPT_TARGET_ID,
+  createConceptPromptContextTarget,
   createNewProjectTitlePromptTarget,
   conceptPromptContextTargetId,
   promptContextControlForActiveTarget,
@@ -169,7 +170,7 @@ export function DashboardPage() {
   function activateNewProjectTitleTarget(nextName = name) {
     activatePromptContextTarget(
       createNewProjectTitlePromptTarget(nextName, {
-        submitLabel: "Wy\u015blij do AI",
+        submitLabel: "Wyślij do AI",
         submitDisabled:
           Boolean(newProjectStatus) ||
           createMutation.isPending,
@@ -181,6 +182,25 @@ export function DashboardPage() {
 
   function queueProjectTitle(projectId: string) {
     queueProjectTitleMutation.mutate(projectId);
+  }
+
+  function activateProjectTitleTarget(projectId: string) {
+    const projectStatus = proposalStatus(projectId);
+    setProposalProjectId(projectId);
+    setAiError("");
+    activatePromptContextTarget(
+      createConceptPromptContextTarget(projectId, "workingTitle", {
+        submitLabel: "Wyślij do AI",
+        submitDisabled:
+          Boolean(projectStatus) ||
+          codexUnavailable ||
+          codexStatusQuery.isLoading,
+        submitDisabledReason: projectStatus
+          ? "Tytuł roboczy jest już w kolejce AI."
+          : "Codex CLI nie jest teraz gotowy.",
+        onSubmit: () => queueProjectTitle(projectId)
+      })
+    );
   }
 
   function addProjectTitleToPromptContext(projectId: string) {
@@ -259,7 +279,7 @@ export function DashboardPage() {
                   className="icon-button ai-inline-button"
                   aria-label="Generuj tytuł dla nowego projektu"
                   title="Generuj tytuł dla nowego projektu"
-                  onClick={enqueueNewProjectTitle}
+                  onClick={() => activateNewProjectTitleTarget()}
                   disabled={
                     Boolean(newProjectStatus) ||
                     createMutation.isPending ||
@@ -377,7 +397,7 @@ export function DashboardPage() {
                     <button
                       type="button"
                       className="icon-button project-card-ai-button"
-                      onClick={() => queueProjectTitle(project.id)}
+                      onClick={() => activateProjectTitleTarget(project.id)}
                       disabled={
                         generating ||
                         codexUnavailable ||

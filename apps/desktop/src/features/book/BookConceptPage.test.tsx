@@ -23,10 +23,16 @@ import {
 
 vi.mock("../../shared/api/commands", () => ({
   acceptGeneratedBookCover: vi.fn(),
+  cancelActiveCodexRun: vi.fn(),
   checkCodexCli: vi.fn(),
   generateBookCover: vi.fn(),
   getProject: vi.fn(),
+  listActiveCodexRuns: vi.fn(() => Promise.resolve([])),
+  listAiProposals: vi.fn(() => Promise.resolve([])),
+  markAiProposalAccepted: vi.fn(() => Promise.resolve()),
+  markAiProposalRejected: vi.fn(() => Promise.resolve()),
   runCodexPrompt: vi.fn(),
+  upsertAiProposalSnapshot: vi.fn(() => Promise.resolve()),
   updateBookConcept: vi.fn()
 }));
 
@@ -112,6 +118,11 @@ function renderWithQueryClient() {
   );
 }
 
+async function sendActivePrompt() {
+  const panel = await screen.findByLabelText("Kontekst promptu AI");
+  fireEvent.click(within(panel).getByRole("button", { name: /Wy.lij do AI/i }));
+}
+
 describe("BookConceptPage AI flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -188,6 +199,11 @@ describe("BookConceptPage AI flow", () => {
     await waitFor(() => expect(generateButton).not.toBeDisabled());
     fireEvent.click(generateButton);
 
+    const promptPanel = await screen.findByLabelText("Kontekst promptu AI");
+    expect(within(promptPanel).getAllByText(/Tytu.? roboczy/i).length).toBeGreaterThan(0);
+    expect(runCodexPrompt).not.toHaveBeenCalled();
+    fireEvent.click(within(promptPanel).getByRole("button", { name: /Wy.lij do AI/i }));
+
     expect(
       await screen.findByText(/kolejce panelu|Codex CLI generuje/i)
     ).toBeInTheDocument();
@@ -218,17 +234,19 @@ describe("BookConceptPage AI flow", () => {
 
     expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("tab", { name: /Bohater/i }));
     fireEvent.change(screen.getByLabelText("Bohater / bohaterka"), {
       target: { value: "Archiwistka z drukarni pamięci." }
     });
     fireEvent.change(screen.getByLabelText("Cel bohatera"), {
       target: { value: "Odnaleźć siostrę przed korektą miejskich wspomnień." }
     });
+    fireEvent.click(screen.getByRole("tab", { name: /wiat/i }));
     fireEvent.change(screen.getByLabelText("Setting"), {
       target: { value: "Miasto drukarni i nocnych archiwów." }
     });
 
-    fireEvent.click(screen.getByRole("tab", { name: /Silnik historii/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /Konflikt/i }));
     fireEvent.change(screen.getByLabelText("Logline"), {
       target: { value: "Jedno zdanie sprzedające historię." }
     });
@@ -362,7 +380,7 @@ describe("BookConceptPage AI flow", () => {
     expect(within(panel).getByLabelText("Komentarz autora")).toBeInTheDocument();
   });
 
-  it("does not show prompt context when clicking field AI without focusing the field", async () => {
+  it("opens prompt context when clicking field AI without running immediately", async () => {
     renderWithQueryClient();
 
     expect(await screen.findByDisplayValue("Stary tytuł")).toBeInTheDocument();
@@ -373,18 +391,11 @@ describe("BookConceptPage AI flow", () => {
     await waitFor(() => expect(generateButton).not.toBeDisabled());
     fireEvent.click(generateButton);
 
-    expect(screen.queryByLabelText("Kontekst promptu AI")).not.toBeInTheDocument();
-    expect(useAiPromptContextStore.getState().activeTargetId).toBeNull();
-
-    await waitFor(() => expect(runCodexPrompt).toHaveBeenCalled());
-    const request = vi.mocked(runCodexPrompt).mock.calls[0][0];
-    expect(request.promptPackageJson).toEqual(
-      expect.objectContaining({
-        context: expect.not.objectContaining({
-          contextControl: expect.anything()
-        })
-      })
+    expect(await screen.findByLabelText("Kontekst promptu AI")).toBeInTheDocument();
+    expect(useAiPromptContextStore.getState().activeTargetId).toBe(
+      conceptPromptContextTargetId("project-1", "workingTitle")
     );
+    expect(runCodexPrompt).not.toHaveBeenCalled();
   });
 
   it("uses matching field prompt context from the field AI button and closes it", async () => {
@@ -404,6 +415,7 @@ describe("BookConceptPage AI flow", () => {
     });
     await waitFor(() => expect(generateButton).not.toBeDisabled());
     fireEvent.click(generateButton);
+    await sendActivePrompt();
 
     await waitFor(() => expect(runCodexPrompt).toHaveBeenCalled());
     const request = vi.mocked(runCodexPrompt).mock.calls[0][0];
@@ -512,7 +524,7 @@ describe("BookConceptPage AI flow", () => {
     expect(screen.queryByLabelText("Kontekst promptu AI")).not.toBeInTheDocument();
   });
 
-  it("does not switch or reuse prompt context when another field AI button is clicked", async () => {
+  it("switches prompt context when another field AI button is clicked", async () => {
     renderWithQueryClient();
 
     fireEvent.focus(await screen.findByLabelText("Premise"));
@@ -526,6 +538,12 @@ describe("BookConceptPage AI flow", () => {
     });
     await waitFor(() => expect(otherFieldButton).not.toBeDisabled());
     fireEvent.click(otherFieldButton);
+
+    expect(useAiPromptContextStore.getState().activeTargetId).toBe(
+      conceptPromptContextTargetId("project-1", "workingTitle")
+    );
+    expect(runCodexPrompt).not.toHaveBeenCalled();
+    await sendActivePrompt();
 
     await waitFor(() => expect(runCodexPrompt).toHaveBeenCalled());
     const request = vi.mocked(runCodexPrompt).mock.calls[0][0];

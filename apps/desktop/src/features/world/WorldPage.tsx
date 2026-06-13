@@ -573,11 +573,11 @@ export function WorldPage({ projectId }: WorldPageProps) {
           <p className="muted-text">Elementy świata, reguły i ich powiązania z postaciami oraz planem.</p>
         </div>
         <div className="world-header-actions">
-          <button type="button" className="secondary-button" onClick={() => queueWorldGeneration("worldElement", elementDraftPreview(emptyElementInput(projectId, world.elements.length)))}>
+          <button type="button" className="secondary-button" onClick={() => activateWorldPromptContext("worldElement", elementDraftPreview(emptyElementInput(projectId, world.elements.length)))}>
             <Sparkles size={16} />
             AI element
           </button>
-          <button type="button" className="secondary-button" onClick={() => queueWorldGeneration("worldRule", ruleDraftPreview(emptyRuleInput(projectId, world.rules.length)))}>
+          <button type="button" className="secondary-button" onClick={() => activateWorldPromptContext("worldRule", ruleDraftPreview(emptyRuleInput(projectId, world.rules.length)))}>
             <Sparkles size={16} />
             AI reguła
           </button>
@@ -717,7 +717,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                     rows={item.rows}
                     target={elementDraftPreview(elementDraft)}
                     onChange={(value) => setElementDraft({ ...elementDraft, [item.key]: value })}
-                    onGenerate={queueWorldGeneration}
+                    onGenerate={activateWorldPromptContext}
                     onActivate={activateWorldPromptContext}
                   />
                 ))}
@@ -736,7 +736,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
               <div className="world-section-heading">
                 <h3><BookOpen size={17} /> {ruleDraft.name || "Nowa reguła"}</h3>
                 <div className="button-row">
-                  <button type="button" className="secondary-button" onClick={() => queueWorldGeneration("worldRuleAnalysis", ruleDraftPreview(ruleDraft))}>
+                  <button type="button" className="secondary-button" onClick={() => activateWorldPromptContext("worldRuleAnalysis", ruleDraftPreview(ruleDraft))}>
                     <Sparkles size={15} />
                     Analizuj
                   </button>
@@ -751,7 +751,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                     rows={item.rows}
                     target={ruleDraftPreview(ruleDraft)}
                     onChange={(value) => setRuleDraft({ ...ruleDraft, [item.key]: value })}
-                    onGenerate={queueWorldGeneration}
+                    onGenerate={activateWorldPromptContext}
                     onActivate={activateWorldPromptContext}
                   />
                 ))}
@@ -786,7 +786,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 rows={7}
                 target={elementDraftPreview(elementDraft)}
                 onChange={(value) => setElementDraft({ ...elementDraft, visualPrompt: value })}
-                onGenerate={queueWorldGeneration}
+                onGenerate={activateWorldPromptContext}
                 onActivate={activateWorldPromptContext}
               />
               <EditorFooter

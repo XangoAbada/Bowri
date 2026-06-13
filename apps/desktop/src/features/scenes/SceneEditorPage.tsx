@@ -403,7 +403,10 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     );
   }
 
-  function activateSceneEditorPromptContext() {
+  function activateSceneEditorPromptContext(
+    field: SceneEditorFieldKey = "continueScene",
+    mode: SceneEditorInsertMode = "append_to_scene"
+  ) {
     if (!selectedScene) {
       return;
     }
@@ -420,7 +423,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       submitLabel: "AI",
       submitDisabled: !projectQuery.data || !bookId || Boolean(pendingEditorStatus),
       submitDisabledReason: pendingEditorStatus ? "AI już pracuje nad tą sceną." : "Najpierw wczytaj dane projektu.",
-      onSubmit: () => queueEditorAction("continueScene", "append_to_scene")
+      onSubmit: () => queueEditorAction(field, mode)
     });
   }
 
@@ -467,6 +470,23 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       prompt: renderPlanPromptPackage(promptPackage)
     });
     closePromptContextTarget(targetId);
+  }
+
+  function activateSceneFieldPromptContext(
+    field: PlanFieldKey,
+    targetEntity?: PlanPromptEntity,
+    draftOverride?: UpsertSceneInput
+  ) {
+    const baseScene = targetEntity && "manuscriptContent" in targetEntity ? targetEntity : selectedScene;
+    const sourceDraft = draftOverride ?? draft;
+    const planEntity =
+      targetEntity && !("manuscriptContent" in targetEntity)
+        ? targetEntity
+        : sourceDraft && baseScene
+          ? draftToScene(baseScene, sourceDraft)
+          : baseScene ?? (sourceDraft ? sceneDraftPromptEntity(sourceDraft) : undefined);
+
+    activatePlanPromptContext(field, planEntity);
   }
 
   function queueEditorAction(field: SceneEditorFieldKey, mode: SceneEditorInsertMode = insertMode) {
@@ -684,7 +704,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                 <button
                   type="button"
                   className="secondary-button scene-ai-icon-button"
-                  onClick={() => queueEditorAction("continueScene", "append_to_scene")}
+                  onClick={() => activateSceneEditorPromptContext("continueScene", "append_to_scene")}
                   title="AI"
                   aria-label="AI: kontynuuj scenę"
                   disabled={Boolean(pendingEditorStatus)}
@@ -708,17 +728,17 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                   {selectionText ? (
                     <div className="scene-selection-popover" role="toolbar" aria-label="AI dla zaznaczenia">
                       <span>{countWords(selectionText)} słów zaznaczenia</span>
-                      <button type="button" onClick={() => queueEditorAction("rewriteSelection", "replace_selection")}>Przepisz</button>
-                      <button type="button" onClick={() => queueEditorAction("expandSelection", "insert_after_selection")}>Rozwiń</button>
-                      <button type="button" onClick={() => queueEditorAction("rewriteSelection", "replace_selection")}>Popraw dialog</button>
-                      <button type="button" onClick={() => queueEditorAction("expandSelection", "insert_after_selection")}>Dodaj napięcie</button>
+                      <button type="button" onClick={() => activateSceneEditorPromptContext("rewriteSelection", "replace_selection")}>Przepisz</button>
+                      <button type="button" onClick={() => activateSceneEditorPromptContext("expandSelection", "insert_after_selection")}>Rozwiń</button>
+                      <button type="button" onClick={() => activateSceneEditorPromptContext("rewriteSelection", "replace_selection")}>Popraw dialog</button>
+                      <button type="button" onClick={() => activateSceneEditorPromptContext("expandSelection", "insert_after_selection")}>Dodaj napięcie</button>
                     </div>
                   ) : null}
                   <EditorContent
                     editor={editor}
                     className="scene-editor-scroll"
-                    onFocusCapture={activateSceneEditorPromptContext}
-                    onClick={activateSceneEditorPromptContext}
+                    onFocusCapture={() => activateSceneEditorPromptContext()}
+                    onClick={() => activateSceneEditorPromptContext()}
                   />
                   <span className="scene-editor-word-corner">{currentWordCount.toLocaleString("pl-PL")} słów</span>
                 </div>
@@ -798,7 +818,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
           onClose={() => setSceneModal(null)}
           onSave={saveSceneFromModal}
           onDelete={(sceneId) => sceneDeleteMutation.mutate(sceneId)}
-          onGenerate={queueSceneField}
+          onGenerate={activateSceneFieldPromptContext}
           onActivatePrompt={activatePlanPromptContext}
         />
       ) : null}
@@ -811,7 +831,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
         onClose={() => setChapterModal(null)}
         onSave={(input) => chapterMutation.mutate(input)}
         onDelete={(chapterId) => chapterDeleteMutation.mutate(chapterId)}
-        onGenerate={queueSceneField}
+        onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
 

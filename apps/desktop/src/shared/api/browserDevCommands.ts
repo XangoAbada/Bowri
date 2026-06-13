@@ -6,6 +6,7 @@ import type {
   AiLogEntry,
   AiProposalRecord,
   AiRunResult,
+  ActiveCodexRun,
   Beat,
   Book,
   BookCoverResult,
@@ -1207,6 +1208,18 @@ export async function browserRunCodexPrompt(
     errorMessage,
     durationMs: 0
   };
+}
+
+export async function browserListActiveCodexRuns(
+  _projectId?: string
+): Promise<ActiveCodexRun[]> {
+  return [];
+}
+
+export async function browserCancelActiveCodexRun(
+  _input: { projectId?: string; aiRunId?: string } = {}
+): Promise<boolean> {
+  return false;
 }
 
 export async function browserGenerateNewProjectTitle(

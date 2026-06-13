@@ -756,6 +756,16 @@ export type AiRunResult = {
   durationMs: number;
 };
 
+export type ActiveCodexRun = {
+  aiRunId: string;
+  projectId: string;
+  action: string;
+  startedAt: string;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  phase: string;
+};
+
 export type AiLogEntry = {
   id: string;
   projectId: string;

@@ -358,7 +358,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     setSelectedCharacterId(newCharacterDraftId);
     setActiveTab("profile");
     setDraft(freshDraft);
-    queueCharacterGeneration("characterProfile", target);
+    activateCharacterPromptContext("characterProfile", target);
   }
 
   function generateRelationForCharacter(character: Character) {
@@ -371,7 +371,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
 
     setRelationModal(state);
     setErrorMessage("");
-    queueCharacterGeneration("characterRelation", relationPreview(relationDraft));
+    activateCharacterPromptContext("characterRelation", relationPreview(relationDraft));
   }
 
   function generateMemoryForCharacter(character: Character) {
@@ -379,7 +379,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     const memoryDraft = memoryToInput(null, state, workspace);
     setMemoryModal(state);
     setErrorMessage("");
-    queueCharacterGeneration("characterMemory", memoryPreview(memoryDraft));
+    activateCharacterPromptContext("characterMemory", memoryPreview(memoryDraft));
   }
 
   function queueCharacterGeneration(field: CharacterFieldKey, targetEntity?: CharacterPromptEntity) {
@@ -580,7 +580,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                             list={item.list}
                             target={selectedCharacter ?? draftCharacterPreview(draft)}
                             onChange={(value) => setDraft((current) => ({ ...current, [item.key]: value }))}
-                            onGenerate={queueCharacterGeneration}
+                            onGenerate={activateCharacterPromptContext}
                             onActivate={activateCharacterPromptContext}
                           />
                         ))}
@@ -620,7 +620,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
               <CharacterImageSection
                 character={selectedCharacter}
                 image={selectedImage}
-                onGenerate={() => selectedCharacter && queueCharacterGeneration("characterImage", selectedCharacter)}
+                onGenerate={() => selectedCharacter && activateCharacterPromptContext("characterImage", selectedCharacter)}
               />
             ) : null}
           </form>
@@ -636,7 +636,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
           workspace={workspace}
           onClose={() => setRelationModal(null)}
           onSubmit={(input) => relationMutation.mutate(input)}
-          onGenerate={queueCharacterGeneration}
+          onGenerate={activateCharacterPromptContext}
           onActivate={activateCharacterPromptContext}
         />
       ) : null}
@@ -647,7 +647,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
           workspace={workspace}
           onClose={() => setMemoryModal(null)}
           onSubmit={(input) => memoryMutation.mutate(input)}
-          onGenerate={queueCharacterGeneration}
+          onGenerate={activateCharacterPromptContext}
           onActivate={activateCharacterPromptContext}
         />
       ) : null}
@@ -658,7 +658,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
           workspace={workspace}
           onClose={() => setMemoryLinkModal(null)}
           onSubmit={(input) => memoryLinkMutation.mutate(input)}
-          onGenerate={queueCharacterGeneration}
+          onGenerate={activateCharacterPromptContext}
           onActivate={activateCharacterPromptContext}
         />
       ) : null}

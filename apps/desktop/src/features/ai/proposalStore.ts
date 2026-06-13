@@ -28,7 +28,7 @@ import {
   type SceneStoryBibleAuditPromptPackage
 } from "./sceneStoryBibleAuditPromptPackage";
 
-export type AiProposalStatus = "queued" | "running" | "success" | "error";
+export type AiProposalStatus = "queued" | "running" | "success" | "error" | "cancelled";
 export type PendingAiProposalStatus = Extract<
   AiProposalStatus,
   "queued" | "running"
@@ -161,6 +161,7 @@ type ProposalState = {
   startQueuedProposal: (id: string) => void;
   finishProposal: (id: string, result: ProposalResult) => void;
   failProposal: (id: string, errorMessage: string, rawOutput?: string) => void;
+  cancelProposal: (id: string, errorMessage?: string) => void;
   updateProposalProgress: (id: string, progress: ProposalProgress) => void;
   retryProposal: (id: string) => void;
   setEditableValue: (id: string, value: string) => void;
@@ -263,6 +264,24 @@ export const useProposalStore = create<ProposalState>((set) => ({
                 ...proposal,
                 status: "error",
                 rawOutput,
+                errorMessage,
+                updatedAt: new Date().toISOString()
+              })
+            : proposal
+        )
+      })
+    );
+    persistProposalSnapshot(updated);
+  },
+  cancelProposal: (id, errorMessage = "Generowanie zostało przerwane.") => {
+    let updated: ActiveAiProposal | undefined;
+    set((state) =>
+      syncActive({
+        proposals: state.proposals.map((proposal) =>
+          proposal.id === id
+            ? (updated = {
+                ...proposal,
+                status: "cancelled",
                 errorMessage,
                 updatedAt: new Date().toISOString()
               })
@@ -494,6 +513,7 @@ function syncActive(
       state.proposals.find((proposal) => proposal.status === "running") ??
       state.proposals.find((proposal) => proposal.status === "queued") ??
       state.proposals.find((proposal) => proposal.status === "success") ??
+      state.proposals.find((proposal) => proposal.status === "cancelled") ??
       state.proposals.find((proposal) => proposal.status === "error") ??
       null
   };

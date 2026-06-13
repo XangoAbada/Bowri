@@ -37,13 +37,20 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../../shared/api/commands", () => ({
   acceptGeneratedBookCover: vi.fn(),
+  cancelActiveCodexRun: vi.fn(),
   checkCodexCli: vi.fn(),
   createProject: vi.fn(),
+  deleteProject: vi.fn(),
   generateNewProjectTitle: vi.fn(),
   getProject: vi.fn(),
+  listActiveCodexRuns: vi.fn(() => Promise.resolve([])),
+  listAiProposals: vi.fn(() => Promise.resolve([])),
   listCodexModels: vi.fn(),
   listProjects: vi.fn(),
+  markAiProposalAccepted: vi.fn(() => Promise.resolve()),
+  markAiProposalRejected: vi.fn(() => Promise.resolve()),
   runCodexPrompt: vi.fn(),
+  upsertAiProposalSnapshot: vi.fn(() => Promise.resolve()),
   updateBookConcept: vi.fn()
 }));
 
@@ -191,16 +198,16 @@ describe("DashboardPage", () => {
       })
     );
 
-    expect(screen.queryByLabelText("Kontekst promptu AI")).not.toBeInTheDocument();
+    const panel = await screen.findByLabelText("Kontekst promptu AI");
+    expect(runCodexPrompt).not.toHaveBeenCalled();
+    fireEvent.click(within(panel).getByRole("button", { name: /Wy.lij do AI/i }));
     expect(await screen.findByDisplayValue("Siostra z mgły")).toBeInTheDocument();
     const request = vi.mocked(runCodexPrompt).mock.calls[0][0];
-    expect(request.promptPackageJson).toEqual(
-      expect.objectContaining({
-        context: expect.not.objectContaining({
-          contextControl: expect.anything()
-        })
-      })
-    );
+    expect(request.promptPackageJson).toMatchObject({
+      context: {
+        contextControl: expect.any(Object)
+      }
+    });
     fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
 
     await waitFor(() =>
@@ -221,7 +228,9 @@ describe("DashboardPage", () => {
 
     fireEvent.click(generateButton);
 
-    expect(screen.queryByLabelText("Kontekst promptu AI")).not.toBeInTheDocument();
+    const panel = await screen.findByLabelText("Kontekst promptu AI");
+    expect(generateNewProjectTitle).not.toHaveBeenCalled();
+    fireEvent.click(within(panel).getByRole("button", { name: /Wy.lij do AI/i }));
     expect(await screen.findByDisplayValue("Siostra z mgły")).toBeInTheDocument();
     expect(titleInput).toHaveValue("");
     expect(generateNewProjectTitle).toHaveBeenCalledWith(
@@ -232,13 +241,11 @@ describe("DashboardPage", () => {
       })
     );
     const request = vi.mocked(generateNewProjectTitle).mock.calls[0][0];
-    expect(request.promptPackageJson).toEqual(
-      expect.objectContaining({
-        context: expect.not.objectContaining({
-          contextControl: expect.anything()
-        })
-      })
-    );
+    expect(request.promptPackageJson).toMatchObject({
+      context: {
+        contextControl: expect.any(Object)
+      }
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /Akceptuj/i }));
 

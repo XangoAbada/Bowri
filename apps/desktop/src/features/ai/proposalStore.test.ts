@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   ActiveAiProposal,
   BOOK_COVER_FIELD,
-  pendingProposalStatus
+  pendingProposalStatus,
+  useProposalStore
 } from "./proposalStore";
 
 describe("pendingProposalStatus", () => {
@@ -93,6 +94,26 @@ describe("pendingProposalStatus", () => {
         targetEntityId: "thread-1:chapter-2"
       })
     ).toBe("queued");
+  });
+
+  it("does not treat cancelled proposals as pending and allows retry", () => {
+    const cancelled = proposal("cancelled-title", "workingTitle", "cancelled");
+    useProposalStore.setState({
+      proposals: [cancelled],
+      activeProposal: cancelled
+    });
+
+    expect(
+      pendingProposalStatus(useProposalStore.getState().proposals, {
+        projectId: "project-1",
+        field: "workingTitle",
+        scope: "bookConcept"
+      })
+    ).toBeNull();
+
+    useProposalStore.getState().retryProposal(cancelled.id);
+
+    expect(useProposalStore.getState().proposals[0].status).toBe("queued");
   });
 });
 
