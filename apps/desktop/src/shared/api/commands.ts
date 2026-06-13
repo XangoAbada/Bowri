@@ -13,6 +13,7 @@ import {
   browserMarkAiProposalRejected,
   browserUpsertAiProposalSnapshot,
   browserCreateProject,
+  browserDeleteProject,
   browserDeleteCharacter,
   browserDeleteCharacterMemory,
   browserDeleteCharacterMemoryLink,
@@ -142,6 +143,14 @@ export function listProjects(): Promise<ProjectSummary[]> {
   }
 
   return invoke("list_projects");
+}
+
+export function deleteProject(projectId: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteProject(projectId);
+  }
+
+  return invoke("delete_project", { projectId });
 }
 
 export function getProject(projectId: string): Promise<ProjectDetails> {

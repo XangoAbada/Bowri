@@ -1,10 +1,11 @@
-import { BookOpen, FolderOpen, Loader2, Plus, Sparkles } from "lucide-react";
+import { BookOpen, FolderOpen, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   checkCodexCli,
   createProject,
+  deleteProject,
   getProject,
   listProjects
 } from "../../shared/api/commands";
@@ -80,6 +81,13 @@ export function DashboardPage() {
         to: "/projects/$projectId/concept",
         params: { projectId: details.project.id }
       });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteProject,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
     }
   });
 
@@ -165,7 +173,7 @@ export function DashboardPage() {
         submitDisabled:
           Boolean(newProjectStatus) ||
           createMutation.isPending,
-        submitDisabledReason: "Generowanie tytulu jest teraz niedostepne.",
+        submitDisabledReason: "Generowanie tytułu jest teraz niedostępne.",
         onSubmit: enqueueNewProjectTitle
       })
     );
@@ -184,6 +192,20 @@ export function DashboardPage() {
     }
 
     addContextSourceToActiveTarget(conceptPromptContextSource("workingTitle"));
+  }
+
+  function requestProjectDelete(projectId: string, displayTitle: string) {
+    if (deleteMutation.isPending) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Usunąć projekt „${displayTitle}”? Tej operacji nie można cofnąć.`
+    );
+
+    if (confirmed) {
+      deleteMutation.mutate(projectId);
+    }
   }
 
   const codexUnavailable = codexStatusQuery.data?.available === false;
@@ -257,8 +279,8 @@ export function DashboardPage() {
                   aria-label="Dodaj wpis autora do kontekstu promptu"
                   title={
                     activePromptTarget
-                      ? "Wpis autora jest juz wymaganym kontekstem tego promptu."
-                      : "Najpierw zaznacz pole tekstowe, aby otworzyc kontekst promptu."
+                      ? "Wpis autora jest już wymaganym kontekstem tego promptu."
+                      : "Najpierw zaznacz pole tekstowe, aby otworzyć kontekst promptu."
                   }
                   disabled
                 >
@@ -352,39 +374,53 @@ export function DashboardPage() {
                     </span>
                   </Link>
                   <div className="project-card-ai-actions">
-                  <button
-                    type="button"
-                    className="icon-button project-card-ai-button"
-                    onClick={() => queueProjectTitle(project.id)}
-                    disabled={
-                      generating ||
-                      codexUnavailable ||
-                      codexStatusQuery.isLoading ||
-                      !project.activeBookId
-                    }
-                    title="Generuj tytuł roboczy z AI"
-                    aria-label={`Generuj tytuł roboczy z AI dla projektu ${displayTitle}`}
-                  >
-                    {generating ? (
-                      <Loader2 size={16} className="spin-icon" />
-                    ) : (
-                      <Sparkles size={16} />
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      className="icon-button project-card-ai-button"
+                      onClick={() => queueProjectTitle(project.id)}
+                      disabled={
+                        generating ||
+                        codexUnavailable ||
+                        codexStatusQuery.isLoading ||
+                        !project.activeBookId
+                      }
+                      title="Generuj tytuł roboczy z AI"
+                      aria-label={`Generuj tytuł roboczy z AI dla projektu ${displayTitle}`}
+                    >
+                      {generating ? (
+                        <Loader2 size={16} className="spin-icon" />
+                      ) : (
+                        <Sparkles size={16} />
+                      )}
+                    </button>
                     <button
                       type="button"
                       className="icon-button ai-context-add-button project-card-context-button"
                       onClick={() => addProjectTitleToPromptContext(project.id)}
-                    disabled={!canAddProjectTitleContext}
-                    title={
-                      activePromptTarget?.projectId !== project.id
-                        ? "Najpierw otworz kontekst promptu tego projektu."
-                        : "Tytul roboczy jest juz w kontekscie promptu."
-                    }
-                    aria-label={`Dodaj tytul roboczy projektu ${displayTitle} do kontekstu promptu`}
-                  >
-                    <Plus size={14} />
-                  </button>
+                      disabled={!canAddProjectTitleContext}
+                      title={
+                        activePromptTarget?.projectId !== project.id
+                          ? "Najpierw otwórz kontekst promptu tego projektu."
+                          : "Tytuł roboczy jest już w kontekście promptu."
+                      }
+                      aria-label={`Dodaj tytuł roboczy projektu ${displayTitle} do kontekstu promptu`}
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button project-card-delete-button"
+                      onClick={() => requestProjectDelete(project.id, displayTitle)}
+                      disabled={deleteMutation.isPending}
+                      title="Usuń projekt"
+                      aria-label={`Usuń projekt ${displayTitle}`}
+                    >
+                      {deleteMutation.isPending && deleteMutation.variables === project.id ? (
+                        <Loader2 size={16} className="spin-icon" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </button>
                   </div>
                 </article>
               );
@@ -392,6 +428,9 @@ export function DashboardPage() {
           </div>
 
           {aiError ? <p className="warning-text">{aiError}</p> : null}
+          {deleteMutation.isError ? (
+            <p className="warning-text">Nie udało się usunąć projektu.</p>
+          ) : null}
         </section>
       </div>
 

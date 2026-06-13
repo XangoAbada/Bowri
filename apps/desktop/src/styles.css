@@ -7118,9 +7118,14 @@ button.nav-item {
 }
 
 .project-card-ai-button,
-.project-card-context-button {
+.project-card-context-button,
+.project-card-delete-button {
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 10px 24px rgba(23, 36, 32, 0.12);
+}
+
+.project-card-delete-button {
+  color: var(--red);
 }
 
 .empty-state {
@@ -7693,7 +7698,7 @@ button.nav-item {
   }
 
   .concept-workspace {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr);
     gap: 24px;
   }
 

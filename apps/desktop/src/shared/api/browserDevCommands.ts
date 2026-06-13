@@ -178,6 +178,25 @@ export async function browserListProjects(): Promise<ProjectSummary[]> {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
+export async function browserDeleteProject(projectId: string): Promise<void> {
+  const state = readState();
+  const deleted = state.projects.find(({ project }) => project.id === projectId);
+
+  if (!deleted) {
+    throw new Error("Project not found in browser preview storage.");
+  }
+
+  const deletedBookId = deleted.book.id;
+  state.projects = state.projects.filter(({ project }) => project.id !== projectId);
+  delete state.plans[deletedBookId];
+  delete state.characterWorkspaces[projectId];
+  delete state.worldWorkspaces[projectId];
+  state.aiRuns = state.aiRuns.filter((run) => run.projectId !== projectId);
+  state.aiProposals = state.aiProposals.filter((proposal) => proposal.projectId !== projectId);
+  state.exportPresets = state.exportPresets.filter((preset) => preset.projectId !== projectId);
+  writeState(state);
+}
+
 export async function browserGetProject(
   projectId: string
 ): Promise<ProjectDetails> {

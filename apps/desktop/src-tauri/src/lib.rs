@@ -1266,6 +1266,21 @@ pub async fn list_projects_in_pool(pool: &SqlitePool) -> Result<Vec<ProjectSumma
     Ok(projects)
 }
 
+pub async fn delete_project_in_pool(pool: &SqlitePool, project_id: &str) -> Result<(), AppError> {
+    let result = sqlx::query("DELETE FROM projects WHERE id = ?")
+        .bind(project_id)
+        .execute(pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::Process(
+            "Nie znaleziono projektu do usunięcia.".into(),
+        ));
+    }
+
+    Ok(())
+}
+
 pub async fn get_project_details(
     pool: &SqlitePool,
     project_id: &str,
@@ -5318,6 +5333,13 @@ async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectSummary>
 }
 
 #[tauri::command]
+async fn delete_project(state: State<'_, AppState>, project_id: String) -> Result<(), String> {
+    delete_project_in_pool(&state.db, &project_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
 async fn get_project(
     state: State<'_, AppState>,
     project_id: String,
@@ -7170,6 +7192,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             create_project,
             list_projects,
+            delete_project,
             get_project,
             get_book_plan,
             list_plan_versions,
@@ -7329,6 +7352,29 @@ mod tests {
         assert_eq!(created.book.working_title, "Nowa powiesc");
         assert_eq!(created.book.cover_image_path, "");
         assert_eq!(listed[0].cover_image_path, "");
+    }
+
+    #[tokio::test]
+    async fn delete_project_removes_it_from_project_list() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Projekt do usuniecia".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        delete_project_in_pool(&pool, &created.project.id)
+            .await
+            .unwrap();
+
+        let listed = list_projects_in_pool(&pool).await.unwrap();
+        assert!(listed.is_empty());
+        let deleted = get_project_details(&pool, &created.project.id).await;
+        assert!(deleted.is_err());
     }
 
     #[tokio::test]
