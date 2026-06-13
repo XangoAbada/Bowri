@@ -5,6 +5,7 @@ import { BookConceptPage } from "../features/book/BookConceptPage";
 import { BookPlanPage } from "../features/book/BookPlanPage";
 import { CharactersPage } from "../features/characters/CharactersPage";
 import { WorldPage } from "../features/world/WorldPage";
+import { SceneEditorPage } from "../features/scenes/SceneEditorPage";
 import { CodexSettingsPage } from "../features/ai/CodexSettingsPage";
 import { AiLogPage } from "../features/ai/AiLogPage";
 
@@ -48,6 +49,12 @@ const projectWorldRoute = createRoute({
   component: ProjectWorldRoute
 });
 
+const projectEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId/editor",
+  component: ProjectEditorRoute
+});
+
 const projectAiRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects/$projectId/ai",
@@ -67,6 +74,7 @@ const routeTree = rootRoute.addChildren([
   projectPlanRoute,
   projectCharactersRoute,
   projectWorldRoute,
+  projectEditorRoute,
   projectAiRoute,
   projectAiLogRoute
 ]);
@@ -112,6 +120,15 @@ function ProjectWorldRoute() {
   return (
     <ProjectShell projectId={projectId} activeSection="world">
       <WorldPage projectId={projectId} />
+    </ProjectShell>
+  );
+}
+
+function ProjectEditorRoute() {
+  const projectId = useProjectId();
+  return (
+    <ProjectShell projectId={projectId} activeSection="editor">
+      <SceneEditorPage projectId={projectId} />
     </ProjectShell>
   );
 }

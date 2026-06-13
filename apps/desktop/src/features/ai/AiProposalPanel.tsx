@@ -59,6 +59,15 @@ import {
 } from "./worldPromptPackage";
 import { applyWorldDraftField } from "./worldDraftFieldTargets";
 import {
+  parseSceneEditorResult,
+  sceneEditorFieldLabel,
+  SceneEditorFieldKey
+} from "./sceneEditorPromptPackage";
+import {
+  applySceneEditorProposal,
+  SceneEditorInsertMode
+} from "./sceneEditorProposalTargets";
+import {
   ActiveAiProposal,
   BOOK_COVER_FIELD,
   CHARACTER_IMAGE_FIELD,
@@ -304,6 +313,34 @@ export function AiProposalPanel({
         throw new Error("Nie ma już otwartego formularza dla tej propozycji świata.");
       }
 
+      if (proposal.scope === "sceneEditor") {
+        const packageContext =
+          "context" in proposal.promptPackageJson
+            ? proposal.promptPackageJson.context
+            : {};
+        const scopedPackageContext =
+          packageContext && typeof packageContext === "object"
+            ? (packageContext as Record<string, unknown>)
+            : {};
+        const targetEntityId =
+          typeof scopedPackageContext.targetEntityId === "string"
+            ? scopedPackageContext.targetEntityId
+            : "";
+        const value = proposal.editableValue.trim();
+        const insertMode = sceneEditorInsertMode(scopedPackageContext.insertMode);
+
+        if (!targetEntityId) {
+          throw new Error("Brak aktywnej sceny dla propozycji edytora.");
+        }
+
+        const applied = await applySceneEditorProposal(targetEntityId, value, insertMode);
+        if (!applied) {
+          throw new Error("Nie ma już otwartego edytora sceny dla tej propozycji AI.");
+        }
+
+        return null;
+      }
+
       if (isPremiseDevelopment(proposal.parsed)) {
         const input = proposalInputFromFields(
           proposal.editableFields,
@@ -433,6 +470,7 @@ function ProposalQueueItem({
   const planProposal = proposal.scope === "bookPlan";
   const characterProposal = proposal.scope === "characters";
   const worldProposal = proposal.scope === "world";
+  const sceneEditorProposal = proposal.scope === "sceneEditor";
   const label = coverProposal
     ? "Okładka"
     : planProposal
@@ -443,7 +481,9 @@ function ProposalQueueItem({
           ? characterFieldConfigs[proposal.field as CharacterFieldKey]?.label ?? "Postać"
           : worldProposal
             ? worldFieldConfigs[proposal.field as WorldFieldKey]?.label ?? "Świat"
-            : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
+            : sceneEditorProposal
+              ? sceneEditorFieldLabel(proposal.field as SceneEditorFieldKey)
+              : conceptFieldConfigs[proposal.field as ConceptFieldKey].label;
   const running = proposal.status === "running";
   const queued = proposal.status === "queued";
   const success = proposal.status === "success";
@@ -456,6 +496,7 @@ function ProposalQueueItem({
     !coverProposal &&
     !characterProposal &&
     !worldProposal &&
+    !sceneEditorProposal &&
     !planProposal &&
     (longConceptFields.includes(proposal.field as ConceptFieldKey) || structured)
       ? 8
@@ -464,6 +505,8 @@ function ProposalQueueItem({
     ? Boolean((proposal.coverImagePath || proposal.editableValue).trim())
     : characterImageProposal
       ? Boolean((proposal.characterImagePath || proposal.coverImagePath || proposal.editableValue).trim())
+    : sceneEditorProposal
+      ? proposal.editableValue.trim().length > 0
     : planProposal
       ? proposal.editableValue.trim().length > 0
       : characterProposal
@@ -601,13 +644,15 @@ function ProposalQueueItem({
 
       {success && !structured && !coverProposal && !characterImageProposal ? (
         <label className="field-label">
-          {planProposal
-            ? "Propozycja do zastosowania w widoku Plan"
-            : "Propozycja do akceptacji"}
+          {sceneEditorProposal
+            ? "Tekst do wstawienia po akceptacji"
+            : planProposal
+              ? "Propozycja do zastosowania w widoku Plan"
+              : "Propozycja do akceptacji"}
           <textarea
             value={proposal.editableValue}
             onChange={(event) => onEditableValueChange(event.target.value)}
-            rows={planProposal ? 8 : proposalRows}
+            rows={sceneEditorProposal ? 10 : planProposal ? 8 : proposalRows}
             title={`Możesz poprawić propozycję dla pola ${label} przed zapisem.`}
           />
         </label>
@@ -617,6 +662,13 @@ function ProposalQueueItem({
         <p className="muted-text">
           Akceptacja zapisze tylko zakres tego widoku planu. Pozostałe sekcje z
           odpowiedzi AI zostaną pominięte.
+        </p>
+      ) : null}
+
+      {sceneEditorProposal && success ? (
+        <p className="muted-text">
+          Akceptacja zastosuje tekst w aktywnym edytorze sceny zgodnie z trybem
+          wstawiania zapisanym w prompcie. Do tego momentu manuskrypt się nie zmieni.
         </p>
       ) : null}
 
@@ -874,7 +926,7 @@ function useAiQueueRunner() {
 
         const parsed = parseProposalResult(
           result.rawOutput,
-          snapshot.field as ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey,
+          snapshot.field as ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey | SceneEditorFieldKey,
           snapshot.action
         );
         finishProposal(proposalId, {
@@ -964,7 +1016,7 @@ function useCoverGenerationProgressListener() {
 
 export function parseProposalResult(
   rawOutput: string,
-  expectedField: ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey,
+  expectedField: ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey | SceneEditorFieldKey,
   action: string
 ): ParsedAiProposal {
   if (isPlanAction(action)) {
@@ -977,6 +1029,16 @@ export function parseProposalResult(
 
   if (isWorldAction(action)) {
     return parseWorldSuggestion(rawOutput, expectedField as WorldFieldKey);
+  }
+
+  if (isSceneEditorAction(action)) {
+    return {
+      kind: "book_plan_suggestion",
+      summary: "Propozycja tekstu sceny",
+      textValue: parseSceneEditorResult(rawOutput),
+      value: rawOutput,
+      warnings: []
+    };
   }
 
   if (action === "expand_premise") {
@@ -1376,6 +1438,24 @@ function isWorldAction(action: string): boolean {
     "generate_world_rule_field",
     "generate_world_rule_analysis"
   ].includes(action);
+}
+
+function isSceneEditorAction(action: string): boolean {
+  return [
+    "draft_scene",
+    "continue_scene",
+    "rewrite_selection",
+    "expand_selection"
+  ].includes(action);
+}
+
+function sceneEditorInsertMode(value: unknown): SceneEditorInsertMode {
+  return value === "replace_selection" ||
+    value === "insert_after_selection" ||
+    value === "append_to_scene" ||
+    value === "save_as_variant"
+    ? value
+    : "append_to_scene";
 }
 
 function isLargePlanField(field: PlanFieldKey): boolean {

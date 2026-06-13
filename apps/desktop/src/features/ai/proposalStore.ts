@@ -17,6 +17,10 @@ import type {
   WorldFieldKey,
   WorldPromptPackage
 } from "./worldPromptPackage";
+import type {
+  SceneEditorFieldKey,
+  SceneEditorPromptPackage
+} from "./sceneEditorPromptPackage";
 
 export type AiProposalStatus = "queued" | "running" | "success" | "error";
 export type PendingAiProposalStatus = Extract<
@@ -29,7 +33,8 @@ export type AiProposalScope =
   | "bookCover"
   | "bookPlan"
   | "characters"
-  | "world";
+  | "world"
+  | "sceneEditor";
 export const BOOK_COVER_FIELD = "__book_cover__";
 export const CHARACTER_IMAGE_FIELD = "__character_image__";
 export const NEW_PROJECT_PROPOSAL_ID = "__new_project__";
@@ -38,6 +43,7 @@ export type AiTaskFieldKey =
   | PlanFieldKey
   | CharacterFieldKey
   | WorldFieldKey
+  | SceneEditorFieldKey
   | typeof BOOK_COVER_FIELD
   | typeof CHARACTER_IMAGE_FIELD;
 export type ParsedAiProposal =
@@ -66,7 +72,8 @@ export type AiPromptSnapshot = {
     | CoverPromptPackage
     | PlanPromptPackage
     | CharacterPromptPackage
-    | WorldPromptPackage;
+    | WorldPromptPackage
+    | SceneEditorPromptPackage;
   prompt: string;
   coverPrompt?: string;
   coverNegativePrompt?: string;

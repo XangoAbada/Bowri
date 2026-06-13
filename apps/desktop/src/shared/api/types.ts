@@ -684,7 +684,11 @@ export type AIAction =
   | "generate_character_image"
   | "generate_world_element_field"
   | "generate_world_rule_field"
-  | "generate_world_rule_analysis";
+  | "generate_world_rule_analysis"
+  | "draft_scene"
+  | "continue_scene"
+  | "rewrite_selection"
+  | "expand_selection";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 

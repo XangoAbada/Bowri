@@ -35,13 +35,12 @@ import storyforgeLogo from "../assets/storyforge-logo-full.png";
 
 type ProjectShellProps = {
   projectId: string;
-  activeSection: "concept" | "plan" | "characters" | "world" | "ai" | "aiLog";
+  activeSection: "concept" | "plan" | "characters" | "world" | "editor" | "ai" | "aiLog";
   children: ReactNode;
 };
 
 const disabledSections = [
   { label: "Rozdziały", icon: FileText },
-  { label: "Edytor", icon: PenLine },
   { label: "Ciągłość", icon: Brain }
 ];
 
@@ -112,6 +111,8 @@ export function ProjectShell({
           ? "Faza 4: Postacie i relacje"
           : activeSection === "world"
             ? "Faza 5: Świat i reguły"
+            : activeSection === "editor"
+              ? "Faza 7: Edytor scen i rozdziałów"
           : activeSection === "aiLog"
           ? "Log AI"
           : "Ustawienia AI";
@@ -247,6 +248,15 @@ export function ProjectShell({
           >
             <Boxes size={18} />
             Świat
+          </Link>
+
+          <Link
+            to="/projects/$projectId/editor"
+            params={{ projectId }}
+            className={activeSection === "editor" ? "nav-item active" : "nav-item"}
+          >
+            <PenLine size={18} />
+            Edytor
           </Link>
 
           {disabledSections.map(({ label, icon: Icon }) => (

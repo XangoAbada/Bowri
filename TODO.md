@@ -225,19 +225,19 @@ Zrodla:
 [07_ux_i_nawigacja.md](docs/blueprint/07_ux_i_nawigacja.md),
 [14_faza_7_edytor_scen.md](docs/blueprint/14_faza_7_edytor_scen.md)
 
-- [ ] Dodac TipTap jako edytor scen.
-- [ ] Dodac widok rozdzialu z lista scen, statusem i licznikami slow.
-- [ ] Dodac widok sceny z celem, konfliktem, wynikiem, POV, lokacja,
+- [x] Dodac TipTap jako edytor scen.
+- [x] Dodac widok rozdzialu z lista scen, statusem i licznikami slow.
+- [x] Dodac widok sceny z celem, konfliktem, wynikiem, POV, lokacja,
       postaciami, watkami i tekstem.
-- [ ] Dodac autosave i odtwarzanie danych po restarcie.
-- [ ] Dodac licznik slow i target word count.
-- [ ] Dodac popup AI dla zaznaczenia tekstu.
-- [ ] Dodac AI actions `draft_scene`, `continue_scene`, `rewrite_selection`,
+- [x] Dodac autosave i odtwarzanie danych po restarcie.
+- [x] Dodac licznik slow i target word count.
+- [x] Dodac popup AI dla zaznaczenia tekstu.
+- [x] Dodac AI actions `draft_scene`, `continue_scene`, `rewrite_selection`,
       `expand_selection`.
-- [ ] Dodac warianty odpowiedzi AI i tryby wstawiania wyniku.
-- [ ] Wymagac decyzji uzytkownika przed zmiana tekstu przez AI.
+- [x] Dodac warianty odpowiedzi AI i tryby wstawiania wyniku.
+- [x] Wymagac decyzji uzytkownika przed zmiana tekstu przez AI.
 - [ ] Dodac testy licznika, zaznaczenia, promptu sceny, anulowania i rewrite.
-- [ ] Upewnić się, że generowanie pól sceny i akcje edytora uwzględniają
+- [x] Upewnić się, że generowanie pól sceny i akcje edytora uwzględniają
       kluczowe pola sceny, rozdziału, Story Bible i style guide.
 
 ### Faza 8: Ekstrakcja dynamiczna
