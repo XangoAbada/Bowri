@@ -370,14 +370,18 @@ async function applyChapterSceneBreakdown(
     throw new Error("Brak obsługi zapisu sceny dla propozycji AI.");
   }
 
+  const sceneRecords = record.scenes.filter(
+    (item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === "object" && !Array.isArray(item))
+  );
+  const targetWordCounts = chapterBreakdownTargetWordCounts(
+    chapter,
+    sceneRecords,
+    context.plan.scenes.filter((scene) => scene.chapterId === chapter.id)
+  );
   const createdScenes: CreatedSceneForAudit[] = [];
 
-  for (const [index, item] of record.scenes.entries()) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-
-    const sceneRecord = item as Record<string, unknown>;
+  for (const [index, sceneRecord] of sceneRecords.entries()) {
     const relationHints =
       sceneRecord.relationHints && typeof sceneRecord.relationHints === "object"
         ? (sceneRecord.relationHints as Record<string, unknown>)
@@ -398,7 +402,7 @@ async function applyChapterSceneBreakdown(
       locationId: namesToIds(context.world?.elements ?? [], [
         relationHints.locationNameOrId
       ])[0] ?? null,
-      targetWordCount: numberValue(sceneRecord.targetWordCount, 0) || null,
+      targetWordCount: targetWordCounts[index] ?? null,
       actualWordCount: null,
       manuscriptContent: "",
       status: "planned"
@@ -729,6 +733,67 @@ function numberValue(value: unknown, fallback: number): number {
     return Number.isFinite(parsed) ? parsed : fallback;
   }
   return fallback;
+}
+
+function positiveIntegerValue(value: unknown): number | null {
+  const parsed = numberValue(value, 0);
+  return parsed > 0 ? Math.round(parsed) : null;
+}
+
+function chapterBreakdownTargetWordCounts(
+  chapter: Chapter,
+  sceneRecords: Record<string, unknown>[],
+  existingScenes: Array<{ targetWordCount: number | null }>
+): Array<number | null> {
+  const proposedCounts = sceneRecords.map((scene) =>
+    positiveIntegerValue(scene.targetWordCount)
+  );
+  const chapterTarget = positiveIntegerValue(chapter.targetWordCount);
+  if (!chapterTarget || sceneRecords.length === 0) {
+    return proposedCounts;
+  }
+
+  const existingTargetTotal = existingScenes.reduce(
+    (sum, scene) => sum + (positiveIntegerValue(scene.targetWordCount) ?? 0),
+    0
+  );
+  const availableTarget = Math.max(0, chapterTarget - existingTargetTotal);
+  if (availableTarget <= 0) {
+    return proposedCounts;
+  }
+
+  const knownCounts = proposedCounts.filter((count): count is number => count !== null);
+  const fallbackWeight = knownCounts.length
+    ? knownCounts.reduce((sum, count) => sum + count, 0) / knownCounts.length
+    : 1;
+  const weights = proposedCounts.map((count) => count ?? fallbackWeight);
+
+  return distributeWordCount(availableTarget, weights).map((count) =>
+    count > 0 ? count : null
+  );
+}
+
+function distributeWordCount(total: number, weights: number[]): number[] {
+  if (total <= 0 || weights.length === 0) {
+    return [];
+  }
+
+  const safeWeights = weights.map((weight) =>
+    Number.isFinite(weight) && weight > 0 ? weight : 1
+  );
+  const totalWeight = safeWeights.reduce((sum, weight) => sum + weight, 0) || 1;
+  const rawCounts = safeWeights.map((weight) => (total * weight) / totalWeight);
+  const counts = rawCounts.map((count) => Math.floor(count));
+  let remainder = total - counts.reduce((sum, count) => sum + count, 0);
+  const indexesByRemainder = rawCounts
+    .map((count, index) => ({ index, remainder: count - Math.floor(count) }))
+    .sort((left, right) => right.remainder - left.remainder);
+
+  for (let index = 0; remainder > 0; index += 1, remainder -= 1) {
+    counts[indexesByRemainder[index % indexesByRemainder.length].index] += 1;
+  }
+
+  return counts;
 }
 
 function namesToIds<T extends { id: string; name?: string; workingTitle?: string }>(

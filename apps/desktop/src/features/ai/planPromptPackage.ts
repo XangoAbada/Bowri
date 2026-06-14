@@ -25,6 +25,7 @@ type PlanContextKey =
   | "actChapters"
   | "allChapters"
   | "targetChapter"
+  | "chapterScenes"
   | "chapterAct"
   | "neighborChapters"
   | "targetScene"
@@ -280,7 +281,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_chapter_plan",
     targetKind: "chapter",
     userInstruction:
-      "Wygeneruj tylko roboczy szkielet rozdziałów po istniejących aktach: numer, tytuł roboczy, krótkie streszczenie i wstępny cel. Nie wymagaj pełnego konfliktu, punktu zwrotnego, beatów ani wątków; jeśli istnieją, możesz użyć ich wyłącznie jako kontekstu."
+      "Wygeneruj tylko roboczy szkielet rozdziałów po istniejących aktach: numer, tytuł roboczy, krótkie streszczenie, wstępny cel i docelową liczbę słów dla każdego rozdziału. Jeśli książka ma docelową liczbę słów, rozdziel ją sensownie między rozdziały z uwzględnieniem rytmu aktów; jeśli jej nie ma, zaproponuj realistyczne orientacyjne wartości. Nie wymagaj pełnego konfliktu, punktu zwrotnego, beatów ani wątków; jeśli istnieją, możesz użyć ich wyłącznie jako kontekstu."
   },
   chapterSummary: {
     key: "chapterSummary",
@@ -344,7 +345,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_chapter_scene_breakdown",
     targetKind: "scene",
     userInstruction:
-      "Rozbij wybrany rozdział na 2-5 propozycji scen. Każda scena ma mieć tytuł, streszczenie, cel, konflikt, wynik, target słów, sugerowane istniejące relacje oraz informację, który beat lub obowiązek rozdziału obsługuje. Nie twórz postaci ani świata; brakujące elementy zwróć jako kandydatów Story Bible."
+      "Rozbij wybrany rozdział na 2-5 propozycji scen. Uwzględnij docelową liczbę słów rozdziału: docelowe liczby słów scen mają rozdzielać pulę rozdziału między sceny, a jeśli rozdział ma już sceny, traktuj ich docelowe liczby słów jako zajętą część puli. Każda scena ma mieć tytuł, streszczenie, cel, konflikt, wynik, docelową liczbę słów, sugerowane istniejące relacje oraz informację, który beat lub obowiązek rozdziału obsługuje. Nie twórz postaci ani świata; brakujące elementy zwróć jako kandydatów Story Bible."
   },
   sceneTitle: {
     key: "sceneTitle",
@@ -474,9 +475,10 @@ const planContextSourceLabels: Record<PlanContextKey, string> = {
   allActs: "Wszystkie akty",
   targetAct: "Docelowy akt",
   siblingActs: "Sąsiednie akty",
-  actChapters: "Rozdzialy aktu",
+  actChapters: "Rozdziały aktu",
   allChapters: "Wszystkie rozdziały",
   targetChapter: "Docelowy rozdział",
+  chapterScenes: "Sceny rozdziału",
   chapterAct: "Akt rozdziału",
   neighborChapters: "Sąsiednie rozdziały",
   targetScene: "Docelowa scena",
@@ -521,7 +523,7 @@ const planPromptContextDefaultKeys: Record<PlanFieldKey, PlanContextKey[]> = {
   sceneDraft: ["bookCore", "styleGuide", "targetChapter", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters"],
   allChapterSceneDrafts: ["bookCore", "styleGuide", "planAudit"],
   prepareChapterForScenes: ["bookCore", "targetChapter", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters"],
-  chapterSceneBreakdown: ["bookCore", "styleGuide", "targetChapter", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters", "allCharacters", "allWorldElements", "allWorldRules"],
+  chapterSceneBreakdown: ["bookCore", "styleGuide", "targetChapter", "chapterScenes", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters", "allCharacters", "allWorldElements", "allWorldRules"],
   sceneTitle: ["bookCore", "styleGuide", "targetScene", "sceneChapter", "neighborScenes", "assignedThreads"],
   sceneSummary: ["bookCore", "styleGuide", "targetScene", "sceneChapter", "neighborScenes", "assignedThreads"],
   sceneGoal: ["bookCore", "targetScene", "sceneChapter", "assignedThreads", "assignedBeats"],
@@ -816,6 +818,9 @@ function renderPlanContext(
       : "",
     isContextKeyIncluded("targetChapter", contextControl)
       ? `Docelowy rozdział: ${JSON.stringify(target.chapter ? compactChapter(target.chapter) : null)}`
+      : "",
+    isContextKeyIncluded("chapterScenes", contextControl)
+      ? `Sceny rozdziału: ${JSON.stringify(scenesForChapter(plan, target.chapter).map(compactScene))}`
       : "",
     isContextKeyIncluded("chapterAct", contextControl)
       ? `Akt rozdziału: ${JSON.stringify(target.chapter ? compactAct(actForChapter(plan, target.chapter)) : null)}`
@@ -1123,6 +1128,17 @@ function neighborScenes(
   return [scenes[index - 1], scenes[index + 1]].filter(
     (item): item is Scene => Boolean(item)
   );
+}
+
+function scenesForChapter(
+  plan: PlanPromptPackage["context"]["plan"],
+  chapter: Chapter | null | undefined
+): Scene[] {
+  if (!chapter) {
+    return [];
+  }
+
+  return orderedScenes(plan).filter((scene) => scene.chapterId === chapter.id);
 }
 
 function siblingActs(
@@ -1617,6 +1633,7 @@ function planSuggestionSchema(field: PlanFieldKey): unknown {
           workingTitle: "string",
           summary: "string",
           purpose: "string",
+          targetWordCount: 3500,
           actNameOrId: "string"
         }
       ]
