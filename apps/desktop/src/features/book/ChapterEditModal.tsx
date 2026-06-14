@@ -231,24 +231,29 @@ function ChapterForm({
   const selectedThreads = plan.threads.filter((thread) => threadIds.includes(thread.id));
   const selectedBeats = plan.beats.filter((beat) => beatIds.includes(beat.id));
   const targetWords = parseOptionalPositiveInt(targetWordCount);
-  const completionItems = [
+  const skeletonItems = [
     { label: "Tytuł roboczy", complete: Boolean(workingTitle.trim()) },
     { label: "Akt", complete: Boolean(actId) },
+    { label: "Cel wstępny", complete: Boolean(purpose.trim()) }
+  ];
+  const contractItems = [
     { label: "Streszczenie", complete: Boolean(summary.trim()) },
-    { label: "Cel", complete: Boolean(purpose.trim()) },
     { label: "Konflikt", complete: Boolean(conflict.trim()) },
     { label: "Punkt zwrotny", complete: Boolean(turningPoint.trim()) },
+    { label: "Cel słów", complete: Boolean(targetWords) },
     { label: "Beaty", complete: beatIds.length > 0 },
     { label: "Wątki", complete: threadIds.length > 0 }
   ];
+  const completionItems = [...skeletonItems, ...contractItems];
   const completedItems = completionItems.filter((item) => item.complete).length;
-  const completionPercent = Math.round((completedItems / completionItems.length) * 100);
-  const visualStatus =
-    completionPercent >= 88
-      ? "Gotowy do pisania"
-      : completionPercent >= 50
-        ? "W trakcie"
-        : "Szkic";
+  const skeletonComplete = skeletonItems.every((item) => item.complete);
+  const contractComplete = contractItems.every((item) => item.complete);
+  const visualStatus = !skeletonComplete
+    ? "Szkic szkieletu"
+    : contractComplete
+      ? "Kontrakt gotowy"
+      : "Szkielet gotowy";
+  const visualTone = contractComplete ? "ready" : skeletonComplete ? "active" : "draft";
   const openChapterLabel = chapter ? `Otwórz rozdział ${chapter.workingTitle}` : "";
 
   return (
@@ -271,9 +276,9 @@ function ChapterForm({
         </span>
         <span
           className={
-            completionPercent >= 88
+            visualTone === "ready"
               ? "chapter-status-pill ready"
-              : completionPercent >= 50
+              : visualTone === "active"
                 ? "chapter-status-pill active"
                 : "chapter-status-pill"
           }
@@ -288,7 +293,7 @@ function ChapterForm({
           <section className="chapter-edit-section">
             <div className="chapter-section-heading">
               <LayoutList size={17} />
-              <h4>Treść rozdziału</h4>
+              <h4>Szkielet i kontrakt rozdziału</h4>
             </div>
             <div className="chapter-field-stack">
               <PlanInlineField
@@ -462,7 +467,7 @@ function ChapterForm({
       <footer className="chapter-edit-footer">
         <div className="chapter-footer-status">
           <CheckCircle2 size={16} />
-          <span>{completedItems} / {completionItems.length} elementów planu uzupełnionych</span>
+          <span>{completedItems} / {completionItems.length} elementów szkieletu i kontraktu uzupełnionych</span>
         </div>
         <div className="chapter-footer-actions">
           {onDelete ? (

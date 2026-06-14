@@ -180,11 +180,11 @@ export type PlanPromptPackage = {
 export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
   storyStructure: {
     key: "storyStructure",
-    label: "Struktura fabuly",
+    label: "Struktura fabuły",
     action: "suggest_story_structure",
     targetKind: "structure",
     userInstruction:
-      "Zaproponuj tylko typ struktury fabularnej dla ksiazki. Nie generuj ani nie edytuj opisu, notatek, aktow, beatow, watkow ani rozdzialow."
+      "Zaproponuj tylko typ struktury fabularnej dla książki. Nie generuj ani nie edytuj opisu, notatek, aktów, beatów, wątków ani rozdziałów."
   },
   storyStructureDescription: {
     key: "storyStructureDescription",
@@ -192,7 +192,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "suggest_story_structure",
     targetKind: "structure",
     userInstruction:
-      "Wygeneruj tylko wartosc pola opisu struktury. Jesli pole ma juz tresc, rozwin ja w kompletna docelowa wersje bez zmiany typu struktury, notatek ani encji planu."
+      "Wygeneruj tylko wartość pola opisu struktury. Jeśli pole ma już treść, rozwiń ją w kompletną docelową wersję bez zmiany typu struktury, notatek ani encji planu."
   },
   storyStructureNotes: {
     key: "storyStructureNotes",
@@ -200,7 +200,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "suggest_story_structure",
     targetKind: "structure",
     userInstruction:
-      "Wygeneruj tylko wartosc pola notatek do planu. Jesli pole ma juz tresc, rozwin ja w kompletna docelowa wersje bez zmiany typu struktury, opisu ani encji planu."
+      "Wygeneruj tylko wartość pola notatek do planu. Jeśli pole ma już treść, rozwiń ją w kompletną docelową wersję bez zmiany typu struktury, opisu ani encji planu."
   },
   acts: {
     key: "acts",
@@ -208,7 +208,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_acts",
     targetKind: "act",
     userInstruction:
-      "Wygeneruj tylko akty z zakresem fabuly, celem i zwiezlym streszczeniem. Nie generuj beatow, watkow ani rozdzialow."
+      "Wygeneruj tylko akty z zakresem fabuły, celem i zwięzłym streszczeniem. Nie generuj beatów, wątków ani rozdziałów."
   },
   actPurpose: {
     key: "actPurpose",
@@ -216,7 +216,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_act_field",
     targetKind: "act",
     userInstruction:
-      "Wygeneruj tylko wartosc pola celu wybranego aktu, korzystajac z planu jako kontekstu. Nie zmieniaj innych pol ani encji."
+      "Wygeneruj tylko wartość pola celu wybranego aktu, korzystając z planu jako kontekstu. Nie zmieniaj innych pól ani encji."
   },
   actSummary: {
     key: "actSummary",
@@ -224,7 +224,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_act_field",
     targetKind: "act",
     userInstruction:
-      "Wygeneruj tylko wartosc pola streszczenia wybranego aktu. Nie zmieniaj innych pol ani encji."
+      "Wygeneruj tylko wartość pola streszczenia wybranego aktu. Nie zmieniaj innych pól ani encji."
   },
   beatSheet: {
     key: "beatSheet",
@@ -232,7 +232,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_beat_sheet",
     targetKind: "beat",
     userInstruction:
-      "Wygeneruj tylko beat sheet przypisany do istniejacych rozdzialow. Nie generuj struktury, aktow, watkow ani rozdzialow."
+      "Wygeneruj tylko beat sheet przypisany do istniejących roboczych rozdziałów. Traktuj beat jako obowiązek strukturalny rozdziału. Nie generuj struktury, aktów, wątków ani nowych rozdziałów."
   },
   beatName: {
     key: "beatName",
@@ -240,7 +240,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_beat_field",
     targetKind: "beat",
     userInstruction:
-      "Wygeneruj tylko wartosc pola nazwy wybranego beatu. Nie zmieniaj roli, opisu, przypisania ani innych elementow planu."
+      "Wygeneruj tylko wartość pola nazwy wybranego beatu. Nie zmieniaj roli, opisu, przypisania ani innych elementów planu."
   },
   beatRole: {
     key: "beatRole",
@@ -248,7 +248,7 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_beat_field",
     targetKind: "beat",
     userInstruction:
-      "Wygeneruj tylko wartosc pola roli wybranego beatu w strukturze historii. Nie zmieniaj nazwy, opisu, przypisania ani innych elementow planu."
+      "Wygeneruj tylko wartość pola roli wybranego beatu w strukturze historii. Nie zmieniaj nazwy, opisu, przypisania ani innych elementów planu."
   },
   beatDescription: {
     key: "beatDescription",
@@ -256,31 +256,31 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "generate_beat_field",
     targetKind: "beat",
     userInstruction:
-      "Wygeneruj tylko wartosc pola opisu wybranego beatu. Nie zmieniaj nazwy, roli, przypisania ani innych elementow planu."
+      "Wygeneruj tylko wartość pola opisu wybranego beatu. Nie zmieniaj nazwy, roli, przypisania ani innych elementów planu."
   },
   plotThreads: {
     key: "plotThreads",
-    label: "Watki",
+    label: "Wątki",
     action: "generate_plot_threads",
     targetKind: "thread",
     userInstruction:
-      "Zaproponuj tylko watki fabularne wraz z rola i kolorem do mapy planu. Nie generuj struktury, aktow, beatow ani rozdzialow."
+      "Zaproponuj tylko wątki fabularne wraz z rolą i kolorem do mapy planu. Korzystaj z roboczego szkieletu rozdziałów jako kontekstu przebiegu, ale nie generuj struktury, aktów, beatów ani nowych rozdziałów."
   },
   threadDescription: {
     key: "threadDescription",
-    label: "Opis watku",
+    label: "Opis wątku",
     action: "generate_plot_threads",
     targetKind: "thread",
     userInstruction:
-      "Wygeneruj tylko wartosc pola opisu wybranego watku fabularnego. Nie zmieniaj nazwy, statusu, koloru, przypiec do rozdzialow ani innych elementow planu."
+      "Wygeneruj tylko wartość pola opisu wybranego wątku fabularnego. Nie zmieniaj nazwy, statusu, koloru, przypięć do rozdziałów ani innych elementów planu."
   },
   chapterPlan: {
     key: "chapterPlan",
-    label: "Plan rozdzialow",
+    label: "Szkielet rozdziałów",
     action: "generate_chapter_plan",
     targetKind: "chapter",
     userInstruction:
-      "Wygeneruj tylko plan rozdzialow z celami, konfliktami, punktami zwrotnymi oraz przypisaniami do istniejacych aktow, beatow i watkow."
+      "Wygeneruj tylko roboczy szkielet rozdziałów po istniejących aktach: numer, tytuł roboczy, krótkie streszczenie i wstępny cel. Nie wymagaj pełnego konfliktu, punktu zwrotnego, beatów ani wątków; jeśli istnieją, możesz użyć ich wyłącznie jako kontekstu."
   },
   chapterSummary: {
     key: "chapterSummary",
@@ -432,12 +432,12 @@ export const planFieldConfigs: Record<PlanFieldKey, PlanFieldConfig> = {
     action: "find_plan_gaps",
     targetKind: "audit",
     userInstruction:
-      "Znajdz luki, slabe napiecie, watki bez payoffu i rozdzialy bez celu."
+      "Znajdź luki, słabe napięcie, wątki bez payoffu i rozdziały bez celu."
   }
 };
 
 const planContextSourceLabels: Record<PlanContextKey, string> = {
-  storyStructure: "Struktura fabuly",
+  storyStructure: "Struktura fabuły",
   storyStructureDescription: "Opis struktury",
   storyStructureNotes: "Notatki do planu",
   acts: "Akty",
@@ -447,15 +447,15 @@ const planContextSourceLabels: Record<PlanContextKey, string> = {
   beatName: "Nazwa beatu",
   beatRole: "Rola beatu",
   beatDescription: "Opis beatu",
-  plotThreads: "Watki",
-  threadDescription: "Opis watku",
-  chapterPlan: "Plan rozdzialow",
-  chapterSummary: "Streszczenie rozdzialu",
-  chapterPurpose: "Cel rozdzialu",
-  chapterConflict: "Konflikt rozdzialu",
+  plotThreads: "Wątki",
+  threadDescription: "Opis wątku",
+  chapterPlan: "Szkielet rozdziałów",
+  chapterSummary: "Streszczenie rozdziału",
+  chapterPurpose: "Cel rozdziału",
+  chapterConflict: "Konflikt rozdziału",
   chapterTurningPoint: "Punkt zwrotny",
   sceneDraft: "Nowa scena",
-  allChapterSceneDrafts: "Sceny dla rozdzialow",
+  allChapterSceneDrafts: "Sceny dla rozdziałów",
   prepareChapterForScenes: "Przygotowanie rozdziału",
   chapterSceneBreakdown: "Rozbicie rozdziału na sceny",
   sceneTitle: "Tytuł sceny",
@@ -463,41 +463,41 @@ const planContextSourceLabels: Record<PlanContextKey, string> = {
   sceneGoal: "Cel sceny",
   sceneConflict: "Konflikt sceny",
   sceneOutcome: "Wynik sceny",
-  threadChapterDescription: "Opis watku w rozdziale",
-  chapterThreadSuggestions: "Powiazane watki",
-  allChapterThreadSuggestions: "Watki dla rozdzialow",
-  chapterBeatSuggestions: "Powiazane beaty",
+  threadChapterDescription: "Opis wątku w rozdziale",
+  chapterThreadSuggestions: "Powiązane wątki",
+  allChapterThreadSuggestions: "Wątki dla rozdziałów",
+  chapterBeatSuggestions: "Powiązane beaty",
   sceneRelationSuggestions: "Relacje sceny",
   planGaps: "Luki planu",
-  bookCore: "Rdzen koncepcji",
+  bookCore: "Rdzeń koncepcji",
   styleGuide: "Style guide",
   allActs: "Wszystkie akty",
   targetAct: "Docelowy akt",
-  siblingActs: "Sasiednie akty",
+  siblingActs: "Sąsiednie akty",
   actChapters: "Rozdzialy aktu",
-  allChapters: "Wszystkie rozdzialy",
-  targetChapter: "Docelowy rozdzial",
-  chapterAct: "Akt rozdzialu",
-  neighborChapters: "Sasiednie rozdzialy",
+  allChapters: "Wszystkie rozdziały",
+  targetChapter: "Docelowy rozdział",
+  chapterAct: "Akt rozdziału",
+  neighborChapters: "Sąsiednie rozdziały",
   targetScene: "Docelowa scena",
   sceneChapter: "Rozdział sceny",
   neighborScenes: "Sąsiednie sceny",
   assignedBeats: "Przypisane beaty",
-  assignedThreads: "Przypisane watki",
+  assignedThreads: "Przypisane wątki",
   allBeats: "Wszystkie beaty",
   targetBeat: "Docelowy beat",
-  beatChapter: "Rozdzial beatu",
-  siblingBeats: "Sasiednie beaty",
-  allThreads: "Wszystkie watki",
-  targetThread: "Docelowy watek",
-  threadChapters: "Rozdzialy watku",
-  threadActs: "Akty watku",
-  targetThreadChapter: "Relacja watku z rozdzialem",
-  threadNeighborChapters: "Sasiednie rozdzialy watku",
+  beatChapter: "Rozdział beatu",
+  siblingBeats: "Sąsiednie beaty",
+  allThreads: "Wszystkie wątki",
+  targetThread: "Docelowy wątek",
+  threadChapters: "Rozdziały wątku",
+  threadActs: "Akty wątku",
+  targetThreadChapter: "Relacja wątku z rozdziałem",
+  threadNeighborChapters: "Sąsiednie rozdziały wątku",
   allCharacters: "Istniejące postacie",
   allWorldElements: "Istniejące elementy świata",
   allWorldRules: "Istniejące reguły świata",
-  planAudit: "Pelny plan"
+  planAudit: "Pełny plan"
 };
 
 const planPromptContextDefaultKeys: Record<PlanFieldKey, PlanContextKey[]> = {
@@ -513,7 +513,7 @@ const planPromptContextDefaultKeys: Record<PlanFieldKey, PlanContextKey[]> = {
   beatDescription: ["storyStructure", "targetBeat", "beatChapter", "siblingBeats", "assignedThreads"],
   plotThreads: ["bookCore", "styleGuide", "storyStructure", "allThreads", "allChapters"],
   threadDescription: ["bookCore", "targetThread", "threadChapters", "threadActs"],
-  chapterPlan: ["bookCore", "styleGuide", "storyStructure", "allActs", "allChapters", "allBeats", "allThreads"],
+  chapterPlan: ["bookCore", "styleGuide", "storyStructure", "allActs", "allChapters"],
   chapterSummary: ["bookCore", "targetChapter", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters"],
   chapterPurpose: ["bookCore", "targetChapter", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters"],
   chapterConflict: ["bookCore", "targetChapter", "chapterAct", "assignedBeats", "assignedThreads", "neighborChapters"],
@@ -602,27 +602,27 @@ export function renderPlanPromptPackage(promptPackage: PlanPromptPackage): strin
   const modeInstruction =
     promptPackage.context.generationMode === "expand"
       ? `Tryb pracy: expand.
-Obecna zawartosc pola "${config.label}" jest materialem wyjsciowym:
+Obecna zawartość pola "${config.label}" jest materiałem wyjściowym:
 ${emptyFallback(promptPackage.context.targetFieldCurrentValue)}
 
-Uwzglednij te tresc i rozwin ja w lepsza, pelniejsza propozycje. Mozesz przebudowac, doprecyzowac i przepisac istniejaca tresc, jesli dzieki temu wynik bedzie spojniejszy. Zwroc kompletna docelowa wartosc pola, nie sam dopisek.`
+Uwzględnij tę treść i rozwiń ją w lepszą, pełniejszą propozycję. Możesz przebudować, doprecyzować i przepisać istniejącą treść, jeśli dzięki temu wynik będzie spójniejszy. Zwróć kompletną docelową wartość pola, nie sam dopisek.`
       : `Tryb pracy: generate.
-Pole "${config.label}" jest puste albo wymaga nowej propozycji. Wygeneruj kompletna docelowa wartosc pola.`;
+Pole "${config.label}" jest puste albo wymaga nowej propozycji. Wygeneruj kompletną docelową wartość pola.`;
 
   return `# Role
-Jestes asystentem pisarskim pracujacym wewnatrz StoryForge2.
+Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
 
 # Task
 ${promptPackage.userInstruction}
 
 # Hard Rules
-- Pisz po polsku, chyba ze projekt ma inny jezyk.
-- Dla locale "pl" uzywaj poprawnych polskich znakow.
-- Nie zapisuj danych. Zwroc tylko propozycje jako JSON.
-- Nie kasuj istniejacych aktow, beatow, watkow ani rozdzialow; proponuj zmiany i dodatki.
-- Elementy planu, ktore odwolujesz, identyfikuj po id albo dokladnej nazwie.
-- Zwroc tylko sekcje przewidziane w Output Contract dla docelowego pola. Nie dopisuj pozostalych czesci planu.
-- Odpowiedz wylacznie poprawnym JSON bez trailing commas.
+- Pisz po polsku, chyba że projekt ma inny język.
+- Dla locale "pl" używaj poprawnych polskich znaków.
+- Nie zapisuj danych. Zwróć tylko propozycje jako JSON.
+- Nie kasuj istniejących aktów, beatów, wątków ani rozdziałów; proponuj zmiany i dodatki.
+- Elementy planu, które odwołujesz, identyfikuj po id albo dokładnej nazwie.
+- Zwróć tylko sekcje przewidziane w Output Contract dla docelowego pola. Nie dopisuj pozostałych części planu.
+- Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
 
 ${authorPriority}
 
@@ -647,7 +647,7 @@ Migawka docelowego elementu: ${JSON.stringify(promptPackage.context.targetEntity
 ${modeInstruction}
 
 # Output Contract
-Zwroc JSON:
+Zwróć JSON:
 ${JSON.stringify(promptPackage.outputContract.schema, null, 2)}
 `;
 }
@@ -757,29 +757,29 @@ function renderBookContext(
   contextControl?: PromptContextControl
 ): string {
   if (contextControl && !isContextKeyIncluded("bookCore", contextControl)) {
-    return "(pominieto przez autora)";
+    return "(pominięto przez autora)";
   }
 
   return [
-    `- Tytul roboczy: ${emptyFallback(book.workingTitle)}`,
+    `- Tytuł roboczy: ${emptyFallback(book.workingTitle)}`,
     `- Premise: ${emptyFallback(book.premise)}`,
     `- Rozszerzona premisa: ${emptyFallback(book.expandedPremise)}`,
     `- Logline: ${emptyFallback(book.logline)}`,
     `- Konflikt centralny: ${emptyFallback(book.centralConflict)}`,
-    `- Sila przeciwna: ${emptyFallback(book.antagonistForce)}`,
+    `- Siła przeciwna: ${emptyFallback(book.antagonistForce)}`,
     `- Stawki: ${emptyFallback(book.stakes)}`,
     `- Setting: ${emptyFallback(book.settingSketch)}`,
-    `- Kierunek zakonczenia: ${emptyFallback(book.endingDirection)}`,
+    `- Kierunek zakończenia: ${emptyFallback(book.endingDirection)}`,
     `- Gatunek: ${emptyFallback([book.genre, book.subgenre].filter(Boolean).join(", "))}`,
     `- Odbiorcy: ${emptyFallback(book.targetAudience)}`,
     `- Ton: ${emptyFallback(book.tone)}`,
     `- POV: ${emptyFallback(book.pointOfView)}`,
-    `- Docelowa liczba slow: ${book.targetWordCount ?? "(brak)"}`,
+    `- Docelowa liczba słów: ${book.targetWordCount ?? "(brak)"}`,
     `- Tematy: ${emptyFallback(renderJsonList(book.themesJson))}`,
     `- Style guide: ${
       !contextControl || isContextKeyIncluded("styleGuide", contextControl)
         ? emptyFallback(book.styleGuide)
-        : "(pominieto przez autora)"
+        : "(pominięto przez autora)"
     }`
   ].join("\n");
 }
@@ -806,22 +806,22 @@ function renderPlanContext(
       ? `Docelowy akt: ${JSON.stringify(target.act ? compactAct(target.act) : null)}`
       : "",
     isContextKeyIncluded("siblingActs", contextControl)
-      ? `Sasiednie akty: ${JSON.stringify(siblingActs(plan, target.act).map(compactAct))}`
+      ? `Sąsiednie akty: ${JSON.stringify(siblingActs(plan, target.act).map(compactAct))}`
       : "",
     isContextKeyIncluded("actChapters", contextControl)
-      ? `Rozdzialy aktu: ${JSON.stringify(chaptersForAct(plan, target.act?.id).map(compactChapter))}`
+      ? `Rozdziały aktu: ${JSON.stringify(chaptersForAct(plan, target.act?.id).map(compactChapter))}`
       : "",
     isContextKeyIncluded("allChapters", contextControl)
-      ? `Wszystkie rozdzialy: ${JSON.stringify(orderedChapters(plan).map(compactChapter))}`
+      ? `Wszystkie rozdziały: ${JSON.stringify(orderedChapters(plan).map(compactChapter))}`
       : "",
     isContextKeyIncluded("targetChapter", contextControl)
-      ? `Docelowy rozdzial: ${JSON.stringify(target.chapter ? compactChapter(target.chapter) : null)}`
+      ? `Docelowy rozdział: ${JSON.stringify(target.chapter ? compactChapter(target.chapter) : null)}`
       : "",
     isContextKeyIncluded("chapterAct", contextControl)
-      ? `Akt rozdzialu: ${JSON.stringify(target.chapter ? compactAct(actForChapter(plan, target.chapter)) : null)}`
+      ? `Akt rozdziału: ${JSON.stringify(target.chapter ? compactAct(actForChapter(plan, target.chapter)) : null)}`
       : "",
     isContextKeyIncluded("neighborChapters", contextControl)
-      ? `Sasiednie rozdzialy: ${JSON.stringify(neighborChapters(plan, target.chapter).map(compactChapter))}`
+      ? `Sąsiednie rozdziały: ${JSON.stringify(neighborChapters(plan, target.chapter).map(compactChapter))}`
       : "",
     isContextKeyIncluded("targetScene", contextControl)
       ? `Docelowa scena: ${JSON.stringify(target.scene ? compactScene(target.scene) : null)}`
@@ -836,7 +836,7 @@ function renderPlanContext(
       ? `Przypisane beaty: ${JSON.stringify(assignedBeatsForChapter(plan, target.chapter).map((beat) => compactBeat(plan, beat)))}`
       : "",
     isContextKeyIncluded("assignedThreads", contextControl)
-      ? `Przypisane watki: ${JSON.stringify(assignedThreadsForChapter(plan, target.chapter).map(compactThread))}`
+      ? `Przypisane wątki: ${JSON.stringify(assignedThreadsForChapter(plan, target.chapter).map(compactThread))}`
       : "",
     isContextKeyIncluded("allBeats", contextControl)
       ? `Wszystkie beaty: ${JSON.stringify(plan.beats.map((beat) => compactBeat(plan, beat)))}`
@@ -845,31 +845,31 @@ function renderPlanContext(
       ? `Docelowy beat: ${JSON.stringify(target.beat ? compactBeat(plan, target.beat) : null)}`
       : "",
     isContextKeyIncluded("beatChapter", contextControl)
-      ? `Rozdzial beatu: ${JSON.stringify(target.beat ? compactChapter(chapterForBeat(plan, target.beat)) : null)}`
+      ? `Rozdział beatu: ${JSON.stringify(target.beat ? compactChapter(chapterForBeat(plan, target.beat)) : null)}`
       : "",
     isContextKeyIncluded("siblingBeats", contextControl)
-      ? `Sasiednie beaty: ${JSON.stringify(siblingBeats(plan, target.beat).map((beat) => compactBeat(plan, beat)))}`
+      ? `Sąsiednie beaty: ${JSON.stringify(siblingBeats(plan, target.beat).map((beat) => compactBeat(plan, beat)))}`
       : "",
     isContextKeyIncluded("allThreads", contextControl)
-      ? `Wszystkie watki: ${JSON.stringify(plan.threads.map(compactThread))}`
+      ? `Wszystkie wątki: ${JSON.stringify(plan.threads.map(compactThread))}`
       : "",
     isContextKeyIncluded("targetThread", contextControl)
-      ? `Docelowy watek: ${JSON.stringify(target.thread ? compactThread(target.thread) : null)}`
+      ? `Docelowy wątek: ${JSON.stringify(target.thread ? compactThread(target.thread) : null)}`
       : "",
     isContextKeyIncluded("threadChapters", contextControl)
-      ? `Rozdzialy watku: ${JSON.stringify(chaptersForThread(plan, target.thread?.id).map(compactChapter))}`
+      ? `Rozdziały wątku: ${JSON.stringify(chaptersForThread(plan, target.thread?.id).map(compactChapter))}`
       : "",
     isContextKeyIncluded("threadActs", contextControl)
-      ? `Akty watku: ${JSON.stringify(actsForThread(plan, target.thread?.id).map(compactAct))}`
+      ? `Akty wątku: ${JSON.stringify(actsForThread(plan, target.thread?.id).map(compactAct))}`
       : "",
     isContextKeyIncluded("targetThreadChapter", contextControl)
-      ? `Relacja watku z rozdzialem: ${JSON.stringify(target.relation ? compactChapterThread(plan, target.relation) : null)}`
+      ? `Relacja wątku z rozdziałem: ${JSON.stringify(target.relation ? compactChapterThread(plan, target.relation) : null)}`
       : "",
     isContextKeyIncluded("threadNeighborChapters", contextControl)
-      ? `Sasiednie rozdzialy watku: ${JSON.stringify(threadNeighborChapters(plan, target.relation).map(compactChapter))}`
+      ? `Sąsiednie rozdziały wątku: ${JSON.stringify(threadNeighborChapters(plan, target.relation).map(compactChapter))}`
       : "",
     isContextKeyIncluded("planAudit", contextControl)
-      ? `Pelny plan: ${JSON.stringify({
+      ? `Pełny plan: ${JSON.stringify({
           structure: {
             type: plan.structureType,
             description: plan.structureDescription,
@@ -1617,12 +1617,7 @@ function planSuggestionSchema(field: PlanFieldKey): unknown {
           workingTitle: "string",
           summary: "string",
           purpose: "string",
-          conflict: "string",
-          turningPoint: "string",
-          actNameOrId: "string",
-          beatNamesOrIds: ["string"],
-          threadNamesOrIds: ["string"],
-          targetWordCount: 2500
+          actNameOrId: "string"
         }
       ]
     };

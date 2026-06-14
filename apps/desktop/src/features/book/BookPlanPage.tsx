@@ -132,6 +132,7 @@ type ChapterReadiness = {
   percent: number;
   label: string;
   missing: string[];
+  tone: "draft" | "active" | "ready";
 };
 type ThreadEditTarget = "new" | string | null;
 type BulkChapterGenerationField = "allChapterSceneDrafts" | "allChapterThreadSuggestions";
@@ -154,9 +155,9 @@ type PlanPromptEntity = Act | Beat | PlotThread | Chapter | ChapterThread | Scen
 const planSteps: Array<{ key: PlanStep; label: string; icon: typeof Map }> = [
   { key: "structure", label: "Struktura", icon: Map },
   { key: "acts", label: "Akty", icon: Flag },
+  { key: "chapters", label: "Szkielet rozdziałów", icon: FileText },
   { key: "threads", label: "Wątki", icon: GitBranch },
   { key: "beats", label: "Beaty", icon: Target },
-  { key: "chapters", label: "Rozdziały", icon: FileText },
   { key: "scenes", label: "Sceny", icon: ClipboardList }
 ];
 
@@ -795,7 +796,34 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
-    ) : activeStep === "scenes" ? (
+    ) : activeStep === "threads" ? (
+      <ThreadsStep
+        bookId={bookId}
+        plan={plan}
+        saving={threadMutation.isPending || chapterMutation.isPending || chapterThreadMutation.isPending}
+        onSave={(input) => threadMutation.mutate(input)}
+        onSaveChapter={(input) => chapterMutation.mutate(input)}
+        onSaveChapterThreadRelation={(input) => chapterThreadMutation.mutate(input)}
+        onDelete={(item) => deleteMutation.mutate(item)}
+        onSelect={setSelectedItem}
+        onGenerate={activatePlanPromptContext}
+        onActivatePrompt={activatePlanPromptContext}
+        onSuggestThreadsForAllChapters={() => queueBulkChapterGeneration("allChapterThreadSuggestions")}
+      />
+    ) : activeStep === "beats" ? (
+      <BeatsStep
+        bookId={bookId}
+        plan={plan}
+        saving={beatMutation.isPending || beatMoveMutation.isPending}
+        onSave={(input) => beatMutation.mutate(input)}
+        onMoveBeat={(input) => beatMoveMutation.mutate(input)}
+        onDelete={(item) => deleteMutation.mutate(item)}
+        onOpenBeat={openBeatModal}
+        onCreateBeat={openNewBeatModal}
+        onGenerate={activatePlanPromptContext}
+        onActivatePrompt={activatePlanPromptContext}
+      />
+    ) : (
       <ScenesStep
         bookId={bookId}
         plan={plan}
@@ -817,33 +845,6 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onGenerate={activatePlanPromptContext}
         onGenerateForAllChapters={() => queueBulkChapterGeneration("allChapterSceneDrafts")}
       />
-    ) : activeStep === "beats" ? (
-      <BeatsStep
-        bookId={bookId}
-        plan={plan}
-        saving={beatMutation.isPending || beatMoveMutation.isPending}
-        onSave={(input) => beatMutation.mutate(input)}
-        onMoveBeat={(input) => beatMoveMutation.mutate(input)}
-        onDelete={(item) => deleteMutation.mutate(item)}
-        onOpenBeat={openBeatModal}
-        onCreateBeat={openNewBeatModal}
-        onGenerate={activatePlanPromptContext}
-        onActivatePrompt={activatePlanPromptContext}
-      />
-    ) : (
-      <ThreadsStep
-        bookId={bookId}
-        plan={plan}
-        saving={threadMutation.isPending || chapterMutation.isPending || chapterThreadMutation.isPending}
-        onSave={(input) => threadMutation.mutate(input)}
-        onSaveChapter={(input) => chapterMutation.mutate(input)}
-        onSaveChapterThreadRelation={(input) => chapterThreadMutation.mutate(input)}
-        onDelete={(item) => deleteMutation.mutate(item)}
-        onSelect={setSelectedItem}
-        onGenerate={activatePlanPromptContext}
-        onActivatePrompt={activatePlanPromptContext}
-        onSuggestThreadsForAllChapters={() => queueBulkChapterGeneration("allChapterThreadSuggestions")}
-      />
     );
 
   return (
@@ -851,10 +852,10 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       <header className="plan-page-header">
         <div>
           <p className="eyebrow">Plan powieści</p>
-          <h2>Od struktury aktów do rozdziałów</h2>
+          <h2>Od struktury do scen</h2>
           <p>
-            Prowadź historię krok po kroku, a po ułożeniu rozdziałów przejdź do
-            podglądu całej konstrukcji.
+            Najpierw ułóż akty i roboczy szkielet rozdziałów, potem rozpisz przez
+            niego wątki, beaty i sceny.
           </p>
         </div>
         <div className="plan-header-actions" role="group" aria-label="Tryb planu">
@@ -1574,6 +1575,10 @@ function ActsStep({
         />
       }
     >
+      <p className="muted-text">
+        Po ustawieniu aktów utwórz szkielet rozdziałów: robocze kontenery, do których
+        później przypniesz wątki i beaty.
+      </p>
       <div className="plan-grid-list">
         {plan.acts.map((act) => (
           <ActForm
@@ -2255,8 +2260,11 @@ function BeatsStep({
             </span>
             <div>
               <p className="eyebrow">Beaty</p>
-              <h3>Mapa beatów według rozdziałów</h3>
-              <p>{visibleBeats.length} / {plan.beats.length} beatów w widoku</p>
+              <h3>Dopnij beaty do rozdziałów</h3>
+              <p>
+                Mapa beatów porządkuje obowiązki strukturalne. Główna decyzja o
+                kontrakcie nadal dzieje się w kokpicie rozdziału.
+              </p>
             </div>
           </div>
           <div className="chapter-board-actions beat-board-actions">
@@ -2284,6 +2292,8 @@ function BeatsStep({
             </button>
             <PlanAiActions
               field="beatSheet"
+              generateLabel="Dopnij beaty"
+              generateTitle="Wygeneruj beat sheet przypisany do roboczych rozdziałów"
               onGenerate={() => onGenerate("beatSheet")}
               onActivatePrompt={() => onActivatePrompt("beatSheet")}
             />
@@ -3080,8 +3090,8 @@ function ThreadsStep({
             <span className="thread-count-badge">{plan.threads.length}</span>
           </div>
           <p>
-            Zobacz przebieg wątków przez historię, ich pokrycie w rozdziałach i szybkie
-            przypięcia do rozdziałów.
+            Rozpisz łuki i napięcia przez roboczy szkielet rozdziałów. Ten ekran jest
+            mapą przebiegu, a szczegóły kontraktu wracają do kokpitu rozdziału.
           </p>
         </div>
         <div className="thread-header-actions">
@@ -3107,11 +3117,11 @@ function ThreadsStep({
                   ? "Dodaj wątki, aby przypisać je do rozdziałów."
                   : bulkThreadSuggestionsPending
                     ? "Przypisywanie wątków do rozdziałów jest już w kolejce."
-                    : "Wygeneruj propozycje przypisania wątków do wszystkich rozdziałów."
+                    : "Wygeneruj propozycje przebiegu wątków przez wszystkie rozdziały."
             }
           >
             <Sparkles size={16} />
-            Przypisz wątki do rozdziałów
+            Rozpisz wątki przez rozdziały
           </button>
           <button type="button" className="primary-button" onClick={startNewThread}>
             <Plus size={16} />
@@ -4222,11 +4232,12 @@ function ChaptersStep({
               <FileText size={18} />
             </span>
             <div>
-              <p className="eyebrow">Rozdziały</p>
-              <h3>Kokpit rozdziału i mapa aktów</h3>
+              <p className="eyebrow">Szkielet rozdziałów</p>
+              <h3>Robocze rozdziały i kokpit kontraktu</h3>
               <p>
                 {plan.chapters.length} rozdz. / {totalWords.toLocaleString("pl-PL")} słów
-                planowanych
+                planowanych. Zacznij od roboczych kontenerów, a pełny kontrakt dopnij
+                później wątkami i beatami.
               </p>
             </div>
           </div>
@@ -4259,6 +4270,8 @@ function ChaptersStep({
             </button>
             <PlanAiActions
               field="chapterPlan"
+              generateLabel="Utwórz szkielet"
+              generateTitle="Utwórz roboczy szkielet rozdziałów po aktach"
               onGenerate={() => onGenerate("chapterPlan")}
               onActivatePrompt={() => onActivatePrompt("chapterPlan")}
             />
@@ -4722,7 +4735,7 @@ function ChapterCockpit({
       <div className="chapter-cockpit-empty">
         <FileText size={22} />
         <strong>Brak rozdziałów w aktywnym planie</strong>
-        <p>Dodaj pierwszy rozdział, żeby zacząć pracę nad kontraktem fabularnym.</p>
+        <p>Dodaj pierwszy roboczy rozdział, żeby mieć kontener dla wątków i beatów.</p>
         <button
           type="button"
           className="primary-button"
@@ -4797,9 +4810,9 @@ function ChapterCockpit({
             </h3>
             <span
               className={
-                readiness.percent >= 80
+                readiness.tone === "ready"
                   ? "chapter-status-pill ready"
-                  : readiness.percent >= 45
+                  : readiness.tone === "active"
                     ? "chapter-status-pill active"
                     : "chapter-status-pill"
               }
@@ -4813,7 +4826,7 @@ function ChapterCockpit({
               field="prepareChapterForScenes"
               targetEntity={activeChapter}
               generateLabel="Sprawdź gotowość"
-              generateTitle="Sprawdź, co blokuje przejście rozdziału do scen"
+              generateTitle="Sprawdź, czy szkielet rozdziału ma już kontrakt gotowy do scen"
               hideContextButton
               onGenerate={() => onGenerate("prepareChapterForScenes", activeChapter)}
               onActivatePrompt={() => onActivatePrompt("prepareChapterForScenes", activeChapter)}
@@ -4821,7 +4834,7 @@ function ChapterCockpit({
             <PlanAiActions
               field="chapterSceneBreakdown"
               targetEntity={activeChapter}
-              generateLabel="Rozbij na sceny"
+              generateLabel="Rozbij rozdział na sceny"
               generateTitle="Wygeneruj 2-5 scen wykonujących kontrakt rozdziału"
               hideContextButton
               onGenerate={() => onGenerate("chapterSceneBreakdown", activeChapter)}
@@ -6228,46 +6241,70 @@ function formatWordCount(value: number | null): string {
 }
 
 function chapterReadiness(plan: BookPlan, chapter: Chapter): ChapterReadiness {
-  const checks = [
+  const hasTitle = Boolean(chapter.workingTitle.trim());
+  const hasAct = Boolean(chapter.actId);
+  const hasPurpose = Boolean(chapter.purpose.trim());
+  const hasConflict = Boolean(chapter.conflict.trim());
+  const hasTurningPoint = Boolean(chapter.turningPoint.trim());
+  const hasTargetWordCount = Boolean(chapter.targetWordCount && chapter.targetWordCount > 0);
+  const hasBeats = chapterBeatIdsForChapter(plan, chapter.id).length > 0;
+  const hasThreads = chapterThreadIdsForChapter(plan, chapter.id).length > 0;
+  const hasScenes = orderedScenesForChapter(plan, chapter.id).length > 0;
+  const skeletonChecks = [
     {
-      ok: Boolean(chapter.purpose.trim()),
-      missing: "Uzupełnij cel rozdziału."
+      ok: hasTitle,
+      missing: "Nadaj roboczy tytuł rozdziału."
     },
     {
-      ok: Boolean(chapter.conflict.trim()),
+      ok: hasAct,
+      missing: "Przypisz rozdział do aktu."
+    },
+    {
+      ok: hasPurpose,
+      missing: "Uzupełnij cel rozdziału."
+    }
+  ];
+  const contractChecks = [
+    {
+      ok: hasConflict,
       missing: "Uzupełnij konflikt rozdziału."
     },
     {
-      ok: Boolean(chapter.turningPoint.trim()),
+      ok: hasTurningPoint,
       missing: "Uzupełnij punkt zwrotny rozdziału."
     },
     {
-      ok: Boolean(chapter.targetWordCount && chapter.targetWordCount > 0),
+      ok: hasTargetWordCount,
       missing: "Ustal target słów dla rozdziału."
     },
     {
-      ok: chapterBeatIdsForChapter(plan, chapter.id).length > 0,
+      ok: hasThreads,
+      missing: "Rozpisz przynajmniej jeden wątek przez rozdział."
+    },
+    {
+      ok: hasBeats,
       missing: "Dopnij przynajmniej jeden beat do rozdziału."
-    },
-    {
-      ok: chapterThreadIdsForChapter(plan, chapter.id).length > 0,
-      missing: "Dopnij przynajmniej jeden wątek do rozdziału."
-    },
-    {
-      ok: orderedScenesForChapter(plan, chapter.id).length > 0,
-      missing: "Rozbij rozdział na sceny."
     }
   ];
+  const sceneCheck = {
+    ok: hasScenes,
+    missing: "Rozbij rozdział na sceny."
+  };
+  const skeletonComplete = skeletonChecks.every((check) => check.ok);
+  const contractComplete = contractChecks.every((check) => check.ok);
+  const checks = [...skeletonChecks, ...contractChecks, sceneCheck];
   const missing = checks.filter((check) => !check.ok).map((check) => check.missing);
   const percent = Math.round(((checks.length - missing.length) / checks.length) * 100);
-  const label =
-    percent >= 80
-      ? "Gotowy do scen"
-      : percent >= 45
-        ? "Wymaga dopracowania"
-        : "Szkic kontraktu";
+  const tone = contractComplete ? "ready" : skeletonComplete ? "active" : "draft";
+  const label = !skeletonComplete
+    ? "Szkic szkieletu"
+    : !contractComplete
+      ? "Szkielet gotowy"
+      : hasScenes
+        ? "Gotowy do pisania"
+        : "Gotowy do scen";
 
-  return { percent, label, missing };
+  return { percent, label, missing, tone };
 }
 
 function chapterStoryBibleNeeds(plan: BookPlan, scenes: Scene[]): string[] {
