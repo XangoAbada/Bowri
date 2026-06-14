@@ -4544,7 +4544,14 @@
 }
 
 .chapter-view-toggle {
-  min-width: min(260px, 100%);
+  flex: 0 0 auto;
+  width: fit-content;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.chapter-view-toggle button {
+  flex: 0 0 auto;
 }
 
 .chapter-inheritance-section {
