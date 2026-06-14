@@ -1,4 +1,4 @@
-import { Check, CircleStop, Clock3, FileJson, GitBranch, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
+import { Check, CircleStop, Clock3, FileJson, GitBranch, Link2, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
@@ -27,6 +27,8 @@ import {
   saveStoryStructure,
   setActivePlanVersion,
   setSceneRelations,
+  setWorldElementRelations,
+  setWorldRuleRelations,
   upsertAct,
   upsertBeat,
   upsertChapter,
@@ -42,6 +44,7 @@ import {
 } from "../../shared/api/commands";
 import type {
   BookConceptInput,
+  BookPlan,
   Character,
   CharacterMemory,
   CharacterRelation,
@@ -53,7 +56,8 @@ import type {
   UpsertCharacterMemoryInput,
   UpsertCharacterRelationInput,
   UpsertWorldElementInput,
-  UpsertWorldRuleInput
+  UpsertWorldRuleInput,
+  WorldWorkspace
 } from "../../shared/api/types";
 import { parseConceptFieldSuggestion } from "./conceptFieldSuggestion";
 import { useCodexSettingsStore } from "./codexSettingsStore";
@@ -88,12 +92,14 @@ import {
 import {
   parseSceneStoryBibleAuditResult,
   buildSceneStoryBibleAuditPromptPackage,
+  ScenePlanAuditSnapshot,
   renderSceneStoryBibleAuditPromptPackage,
   SCENE_STORY_BIBLE_AUDIT_FIELD
 } from "./sceneStoryBibleAuditPromptPackage";
 import { buildScenePromptContext } from "./scenePromptContext";
 import {
   PendingSceneAuditPrompt,
+  PendingSceneAssignment,
   SceneDiscovery,
   useSceneDiscoveryStore
 } from "./sceneDiscoveryStore";
@@ -441,7 +447,9 @@ export function AiProposalPanel({
   const retryProposal = useProposalStore((state) => state.retryProposal);
   const cancelProposal = useProposalStore((state) => state.cancelProposal);
   const addAuditPrompt = useSceneDiscoveryStore((state) => state.addAuditPrompt);
+  const addAssignment = useSceneDiscoveryStore((state) => state.addAssignment);
   const pendingAuditPrompts = useSceneDiscoveryStore((state) => state.pendingAuditPrompts);
+  const pendingAssignments = useSceneDiscoveryStore((state) => state.pendingAssignments);
   const visibleProposals = proposals
     .filter((proposal) => proposal.projectId === projectId)
     .sort(compareProposalsForPanel);
@@ -453,6 +461,10 @@ export function AiProposalPanel({
   const visibleAuditPrompts = useMemo(
     () => pendingAuditPrompts.filter((prompt) => prompt.projectId === projectId),
     [pendingAuditPrompts, projectId]
+  );
+  const visibleAssignments = useMemo(
+    () => pendingAssignments.filter((assignment) => assignment.projectId === projectId),
+    [pendingAssignments, projectId]
   );
   const persistentProposalQuery = useQuery({
     queryKey: ["ai-proposals", projectId],
@@ -632,7 +644,7 @@ export function AiProposalPanel({
           }
         }
 
-        await applyPlanProposalPayload(
+        return applyPlanProposalPayload(
           payload,
           planField,
           packageContext,
@@ -652,7 +664,6 @@ export function AiProposalPanel({
             world
           }
         );
-        return null;
       }
 
       if (proposal.scope === "characters") {
@@ -782,7 +793,7 @@ export function AiProposalPanel({
         proposalInputFromValue(value, { field: proposal.field as ConceptFieldKey })
       );
     },
-    onSuccess: async (_payload, variables) => {
+    onSuccess: async (payload, variables) => {
       const proposalId = variables.proposalId;
       const proposal = useProposalStore
         .getState()
@@ -802,6 +813,13 @@ export function AiProposalPanel({
         await queryClient.invalidateQueries({ queryKey: ["world-workspace", projectId] });
         await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
         await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      }
+      for (const prompt of sceneAuditPromptsFromPlanResult(proposal, payload)) {
+        addAuditPrompt(prompt);
+      }
+      const assignment = sceneAssignmentFromAcceptedProposal(proposal, payload);
+      if (assignment) {
+        addAssignment(assignment);
       }
       if (proposal.scope === "sceneEditor" && proposal.field !== SCENE_STORY_BIBLE_AUDIT_FIELD) {
         addAuditPrompt(sceneAuditPromptFromProposal(proposal));
@@ -831,7 +849,12 @@ export function AiProposalPanel({
     }
   });
 
-  if (visibleProposals.length === 0 && visibleDiscoveries.length === 0 && visibleAuditPrompts.length === 0) {
+  if (
+    visibleProposals.length === 0 &&
+    visibleDiscoveries.length === 0 &&
+    visibleAuditPrompts.length === 0 &&
+    visibleAssignments.length === 0
+  ) {
     return (
       <section className="context-section compact">
         <div className="section-title-row">
@@ -862,6 +885,7 @@ export function AiProposalPanel({
       </div>
 
       <SceneAuditPromptPanel prompts={visibleAuditPrompts} />
+      <SceneAssignmentPanel projectId={projectId} assignments={visibleAssignments} />
       <SceneDiscoveryPanel projectId={projectId} discoveries={visibleDiscoveries} />
 
       <div className="proposal-queue-list">
@@ -946,7 +970,7 @@ function SceneAuditPromptPanel({ prompts }: { prompts: PendingSceneAuditPrompt[]
               type="button"
               className="secondary-button"
               onClick={() => {
-                void queueSceneAuditFromAcceptedProposal(prompt.sourceProposal, enqueueProposal);
+                void queueSceneAuditFromPrompt(prompt, enqueueProposal);
                 removeAuditPrompt(prompt.id);
               }}
             >
@@ -963,6 +987,72 @@ function SceneAuditPromptPanel({ prompts }: { prompts: PendingSceneAuditPrompt[]
           </div>
         </article>
       ))}
+    </div>
+  );
+}
+
+function SceneAssignmentPanel({
+  projectId,
+  assignments
+}: {
+  projectId: string;
+  assignments: PendingSceneAssignment[];
+}) {
+  const queryClient = useQueryClient();
+  const removeAssignment = useSceneDiscoveryStore((state) => state.removeAssignment);
+  const assignmentMutation = useMutation({
+    mutationFn: assignPendingSceneAssignment,
+    onSuccess: async (_result, assignment) => {
+      removeAssignment(assignment.id);
+      await queryClient.invalidateQueries({ queryKey: ["book-plan", assignment.bookId] });
+      await queryClient.invalidateQueries({ queryKey: ["world-workspace", projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["character-workspace", projectId] });
+    }
+  });
+
+  if (assignments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="scene-discovery-list" aria-label="Elementy do przypisania do sceny">
+      <div className="scene-discovery-heading">
+        <p className="eyebrow">Przypisanie</p>
+        <span className="status-pill">{assignments.length}</span>
+      </div>
+      {assignments.map((assignment) => (
+        <article className="scene-discovery-card" key={assignment.id}>
+          <div>
+            <span className="scene-discovery-kind">{assignmentKindLabel(assignment.kind)}</span>
+            <h3>{assignment.entityTitle}</h3>
+            <p>Przypisać do sceny: {assignment.sceneTitle || "Scena"}?</p>
+            <small>Przypisanie zmieni tylko relacje tej sceny albo relacje elementu świata. Kanon encji zostaje bez zmian.</small>
+          </div>
+          <div className="scene-discovery-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => assignmentMutation.mutate(assignment)}
+              disabled={assignmentMutation.isPending}
+              title="Przypisz element do źródłowej sceny"
+            >
+              <Link2 size={14} />
+              Przypisz
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => removeAssignment(assignment.id)}
+              disabled={assignmentMutation.isPending}
+            >
+              Pomiń
+            </button>
+          </div>
+        </article>
+      ))}
+      {assignmentMutation.isError ? (
+        <p className="warning-text">Nie udało się przypisać elementu do sceny.</p>
+      ) : null}
     </div>
   );
 }
@@ -1015,12 +1105,15 @@ function SceneDiscoveryPanel({
 
     if (discovery.kind === "character") {
       const target = characterDraftFromDiscovery(discovery);
-      const promptPackage = buildCharacterPromptPackage(
-        project,
-        book,
-        characters,
-        "characterProfile",
-        target
+      const promptPackage = withSourceSceneDiscovery(
+        buildCharacterPromptPackage(
+          project,
+          book,
+          characters,
+          "characterProfile",
+          target
+        ),
+        discovery
       );
       enqueueProposal({
         scope: "characters",
@@ -1044,12 +1137,15 @@ function SceneDiscoveryPanel({
         return;
       }
       const target = characterMemoryDraftFromDiscovery(discovery, character);
-      const promptPackage = buildCharacterPromptPackage(
-        project,
-        book,
-        characters,
-        "characterMemory",
-        target
+      const promptPackage = withSourceSceneDiscovery(
+        buildCharacterPromptPackage(
+          project,
+          book,
+          characters,
+          "characterMemory",
+          target
+        ),
+        discovery
       );
       enqueueProposal({
         scope: "characters",
@@ -1070,12 +1166,15 @@ function SceneDiscoveryPanel({
       if (!target) {
         return;
       }
-      const promptPackage = buildCharacterPromptPackage(
-        project,
-        book,
-        characters,
-        "characterRelation",
-        target
+      const promptPackage = withSourceSceneDiscovery(
+        buildCharacterPromptPackage(
+          project,
+          book,
+          characters,
+          "characterRelation",
+          target
+        ),
+        discovery
       );
       enqueueProposal({
         scope: "characters",
@@ -1093,14 +1192,17 @@ function SceneDiscoveryPanel({
 
     if (discovery.kind === "worldElement") {
       const target = worldElementDraftFromDiscovery(discovery);
-      const promptPackage = buildWorldPromptPackage(
-        project,
-        book,
-        plan,
-        characters,
-        world,
-        "worldElement",
-        target
+      const promptPackage = withSourceSceneDiscovery(
+        buildWorldPromptPackage(
+          project,
+          book,
+          plan,
+          characters,
+          world,
+          "worldElement",
+          target
+        ),
+        discovery
       );
       enqueueProposal({
         scope: "world",
@@ -1118,14 +1220,17 @@ function SceneDiscoveryPanel({
 
     if (discovery.kind === "worldRule") {
       const target = worldRuleDraftFromDiscovery(discovery);
-      const promptPackage = buildWorldPromptPackage(
-        project,
-        book,
-        plan,
-        characters,
-        world,
-        "worldRule",
-        target
+      const promptPackage = withSourceSceneDiscovery(
+        buildWorldPromptPackage(
+          project,
+          book,
+          plan,
+          characters,
+          world,
+          "worldRule",
+          target
+        ),
+        discovery
       );
       enqueueProposal({
         scope: "world",
@@ -1190,33 +1295,17 @@ function SceneDiscoveryPanel({
   );
 }
 
-async function queueSceneAuditFromAcceptedProposal(
-  proposal: ActiveAiProposal,
+async function queueSceneAuditFromPrompt(
+  prompt: PendingSceneAuditPrompt,
   enqueueProposal: ReturnType<typeof useProposalStore.getState>["enqueueProposal"]
 ) {
-  const context =
-    "context" in proposal.promptPackageJson
-      ? proposal.promptPackageJson.context
-      : {};
-  const scopedContext =
-    context && typeof context === "object"
-      ? (context as Record<string, unknown>)
-      : {};
-  const targetEntityId =
-    typeof scopedContext.targetEntityId === "string"
-      ? scopedContext.targetEntityId
-      : "";
-  if (!targetEntityId) {
-    return;
-  }
-
   const [projectDetails, plan, characters, world] = await Promise.all([
-    getProject(proposal.projectId),
-    getBookPlan(proposal.bookId),
-    getCharacterWorkspace(proposal.projectId),
-    getWorldWorkspace(proposal.projectId)
+    getProject(prompt.projectId),
+    getBookPlan(prompt.bookId),
+    getCharacterWorkspace(prompt.projectId),
+    getWorldWorkspace(prompt.projectId)
   ]);
-  const scene = plan.scenes.find((item) => item.id === targetEntityId);
+  const scene = plan.scenes.find((item) => item.id === prompt.sceneId);
   if (!scene) {
     return;
   }
@@ -1231,6 +1320,10 @@ async function queueSceneAuditFromAcceptedProposal(
     return;
   }
 
+  const scenePlan =
+    prompt.sourceKind === "scenePlan"
+      ? scenePlanSnapshotFromScene(scene, prompt.analysisText)
+      : null;
   const promptPackage = buildSceneStoryBibleAuditPromptPackage({
     project: projectDetails.project,
     book: projectDetails.book,
@@ -1238,13 +1331,15 @@ async function queueSceneAuditFromAcceptedProposal(
     sceneContext,
     characters,
     world,
-    acceptedText: proposal.editableValue.trim()
+    acceptedText: prompt.sourceKind === "acceptedText" ? prompt.analysisText : "",
+    scenePlan,
+    sourceKind: prompt.sourceKind
   });
 
   enqueueProposal({
     scope: "sceneEditor",
-    projectId: proposal.projectId,
-    bookId: proposal.bookId,
+    projectId: prompt.projectId,
+    bookId: prompt.bookId,
     field: SCENE_STORY_BIBLE_AUDIT_FIELD,
     action: promptPackage.action,
     promptPackageId: promptPackage.id,
@@ -1286,8 +1381,343 @@ function sceneAuditPromptFromProposal(
     bookId: proposal.bookId,
     sceneId,
     sceneTitle,
-    sourceProposal: proposal
+    analysisText: proposal.editableValue.trim(),
+    sourceKind: "acceptedText"
   };
+}
+
+function sceneAuditPromptsFromPlanResult(
+  proposal: ActiveAiProposal,
+  payload: unknown
+): Array<Omit<PendingSceneAuditPrompt, "id" | "createdAt">> {
+  const record = recordValue(payload);
+  if (!Array.isArray(record.createdScenes)) {
+    return [];
+  }
+
+  const prompts: Array<Omit<PendingSceneAuditPrompt, "id" | "createdAt">> = [];
+  for (const item of record.createdScenes) {
+    const scene = recordValue(item);
+    const sceneId = stringRecordValue(scene.id);
+    if (!sceneId) {
+      continue;
+    }
+
+    prompts.push({
+      projectId: proposal.projectId,
+      bookId: proposal.bookId,
+      sceneId,
+      sceneTitle: stringRecordValue(scene.title, "Scena"),
+      analysisText: stringRecordValue(scene.analysisText),
+      sourceKind: "scenePlan"
+    });
+  }
+
+  return prompts;
+}
+
+function scenePlanSnapshotFromScene(
+  scene: {
+    title: string;
+    summary: string;
+    goal: string;
+    conflict: string;
+    outcome: string;
+    targetWordCount: number | null;
+  },
+  analysisText: string
+): ScenePlanAuditSnapshot {
+  return {
+    title: scene.title,
+    summary: scene.summary,
+    goal: scene.goal,
+    conflict: scene.conflict,
+    outcome: scene.outcome,
+    targetWordCount: scene.targetWordCount,
+    analysisText
+  };
+}
+
+function withSourceSceneDiscovery<T extends { context: object }>(
+  promptPackage: T,
+  discovery: SceneDiscovery
+): T {
+  return {
+    ...promptPackage,
+    context: {
+      ...promptPackage.context,
+      sourceSceneDiscovery: sourceSceneDiscoverySnapshot(discovery)
+    }
+  } as T;
+}
+
+function sourceSceneDiscoverySnapshot(discovery: SceneDiscovery): Record<string, unknown> {
+  return {
+    id: discovery.id,
+    projectId: discovery.projectId,
+    bookId: discovery.bookId,
+    sceneId: discovery.sceneId,
+    sceneTitle: discovery.sceneTitle ?? "Scena",
+    kind: discovery.kind,
+    title: discovery.title,
+    reason: discovery.reason,
+    evidence: discovery.evidence,
+    targetExistingCharacterId: discovery.targetExistingCharacterId,
+    relatedCharacterIds: discovery.relatedCharacterIds,
+    suggestedType: discovery.suggestedType
+  };
+}
+
+function sceneAssignmentFromAcceptedProposal(
+  proposal: ActiveAiProposal,
+  payload: unknown
+): Omit<PendingSceneAssignment, "id" | "createdAt"> | null {
+  const source = sourceSceneDiscoveryFromProposal(proposal);
+  if (!source) {
+    return null;
+  }
+
+  const base = {
+    projectId: proposal.projectId,
+    bookId: proposal.bookId,
+    sceneId: source.sceneId,
+    sceneTitle: source.sceneTitle
+  };
+
+  if (proposal.scope === "characters") {
+    const field = characterFieldFromProposal(proposal);
+    const record = recordValue(payload);
+
+    if (field === "characterProfile") {
+      const characterId = stringRecordValue(record.id);
+      if (!characterId) {
+        return null;
+      }
+      return {
+        ...base,
+        kind: "character",
+        entityId: characterId,
+        entityTitle: stringRecordValue(record.name, "Nowa postać"),
+        characterIds: [characterId]
+      };
+    }
+
+    if (field === "characterMemory") {
+      const memoryId = stringRecordValue(record.id);
+      const characterId = stringRecordValue(record.characterId);
+      if (!memoryId || !characterId) {
+        return null;
+      }
+      return {
+        ...base,
+        kind: "characterMemory",
+        entityId: memoryId,
+        entityTitle: stringRecordValue(record.title, "Nowe wspomnienie"),
+        characterIds: [characterId]
+      };
+    }
+
+    if (field === "characterRelation") {
+      const relationId = stringRecordValue(record.id);
+      const characterIds = [
+        stringRecordValue(record.fromCharacterId),
+        stringRecordValue(record.toCharacterId)
+      ].filter(Boolean);
+      if (!relationId || characterIds.length === 0) {
+        return null;
+      }
+      return {
+        ...base,
+        kind: "characterRelation",
+        entityId: relationId,
+        entityTitle: stringRecordValue(record.relationType, "Relacja postaci"),
+        characterIds
+      };
+    }
+  }
+
+  if (proposal.scope === "world") {
+    const record = recordValue(payload);
+    const entityId = stringRecordValue(record.id);
+    if (!entityId) {
+      return null;
+    }
+
+    if (proposal.field === "worldElement") {
+      return {
+        ...base,
+        kind: "worldElement",
+        entityId,
+        entityTitle: stringRecordValue(record.name, "Nowy element świata")
+      };
+    }
+
+    if (proposal.field === "worldRule") {
+      return {
+        ...base,
+        kind: "worldRule",
+        entityId,
+        entityTitle: stringRecordValue(record.name, "Nowa reguła świata")
+      };
+    }
+  }
+
+  return null;
+}
+
+function sourceSceneDiscoveryFromProposal(
+  proposal: ActiveAiProposal
+): { sceneId: string; sceneTitle: string } | null {
+  const context =
+    "context" in proposal.promptPackageJson
+      ? recordValue(proposal.promptPackageJson.context)
+      : {};
+  const source = recordValue(context.sourceSceneDiscovery);
+  const sceneId = stringRecordValue(source.sceneId);
+  if (!sceneId) {
+    return null;
+  }
+
+  return {
+    sceneId,
+    sceneTitle: stringRecordValue(source.sceneTitle, "Scena")
+  };
+}
+
+async function assignPendingSceneAssignment(
+  assignment: PendingSceneAssignment
+): Promise<void> {
+  const [plan, world] = await Promise.all([
+    getBookPlan(assignment.bookId),
+    getWorldWorkspace(assignment.projectId)
+  ]);
+  const scene = plan.scenes.find((item) => item.id === assignment.sceneId);
+  if (!scene) {
+    throw new Error("Nie znaleziono sceny do przypisania.");
+  }
+
+  if (
+    assignment.kind === "character" ||
+    assignment.kind === "characterMemory" ||
+    assignment.kind === "characterRelation"
+  ) {
+    await assignCharactersToScene(plan, assignment, assignment.characterIds ?? []);
+    return;
+  }
+
+  if (assignment.kind === "worldElement") {
+    await assignWorldElementToScene(world, assignment, scene.chapterId);
+    return;
+  }
+
+  await assignWorldRuleToScene(world, assignment, scene.chapterId);
+}
+
+async function assignCharactersToScene(
+  plan: BookPlan,
+  assignment: PendingSceneAssignment,
+  characterIds: string[]
+): Promise<void> {
+  const sceneId = assignment.sceneId;
+  await setSceneRelations({
+    bookId: assignment.bookId,
+    sceneId,
+    characterIds: uniqueStrings([...sceneCharacterIds(plan, sceneId), ...characterIds]),
+    threadIds: sceneThreadIds(plan, sceneId),
+    elementIds: sceneElementIds(plan, sceneId),
+    ruleIds: sceneRuleIds(plan, sceneId)
+  });
+}
+
+async function assignWorldElementToScene(
+  world: WorldWorkspace,
+  assignment: PendingSceneAssignment,
+  chapterId: string | null
+): Promise<void> {
+  const elementId = assignment.entityId;
+  await setWorldElementRelations({
+    projectId: assignment.projectId,
+    elementId,
+    characterIds: world.elementCharacters
+      .filter((item) => item.elementId === elementId)
+      .map((item) => item.characterId),
+    threadIds: world.elementThreads
+      .filter((item) => item.elementId === elementId)
+      .map((item) => item.threadId),
+    chapterIds: uniqueStrings([
+      ...world.elementChapters
+        .filter((item) => item.elementId === elementId)
+        .map((item) => item.chapterId),
+      ...(chapterId ? [chapterId] : [])
+    ]),
+    sceneIds: uniqueStrings([
+      ...world.elementScenes
+        .filter((item) => item.elementId === elementId)
+        .map((item) => item.sceneId),
+      assignment.sceneId
+    ]),
+    ruleIds: world.elementRules
+      .filter((item) => item.elementId === elementId)
+      .map((item) => item.ruleId)
+  });
+}
+
+async function assignWorldRuleToScene(
+  world: WorldWorkspace,
+  assignment: PendingSceneAssignment,
+  chapterId: string | null
+): Promise<void> {
+  const ruleId = assignment.entityId;
+  await setWorldRuleRelations({
+    projectId: assignment.projectId,
+    ruleId,
+    elementIds: world.elementRules
+      .filter((item) => item.ruleId === ruleId)
+      .map((item) => item.elementId),
+    threadIds: world.ruleThreads
+      .filter((item) => item.ruleId === ruleId)
+      .map((item) => item.threadId),
+    chapterIds: uniqueStrings([
+      ...world.ruleChapters
+        .filter((item) => item.ruleId === ruleId)
+        .map((item) => item.chapterId),
+      ...(chapterId ? [chapterId] : [])
+    ]),
+    sceneIds: uniqueStrings([
+      ...world.ruleScenes
+        .filter((item) => item.ruleId === ruleId)
+        .map((item) => item.sceneId),
+      assignment.sceneId
+    ])
+  });
+}
+
+function sceneCharacterIds(plan: BookPlan, sceneId: string): string[] {
+  return plan.sceneCharacters
+    .filter((item) => item.sceneId === sceneId)
+    .map((item) => item.characterId);
+}
+
+function sceneThreadIds(plan: BookPlan, sceneId: string): string[] {
+  return plan.sceneThreads
+    .filter((item) => item.sceneId === sceneId)
+    .map((item) => item.threadId);
+}
+
+function sceneElementIds(plan: BookPlan, sceneId: string): string[] {
+  return plan.sceneWorldElements
+    .filter((item) => item.sceneId === sceneId)
+    .map((item) => item.elementId);
+}
+
+function sceneRuleIds(plan: BookPlan, sceneId: string): string[] {
+  return plan.sceneWorldRules
+    .filter((item) => item.sceneId === sceneId)
+    .map((item) => item.ruleId);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function ProposalQueueItem({
@@ -1892,11 +2322,14 @@ function useAiQueueRunner() {
             typeof scopedContext.targetEntityId === "string"
               ? scopedContext.targetEntityId
               : "";
+          const sceneSnapshot = recordValue(scopedContext.scene);
+          const sceneTitle = stringRecordValue(sceneSnapshot.title, "Scena");
           if (sceneId) {
             useSceneDiscoveryStore.getState().addCandidates({
               projectId: snapshot.projectId,
               bookId: snapshot.bookId,
               sceneId,
+              sceneTitle,
               candidates: parsed.candidates
             });
           }
@@ -2914,6 +3347,14 @@ function parseTargetWordCount(value: string): number | null {
 }
 
 function discoveryKindLabel(kind: SceneDiscovery["kind"]): string {
+  if (kind === "character") return "Postać";
+  if (kind === "characterMemory") return "Wspomnienie";
+  if (kind === "worldElement") return "Element świata";
+  if (kind === "worldRule") return "Reguła świata";
+  return "Relacja";
+}
+
+function assignmentKindLabel(kind: PendingSceneAssignment["kind"]): string {
   if (kind === "character") return "Postać";
   if (kind === "characterMemory") return "Wspomnienie";
   if (kind === "worldElement") return "Element świata";

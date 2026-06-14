@@ -108,6 +108,7 @@ export type CharacterPromptPackage = {
     generationMode: "generate" | "expand";
     targetFieldCurrentValue: string;
     contextControl?: PromptContextControl;
+    sourceSceneDiscovery?: unknown;
   };
   outputContract: {
     kind: "character_field_suggestion" | "character_profile" | "character_relation" | "character_memory" | "character_image";
@@ -450,6 +451,9 @@ function renderWorkspaceContext(promptPackage: CharacterPromptPackage): string {
       : "",
     isIncluded("memoryLinks", contextControl)
       ? `Połączenia wspomnień: ${JSON.stringify(workspace.memoryLinks)}`
+      : "",
+    promptPackage.context.sourceSceneDiscovery
+      ? `Źródło odkrycia ze sceny: ${JSON.stringify(promptPackage.context.sourceSceneDiscovery)}`
       : "",
     renderManualFieldContext(promptPackage)
   ].filter(Boolean).join("\n") || "(brak wybranego kontekstu postaci)";

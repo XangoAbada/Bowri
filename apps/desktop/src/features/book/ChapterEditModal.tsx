@@ -471,7 +471,7 @@ function ChapterForm({
         </div>
         <div className="chapter-footer-actions">
           {onDelete ? (
-            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete}>
+            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete} disabled={saving}>
               <Trash2 size={16} />
               Usuń
             </button>

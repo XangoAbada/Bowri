@@ -81,6 +81,7 @@ export type WorldPromptPackage = {
     generationMode: "generate" | "expand" | "analyze";
     targetFieldCurrentValue: string;
     contextControl?: PromptContextControl;
+    sourceSceneDiscovery?: unknown;
   };
   outputContract: {
     kind: "world_field_suggestion" | "world_element" | "world_rule" | "world_rule_analysis";
@@ -342,6 +343,9 @@ function renderWorkspaceContext(promptPackage: WorldPromptPackage): string {
       : "",
     isIncluded("targetEntity", contextControl)
       ? `Docelowy element: ${JSON.stringify(promptPackage.context.targetEntitySnapshot ?? null)}`
+      : "",
+    promptPackage.context.sourceSceneDiscovery
+      ? `Źródło odkrycia ze sceny: ${JSON.stringify(promptPackage.context.sourceSceneDiscovery)}`
       : "",
     renderManualFieldContext(promptPackage)
   ].filter(Boolean).join("\n") || "(brak wybranego kontekstu świata)";

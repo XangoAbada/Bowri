@@ -5,7 +5,8 @@ describe("sceneDiscoveryStore", () => {
   beforeEach(() => {
     useSceneDiscoveryStore.setState({
       discoveries: [],
-      pendingAuditPrompts: []
+      pendingAuditPrompts: [],
+      pendingAssignments: []
     });
   });
 
@@ -15,25 +16,8 @@ describe("sceneDiscoveryStore", () => {
       bookId: "book-1",
       sceneId: "scene-1",
       sceneTitle: "Nowa scena",
-      sourceProposal: {
-        id: "proposal-1",
-        status: "success",
-        scope: "sceneEditor",
-        projectId: "project-1",
-        bookId: "book-1",
-        field: "continueScene",
-        action: "continue_scene",
-        promptPackageId: "prompt-1",
-        promptPackageJson: {} as never,
-        prompt: "",
-        rawOutput: "",
-        editableValue: "Tekst sceny",
-        editableFields: {},
-        selectedFields: {},
-        errorMessage: "",
-        createdAt: "",
-        updatedAt: ""
-      }
+      analysisText: "Tekst sceny",
+      sourceKind: "acceptedText"
     });
 
     expect(useSceneDiscoveryStore.getState().pendingAuditPrompts).toHaveLength(1);

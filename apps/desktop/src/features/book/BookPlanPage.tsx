@@ -123,6 +123,11 @@ type BeatModalState =
 type SceneModalState =
   | { mode: "create"; chapterId?: string | null }
   | { mode: "edit"; sceneId: string };
+type DeleteTarget =
+  | { kind: "beat"; id: string; title: string; chapterCount: number }
+  | { kind: "thread"; id: string; title: string; chapterCount: number; sceneCount: number }
+  | { kind: "chapter"; id: string; title: string; sceneCount: number }
+  | { kind: "scene"; id: string; title: string };
 type ChapterRelationKind = "threads" | "beats";
 type SceneRelationKind = "characters" | "threads" | "elements" | "rules";
 type BeatSortMode = "order" | "name" | "role";
@@ -365,6 +370,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   const [chapterModal, setChapterModal] = useState<ChapterModalState | null>(null);
   const [beatModal, setBeatModal] = useState<BeatModalState | null>(null);
   const [sceneModal, setSceneModal] = useState<SceneModalState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -529,6 +535,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     },
     onSuccess: async () => {
       setSelectedItem(null);
+      setDeleteTarget(null);
       setMessage("Usunięto element planu.");
       await invalidatePlan();
     },
@@ -547,11 +554,48 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     mutationFn: (id: string) => deleteScene(id),
     onSuccess: async () => {
       setSceneModal(null);
+      setDeleteTarget(null);
       setMessage("Usunięto scenę.");
       await invalidatePlan();
     },
     onError: showError
   });
+  const deletePending = deleteMutation.isPending || sceneDeleteMutation.isPending;
+
+  function requestDelete(target: DeleteTarget) {
+    if (deletePending) {
+      return;
+    }
+
+    setErrorMessage("");
+    setDeleteTarget(target);
+  }
+
+  function confirmDeleteTarget() {
+    if (!deleteTarget || deletePending) {
+      return;
+    }
+
+    if (deleteTarget.kind === "scene") {
+      sceneDeleteMutation.mutate(deleteTarget.id);
+      return;
+    }
+
+    deleteMutation.mutate(
+      { type: deleteTarget.kind, id: deleteTarget.id },
+      {
+        onSuccess: () => {
+          if (deleteTarget.kind === "chapter") {
+            setChapterModal(null);
+          }
+          if (deleteTarget.kind === "beat") {
+            setBeatModal(null);
+          }
+        }
+      }
+    );
+  }
+
   const sceneRelationsMutation = useMutation({
     mutationFn: (input: SetSceneRelationsInput) => setSceneRelations(input),
     onSuccess: invalidatePlan,
@@ -785,11 +829,12 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         plan={plan}
         characters={characters}
         world={world}
-        saving={chapterMutation.isPending || chapterReorderMutation.isPending}
+        saving={chapterMutation.isPending || chapterReorderMutation.isPending || deletePending}
         onOpenChapter={openChapterModal}
         onCreateChapter={openNewChapterModal}
         onCreateScene={(chapterId) => setSceneModal({ mode: "create", chapterId })}
         onEditScene={(sceneId) => setSceneModal({ mode: "edit", sceneId })}
+        onRequestDelete={requestDelete}
         onSaveChapter={(input) => chapterMutation.mutate(input)}
         onSetSceneRelations={(input) => sceneRelationsMutation.mutate(input)}
         onReorderChapters={(inputs) => chapterReorderMutation.mutate(inputs)}
@@ -800,11 +845,11 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       <ThreadsStep
         bookId={bookId}
         plan={plan}
-        saving={threadMutation.isPending || chapterMutation.isPending || chapterThreadMutation.isPending}
+        saving={threadMutation.isPending || chapterMutation.isPending || chapterThreadMutation.isPending || deletePending}
         onSave={(input) => threadMutation.mutate(input)}
         onSaveChapter={(input) => chapterMutation.mutate(input)}
         onSaveChapterThreadRelation={(input) => chapterThreadMutation.mutate(input)}
-        onDelete={(item) => deleteMutation.mutate(item)}
+        onRequestDelete={requestDelete}
         onSelect={setSelectedItem}
         onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
@@ -814,10 +859,10 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       <BeatsStep
         bookId={bookId}
         plan={plan}
-        saving={beatMutation.isPending || beatMoveMutation.isPending}
+        saving={beatMutation.isPending || beatMoveMutation.isPending || deletePending}
         onSave={(input) => beatMutation.mutate(input)}
         onMoveBeat={(input) => beatMoveMutation.mutate(input)}
-        onDelete={(item) => deleteMutation.mutate(item)}
+        onRequestDelete={requestDelete}
         onOpenBeat={openBeatModal}
         onCreateBeat={openNewBeatModal}
         onGenerate={activatePlanPromptContext}
@@ -834,10 +879,12 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
           sceneRelationsMutation.isPending ||
           duplicatePlanMutation.isPending ||
           activePlanMutation.isPending ||
-          deletePlanVersionMutation.isPending
+          deletePlanVersionMutation.isPending ||
+          sceneDeleteMutation.isPending
         }
         onCreateScene={(chapterId) => setSceneModal({ mode: "create", chapterId })}
         onEditScene={(sceneId) => setSceneModal({ mode: "edit", sceneId })}
+        onRequestDelete={requestDelete}
         onSetRelations={(input) => sceneRelationsMutation.mutate(input)}
         onDuplicatePlan={() => duplicatePlanMutation.mutate()}
         onSetActivePlan={(planVersionId) => activePlanMutation.mutate(planVersionId)}
@@ -907,18 +954,19 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         state={chapterModal}
         bookId={bookId}
         plan={plan}
-        saving={chapterMutation.isPending || deleteMutation.isPending}
+        saving={chapterMutation.isPending || deletePending}
         onClose={() => setChapterModal(null)}
         onSave={(input) =>
           chapterMutation.mutate(input, {
             onSuccess: () => setChapterModal(null)
           })
         }
-        onDelete={(chapterId) =>
-          deleteMutation.mutate({ type: "chapter", id: chapterId }, {
-            onSuccess: () => setChapterModal(null)
-          })
-        }
+        onDelete={(chapterId) => {
+          const chapter = plan.chapters.find((item) => item.id === chapterId);
+          if (chapter) {
+            requestDelete(chapterDeleteTarget(plan, chapter));
+          }
+        }}
         onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
@@ -926,18 +974,23 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         state={beatModal}
         bookId={bookId}
         plan={plan}
-        saving={beatMutation.isPending || deleteMutation.isPending}
+        saving={beatMutation.isPending || deletePending}
         onClose={() => setBeatModal(null)}
         onSave={(input) =>
           beatMutation.mutate(input, {
             onSuccess: () => setBeatModal(null)
           })
         }
-        onDelete={(item) =>
-          deleteMutation.mutate(item, {
-            onSuccess: () => setBeatModal(null)
-          })
-        }
+        onDelete={(item) => {
+          if (item.type !== "beat") {
+            return;
+          }
+
+          const beat = plan.beats.find((candidate) => candidate.id === item.id);
+          if (beat) {
+            requestDelete(beatDeleteTarget(plan, beat));
+          }
+        }}
         onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
       />
@@ -961,7 +1014,12 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
             }
           })
         }
-        onDelete={(sceneId) => sceneDeleteMutation.mutate(sceneId)}
+        onDelete={(sceneId) => {
+          const scene = plan.scenes.find((item) => item.id === sceneId);
+          if (scene) {
+            requestDelete(sceneDeleteTarget(plan, scene));
+          }
+        }}
         onGenerate={activatePlanPromptContext}
         onActivatePrompt={activatePlanPromptContext}
         onLinkThreadToChapter={(threadId, chapterId) =>
@@ -973,8 +1031,178 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
           })
         }
       />
+      <ConfirmDeleteModal
+        target={deleteTarget}
+        deleting={deletePending}
+        onClose={() => {
+          if (!deletePending) {
+            setDeleteTarget(null);
+          }
+        }}
+        onConfirm={confirmDeleteTarget}
+      />
     </section>
   );
+}
+
+function ConfirmDeleteModal({
+  target,
+  deleting,
+  onClose,
+  onConfirm
+}: {
+  target: DeleteTarget | null;
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    if (!target) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !deleting) {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleting, onClose, target]);
+
+  if (!target) {
+    return null;
+  }
+
+  const copy = deleteTargetCopy(target);
+  const modal = (
+    <div
+      className="confirm-delete-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-delete-title"
+    >
+      <button
+        type="button"
+        className="confirm-delete-backdrop"
+        onClick={onClose}
+        disabled={deleting}
+        aria-label="Zamknij potwierdzenie usuwania"
+      />
+      <section className="confirm-delete-shell">
+        <header className="confirm-delete-header">
+          <span className="confirm-delete-icon" aria-hidden="true">
+            <Trash2 size={18} />
+          </span>
+          <div>
+            <p className="eyebrow">Potwierdzenie</p>
+            <h3 id="confirm-delete-title">{copy.title}</h3>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            disabled={deleting}
+            aria-label="Zamknij potwierdzenie usuwania"
+            title="Zamknij"
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <div className="confirm-delete-body">
+          <strong>{target.title}</strong>
+          <p>{copy.description}</p>
+          <p className="warning-text">Tej operacji nie można cofnąć.</p>
+        </div>
+        <footer className="confirm-delete-footer">
+          <button type="button" className="ghost-button" onClick={onClose} disabled={deleting}>
+            Anuluj
+          </button>
+          <button
+            type="button"
+            className="ghost-button chapter-delete-button"
+            onClick={onConfirm}
+            disabled={deleting}
+          >
+            {deleting ? <Loader2 size={16} className="spin-icon" /> : <Trash2 size={16} />}
+            Usuń
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+
+  return typeof document === "undefined" ? modal : createPortal(modal, document.body);
+}
+
+function deleteTargetCopy(target: DeleteTarget): { title: string; description: string } {
+  if (target.kind === "beat") {
+    return {
+      title: "Usunąć beat?",
+      description: `Usuniesz beat i jego przypięcia do rozdziałów. Liczba przypięć: ${target.chapterCount}.`
+    };
+  }
+
+  if (target.kind === "thread") {
+    return {
+      title: "Usunąć wątek?",
+      description: `Usuniesz wątek oraz jego powiązania z rozdziałami i scenami. Rozdziały: ${target.chapterCount}. Sceny: ${target.sceneCount}.`
+    };
+  }
+
+  if (target.kind === "chapter") {
+    return {
+      title: "Usunąć rozdział?",
+      description: `Usuniesz rozdział i jego relacje. Sceny z tego rozdziału przejdą do sekcji „Bez rozdziału”. Sceny: ${target.sceneCount}.`
+    };
+  }
+
+  return {
+    title: "Usunąć scenę?",
+    description: "Usuniesz scenę wraz z treścią i relacjami planu."
+  };
+}
+
+function beatDeleteTarget(plan: BookPlan, beat: Beat): DeleteTarget {
+  return {
+    kind: "beat",
+    id: beat.id,
+    title: beat.name || "Beat bez nazwy",
+    chapterCount: plan.chapterBeats.filter((relation) => relation.beatId === beat.id).length
+  };
+}
+
+function threadDeleteTarget(plan: BookPlan, thread: PlotThread): DeleteTarget {
+  return {
+    kind: "thread",
+    id: thread.id,
+    title: thread.name || "Wątek bez nazwy",
+    chapterCount: chaptersForThread(plan, thread).length,
+    sceneCount: plan.sceneThreads.filter((relation) => relation.threadId === thread.id).length
+  };
+}
+
+function chapterDeleteTarget(plan: BookPlan, chapter: Chapter): DeleteTarget {
+  return {
+    kind: "chapter",
+    id: chapter.id,
+    title: `Rozdział ${dynamicChapterNumber(plan, chapter.id)}: ${chapter.workingTitle || "Bez tytułu"}`,
+    sceneCount: orderedScenesForChapter(plan, chapter.id).length
+  };
+}
+
+function sceneDeleteTarget(plan: BookPlan, scene: Scene): DeleteTarget {
+  const chapter = scene.chapterId
+    ? plan.chapters.find((item) => item.id === scene.chapterId)
+    : undefined;
+  const prefix = chapter ? `Rozdział ${dynamicChapterNumber(plan, chapter.id)} · ` : "";
+
+  return {
+    kind: "scene",
+    id: scene.id,
+    title: `${prefix}${scene.title || "Scena bez tytułu"}`
+  };
 }
 
 type StepProps = {
@@ -996,6 +1224,7 @@ function ScenesStep({
   saving,
   onCreateScene,
   onEditScene,
+  onRequestDelete,
   onSetRelations,
   onDuplicatePlan,
   onSetActivePlan,
@@ -1010,6 +1239,7 @@ function ScenesStep({
   saving: boolean;
   onCreateScene: (chapterId?: string | null) => void;
   onEditScene: (sceneId: string) => void;
+  onRequestDelete: (target: DeleteTarget) => void;
   onSetRelations: (input: SetSceneRelationsInput) => void;
   onDuplicatePlan: () => void;
   onSetActivePlan: (planVersionId: string) => void;
@@ -1137,6 +1367,20 @@ function ScenesStep({
                 <span className="chapter-card-topline">
                   <span className="chapter-number-badge">{scene.orderIndex + 1}</span>
                   <span>{sceneStatusLabel(scene.status)}</span>
+                  <button
+                    type="button"
+                    className="plan-card-delete-icon"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onRequestDelete(sceneDeleteTarget(plan, scene));
+                    }}
+                    disabled={saving}
+                    title={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
+                    aria-label={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                   <span>{scene.targetWordCount ? `${scene.targetWordCount.toLocaleString("pl-PL")} słów` : "Brak celu"}</span>
                 </span>
                 <strong>{scene.title || "Scena bez tytułu"}</strong>
@@ -2082,7 +2326,7 @@ function BeatsStep({
   saving,
   onSave,
   onMoveBeat,
-  onDelete,
+  onRequestDelete,
   onOpenBeat,
   onCreateBeat,
   onGenerate,
@@ -2090,7 +2334,7 @@ function BeatsStep({
 }: StepProps & {
   onSave: (input: BeatSaveInput) => void;
   onMoveBeat: (input: MoveBeatToChapterInput) => void;
-  onDelete: (item: SelectedPlanItem) => void;
+  onRequestDelete: (target: DeleteTarget) => void;
   onOpenBeat: (beat: Beat) => void;
   onCreateBeat: (chapterId?: string | null) => void;
 }) {
@@ -2337,6 +2581,7 @@ function BeatsStep({
                     event.stopPropagation();
                   }}
                   onOpen={() => onOpenBeat(beat)}
+                  onRequestDelete={() => onRequestDelete(beatDeleteTarget(plan, beat))}
                   onSuppressOpen={() => {
                     if (!suppressBeatOpenRef.current) {
                       return false;
@@ -2449,6 +2694,7 @@ function BeatsStep({
                           event.stopPropagation();
                         }}
                         onOpen={() => onOpenBeat(beat)}
+                        onRequestDelete={() => onRequestDelete(beatDeleteTarget(plan, beat))}
                         onSuppressOpen={() => {
                           if (!suppressBeatOpenRef.current) {
                             return false;
@@ -2501,7 +2747,8 @@ function BeatBoardCard({
   onLostPointerCapture,
   onHandleClick,
   onSuppressOpen,
-  onOpen
+  onOpen,
+  onRequestDelete
 }: {
   beat: Beat;
   chapter: Chapter | null;
@@ -2516,6 +2763,7 @@ function BeatBoardCard({
   onHandleClick: (event: MouseEvent<HTMLElement>) => void;
   onSuppressOpen: () => boolean;
   onOpen: () => void;
+  onRequestDelete: () => void;
 }) {
   const className = [
     "chapter-board-card",
@@ -2566,6 +2814,20 @@ function BeatBoardCard({
           <GripVertical size={15} />
         </span>
         <span>{chapter ? `Rozdz. ${chapter.number}` : "Nieprzypisany"}</span>
+        <button
+          type="button"
+          className="plan-card-delete-icon"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onRequestDelete();
+          }}
+          disabled={dragDisabled}
+          title={`Usuń beat: ${beat.name}`}
+          aria-label={`Usuń beat: ${beat.name}`}
+        >
+          <Trash2 size={14} />
+        </button>
       </span>
       <strong>{beat.name}</strong>
       <p>{beat.description || "Brak opisu beatu."}</p>
@@ -2788,7 +3050,7 @@ function BeatForm({
         </div>
         <div className="chapter-footer-actions">
           {onDelete ? (
-            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete}>
+            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete} disabled={saving}>
               <Trash2 size={16} />
               Usuń
             </button>
@@ -2969,7 +3231,7 @@ function ThreadsStep({
   onSave,
   onSaveChapter,
   onSaveChapterThreadRelation,
-  onDelete,
+  onRequestDelete,
   onSelect,
   onGenerate,
   onActivatePrompt,
@@ -2978,7 +3240,7 @@ function ThreadsStep({
   onSave: (input: UpsertPlotThreadInput) => void;
   onSaveChapter: (input: UpsertChapterInput) => void;
   onSaveChapterThreadRelation: (input: UpsertChapterThreadInput) => void;
-  onDelete: (item: SelectedPlanItem) => void;
+  onRequestDelete: (target: DeleteTarget) => void;
   onSelect: (item: SelectedPlanItem) => void;
   onSuggestThreadsForAllChapters: () => void;
 }) {
@@ -3218,6 +3480,7 @@ function ThreadsStep({
                     plan={plan}
                     thread={thread}
                     active={selectedThread?.id === thread.id}
+                    saving={saving}
                     onSelect={() => {
                       setSelectedThreadId(thread.id);
                       setEditingThreadId(thread.id);
@@ -3225,6 +3488,7 @@ function ThreadsStep({
                     }}
                     onAddChapter={(chapter) => addThreadToChapter(thread, chapter)}
                     onRemoveChapter={(chapter) => removeThreadFromChapter(thread, chapter)}
+                    onRequestDelete={() => onRequestDelete(threadDeleteTarget(plan, thread))}
                   />
                 ))}
                 {visibleThreads.length === 0 ? (
@@ -3249,7 +3513,7 @@ function ThreadsStep({
         onSave={finishEdit}
         onSaveChapter={onSaveChapter}
         onSaveChapterThreadRelation={onSaveChapterThreadRelation}
-        onDelete={(thread) => onDelete({ type: "thread", id: thread.id })}
+        onDelete={(thread) => onRequestDelete(threadDeleteTarget(plan, thread))}
         onGenerate={onGenerate}
         onActivatePrompt={onActivatePrompt}
       />
@@ -3544,7 +3808,7 @@ function ThreadEditor({
         </div>
         <div className="chapter-footer-actions">
           {onDelete ? (
-            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete}>
+            <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete} disabled={saving}>
               <Trash2 size={16} />
               Usuń
             </button>
@@ -3678,16 +3942,20 @@ function ThreadSummaryCard({
   plan,
   thread,
   active,
+  saving,
   onSelect,
   onAddChapter,
-  onRemoveChapter
+  onRemoveChapter,
+  onRequestDelete
 }: {
   plan: BookPlan;
   thread: PlotThread;
   active: boolean;
+  saving: boolean;
   onSelect: () => void;
   onAddChapter: (chapter: Chapter) => void;
   onRemoveChapter: (chapter: Chapter) => void;
+  onRequestDelete: () => void;
 }) {
   const chapters = chaptersForThread(plan, thread);
   const acts = actsForThread(plan, thread);
@@ -3733,6 +4001,20 @@ function ThreadSummaryCard({
           </em>
         </span>
       </div>
+      <button
+        type="button"
+        className="plan-card-delete-icon thread-card-delete-icon"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onRequestDelete();
+        }}
+        disabled={saving}
+        title={`Usuń wątek: ${thread.name}`}
+        aria-label={`Usuń wątek: ${thread.name}`}
+      >
+        <Trash2 size={14} />
+      </button>
       <p>{thread.description || "Ten wątek nie ma jeszcze opisu."}</p>
       <div className="thread-card-metrics">
         <span>
@@ -4034,6 +4316,7 @@ function ChaptersStep({
   onCreateChapter,
   onCreateScene,
   onEditScene,
+  onRequestDelete,
   onSaveChapter,
   onSetSceneRelations,
   onReorderChapters,
@@ -4046,6 +4329,7 @@ function ChaptersStep({
   onCreateChapter: (actId?: string | null) => void;
   onCreateScene: (chapterId?: string | null) => void;
   onEditScene: (sceneId: string) => void;
+  onRequestDelete: (target: DeleteTarget) => void;
   onSaveChapter: (input: UpsertChapterInput) => void;
   onSetSceneRelations: (input: SetSceneRelationsInput) => void;
   onReorderChapters: (inputs: UpsertChapterInput[]) => void;
@@ -4377,6 +4661,7 @@ function ChaptersStep({
                         event.stopPropagation();
                       }}
                       onOpen={() => onOpenChapter(chapter)}
+                      onRequestDelete={() => onRequestDelete(chapterDeleteTarget(plan, chapter))}
                       onOpenRelationPicker={(kind) =>
                         setRelationPicker({ kind, chapterId: chapter.id })
                       }
@@ -4433,6 +4718,7 @@ function ChaptersStep({
             onCreateChapter={onCreateChapter}
             onCreateScene={onCreateScene}
             onEditScene={onEditScene}
+            onRequestDelete={onRequestDelete}
             onOpenRelationPicker={(kind, chapterId) => setRelationPicker({ kind, chapterId })}
             onUpdateChapterRelations={(chapter, threadIds, beatIds) =>
               onSaveChapter(chapterUpsertInputWithRelations(plan, chapter, threadIds, beatIds))
@@ -4524,6 +4810,7 @@ function ChapterBoardCard({
   onHandleClick,
   onSuppressOpen,
   onOpen,
+  onRequestDelete,
   onOpenRelationPicker,
   onUpdateRelations
 }: {
@@ -4541,6 +4828,7 @@ function ChapterBoardCard({
   onHandleClick: (event: MouseEvent<HTMLElement>) => void;
   onSuppressOpen: () => boolean;
   onOpen: () => void;
+  onRequestDelete: () => void;
   onOpenRelationPicker: (kind: ChapterRelationKind) => void;
   onUpdateRelations: (threadIds: string[], beatIds: string[]) => void;
 }) {
@@ -4594,6 +4882,20 @@ function ChapterBoardCard({
           <GripVertical size={15} />
         </span>
         <span>{formatWordCount(chapter.targetWordCount)}</span>
+        <button
+          type="button"
+          className="plan-card-delete-icon"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onRequestDelete();
+          }}
+          disabled={dragDisabled}
+          title={`Usuń rozdział: ${chapter.workingTitle || "Bez tytułu"}`}
+          aria-label={`Usuń rozdział: ${chapter.workingTitle || "Bez tytułu"}`}
+        >
+          <Trash2 size={14} />
+        </button>
       </span>
       <strong>{chapter.workingTitle}</strong>
       <p>{chapter.summary || "Brak streszczenia rozdziału."}</p>
@@ -4702,6 +5004,7 @@ function ChapterCockpit({
   onCreateChapter,
   onCreateScene,
   onEditScene,
+  onRequestDelete,
   onOpenRelationPicker,
   onUpdateChapterRelations,
   onSetSceneRelations,
@@ -4721,6 +5024,7 @@ function ChapterCockpit({
   onCreateChapter: (actId?: string | null) => void;
   onCreateScene: (chapterId?: string | null) => void;
   onEditScene: (sceneId: string) => void;
+  onRequestDelete: (target: DeleteTarget) => void;
   onOpenRelationPicker: (kind: ChapterRelationKind, chapterId: string) => void;
   onUpdateChapterRelations: (chapter: Chapter, threadIds: string[], beatIds: string[]) => void;
   onSetSceneRelations: (input: SetSceneRelationsInput) => void;
@@ -4844,6 +5148,15 @@ function ChapterCockpit({
               <Pencil size={15} />
               Edytuj rozdział
             </button>
+            <button
+              type="button"
+              className="ghost-button chapter-delete-button"
+              onClick={() => onRequestDelete(chapterDeleteTarget(plan, activeChapter))}
+              disabled={saving}
+            >
+              <Trash2 size={15} />
+              Usuń rozdział
+            </button>
           </div>
         </section>
 
@@ -4924,6 +5237,20 @@ function ChapterCockpit({
                   <span className="chapter-card-topline">
                     <span className="chapter-number-badge">{index + 1}</span>
                     <span>{sceneStatusLabel(scene.status)}</span>
+                    <button
+                      type="button"
+                      className="plan-card-delete-icon"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onRequestDelete(sceneDeleteTarget(plan, scene));
+                      }}
+                      disabled={saving}
+                      title={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
+                      aria-label={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                     <span>{scene.targetWordCount ? `${scene.targetWordCount.toLocaleString("pl-PL")} słów` : "Brak celu"}</span>
                   </span>
                   <strong>{scene.title || "Scena bez tytułu"}</strong>
@@ -5659,7 +5986,7 @@ function EntityActions({
         {saving ? "Zapisuję" : "Zapisz"}
       </button>
       {onDelete ? (
-        <button type="button" className="ghost-button" onClick={onDelete}>
+        <button type="button" className="ghost-button" onClick={onDelete} disabled={saving}>
           <Trash2 size={16} />
           Usuń
         </button>

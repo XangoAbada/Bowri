@@ -18,6 +18,17 @@ import type { PlanFieldKey } from "./planPromptPackage";
 
 const actColors = ["#3f8f6b", "#4f8fd9", "#8b5cf6", "#f59e42", "#d94f8f"];
 
+export type CreatedSceneForAudit = {
+  id: string;
+  title: string;
+  chapterId: string | null;
+  analysisText: string;
+};
+
+export type ApplyPlanProposalResult = {
+  createdScenes: CreatedSceneForAudit[];
+};
+
 export type ApplyPlanContext = {
   bookId: string;
   plan: BookPlan;
@@ -39,7 +50,7 @@ export async function applyPlanProposalPayload(
   field: PlanFieldKey,
   packageContext: unknown,
   context: ApplyPlanContext
-) {
+): Promise<ApplyPlanProposalResult> {
   const record =
     payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
   const scopedPackageContext =
@@ -49,71 +60,70 @@ export async function applyPlanProposalPayload(
 
   if (field === "storyStructure") {
     await applyStructure(record, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "acts") {
     await applyActs(record, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "plotThreads") {
     await applyThreads(record, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "beatSheet") {
     await applyBeats(record, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "chapterPlan") {
     await applyChapters(record, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "sceneDraft") {
-    await applySceneDraft(record, scopedPackageContext, context);
-    return;
+    return applySceneDraft(record, scopedPackageContext, context);
   }
 
   if (field === "chapterSceneBreakdown") {
-    await applyChapterSceneBreakdown(record, scopedPackageContext, context);
-    return;
+    return applyChapterSceneBreakdown(record, scopedPackageContext, context);
   }
 
   if (field === "allChapterSceneDrafts") {
-    await applyAllChapterSceneDrafts(record, context);
-    return;
+    return applyAllChapterSceneDrafts(record, context);
   }
 
   if (field === "prepareChapterForScenes") {
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "chapterThreadSuggestions") {
     await applyChapterRelationSuggestions(record, scopedPackageContext, context, "threads");
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "allChapterThreadSuggestions") {
     await applyAllChapterThreadSuggestions(record, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "chapterBeatSuggestions") {
     await applyChapterRelationSuggestions(record, scopedPackageContext, context, "beats");
-    return;
+    return emptyApplyResult();
   }
 
   if (field === "sceneRelationSuggestions") {
     await applySceneRelationSuggestions(record, scopedPackageContext, context);
-    return;
+    return emptyApplyResult();
   }
 
   if (typeof record.value === "string") {
     await applySingleField(record.value, scopedPackageContext, context);
   }
+
+  return emptyApplyResult();
 }
 
 async function applyStructure(
@@ -293,18 +303,18 @@ async function applySceneDraft(
   record: Record<string, unknown>,
   packageContext: Record<string, unknown>,
   context: ApplyPlanContext
-) {
+): Promise<ApplyPlanProposalResult> {
   const targetEntityId = textValue(packageContext.targetEntityId);
   const chapter = context.plan.chapters.find((item) => item.id === targetEntityId);
   if (!chapter || !record.scene || typeof record.scene !== "object") {
-    return;
+    return emptyApplyResult();
   }
   if (!context.saveScene || !context.setSceneRelations) {
     throw new Error("Brak obsługi zapisu sceny dla propozycji AI.");
   }
 
   const sceneRecord = record.scene as Record<string, unknown>;
-  const savedScene = await context.saveScene({
+  const sceneInput: UpsertSceneInput = {
     bookId: context.bookId,
     chapterId: chapter.id,
     orderIndex: context.plan.scenes.filter((scene) => scene.chapterId === chapter.id).length,
@@ -319,7 +329,8 @@ async function applySceneDraft(
     actualWordCount: null,
     manuscriptContent: "",
     status: "planned"
-  });
+  };
+  const savedScene = await context.saveScene(sceneInput);
 
   const relationHints =
     record.relationHints && typeof record.relationHints === "object"
@@ -334,21 +345,32 @@ async function applySceneDraft(
     elementIds: [],
     ruleIds: []
   });
+
+  return {
+    createdScenes: [
+      createdSceneForAudit(savedScene.id, sceneInput, chapter, {
+        handledBeatOrDuty: textValue(sceneRecord.handledBeatOrDuty),
+        storyBibleNeeds: sceneRecord.storyBibleNeeds
+      })
+    ]
+  };
 }
 
 async function applyChapterSceneBreakdown(
   record: Record<string, unknown>,
   packageContext: Record<string, unknown>,
   context: ApplyPlanContext
-) {
+): Promise<ApplyPlanProposalResult> {
   const targetEntityId = textValue(packageContext.targetEntityId);
   const chapter = context.plan.chapters.find((item) => item.id === targetEntityId);
   if (!chapter || !Array.isArray(record.scenes)) {
-    return;
+    return emptyApplyResult();
   }
   if (!context.saveScene || !context.setSceneRelations) {
     throw new Error("Brak obsługi zapisu sceny dla propozycji AI.");
   }
+
+  const createdScenes: CreatedSceneForAudit[] = [];
 
   for (const [index, item] of record.scenes.entries()) {
     if (!item || typeof item !== "object") {
@@ -360,7 +382,7 @@ async function applyChapterSceneBreakdown(
       sceneRecord.relationHints && typeof sceneRecord.relationHints === "object"
         ? (sceneRecord.relationHints as Record<string, unknown>)
         : {};
-    const savedScene = await context.saveScene({
+    const sceneInput: UpsertSceneInput = {
       bookId: context.bookId,
       chapterId: chapter.id,
       orderIndex:
@@ -380,7 +402,8 @@ async function applyChapterSceneBreakdown(
       actualWordCount: null,
       manuscriptContent: "",
       status: "planned"
-    });
+    };
+    const savedScene = await context.saveScene(sceneInput);
 
     await context.setSceneRelations({
       bookId: context.bookId,
@@ -390,21 +413,31 @@ async function applyChapterSceneBreakdown(
       elementIds: namesToIds(context.world?.elements ?? [], relationHints.elementNamesOrIds),
       ruleIds: namesToIds(context.world?.rules ?? [], relationHints.ruleNamesOrIds)
     });
+
+    createdScenes.push(
+      createdSceneForAudit(savedScene.id, sceneInput, chapter, {
+        handledBeatOrDuty: textValue(sceneRecord.handledBeatOrDuty),
+        storyBibleNeeds: sceneRecord.storyBibleNeeds
+      })
+    );
   }
+
+  return { createdScenes };
 }
 
 async function applyAllChapterSceneDrafts(
   record: Record<string, unknown>,
   context: ApplyPlanContext
-) {
+): Promise<ApplyPlanProposalResult> {
   if (!Array.isArray(record.scenes)) {
-    return;
+    return emptyApplyResult();
   }
   if (!context.saveScene || !context.setSceneRelations) {
     throw new Error("Brak obsługi zapisu sceny dla propozycji AI.");
   }
 
   const createdByChapter = new Map<string, number>();
+  const createdScenes: CreatedSceneForAudit[] = [];
 
   for (const item of record.scenes) {
     if (!item || typeof item !== "object") {
@@ -423,7 +456,7 @@ async function applyAllChapterSceneDrafts(
     const createdCount = createdByChapter.get(chapter.id) ?? 0;
     createdByChapter.set(chapter.id, createdCount + 1);
 
-    const savedScene = await context.saveScene({
+    const sceneInput: UpsertSceneInput = {
       bookId: context.bookId,
       chapterId: chapter.id,
       orderIndex:
@@ -440,7 +473,8 @@ async function applyAllChapterSceneDrafts(
       actualWordCount: null,
       manuscriptContent: "",
       status: "planned"
-    });
+    };
+    const savedScene = await context.saveScene(sceneInput);
 
     const relationHints =
       sceneRecord.relationHints && typeof sceneRecord.relationHints === "object"
@@ -455,7 +489,16 @@ async function applyAllChapterSceneDrafts(
       elementIds: [],
       ruleIds: []
     });
+
+    createdScenes.push(
+      createdSceneForAudit(savedScene.id, sceneInput, chapter, {
+        handledBeatOrDuty: textValue(sceneRecord.handledBeatOrDuty),
+        storyBibleNeeds: sceneRecord.storyBibleNeeds
+      })
+    );
   }
+
+  return { createdScenes };
 }
 
 async function applySceneRelationSuggestions(
@@ -715,4 +758,67 @@ function findByNameOrId<T extends { id: string; name?: string; workingTitle?: st
 
 function uniqueOrderedIds(ids: string[]): string[] {
   return [...new Set(ids)];
+}
+
+function emptyApplyResult(): ApplyPlanProposalResult {
+  return { createdScenes: [] };
+}
+
+function createdSceneForAudit(
+  sceneId: string,
+  scene: UpsertSceneInput,
+  chapter: Chapter,
+  extra: { handledBeatOrDuty?: string; storyBibleNeeds?: unknown } = {}
+): CreatedSceneForAudit {
+  return {
+    id: sceneId,
+    title: scene.title || "Nowa scena",
+    chapterId: scene.chapterId ?? null,
+    analysisText: renderScenePlanAnalysisTextForAudit(scene, chapter, extra)
+  };
+}
+
+function renderScenePlanAnalysisTextForAudit(
+  scene: UpsertSceneInput,
+  chapter: Chapter,
+  extra: { handledBeatOrDuty?: string; storyBibleNeeds?: unknown }
+): string {
+  return [
+    `Rozdział: ${chapter.workingTitle || "Bez tytułu"}`,
+    `Scena: ${scene.title || "Nowa scena"}`,
+    `Streszczenie: ${scene.summary || "(brak)"}`,
+    `Cel: ${scene.goal || "(brak)"}`,
+    `Konflikt: ${scene.conflict || "(brak)"}`,
+    `Wynik: ${scene.outcome || "(brak)"}`,
+    `Docelowa liczba słów: ${scene.targetWordCount ?? "(brak)"}`,
+    extra.handledBeatOrDuty ? `Obsługiwany beat lub obowiązek: ${extra.handledBeatOrDuty}` : "",
+    storyBibleNeedsText(extra.storyBibleNeeds)
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function storyBibleNeedsText(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "";
+  }
+
+  const items = value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return "";
+      }
+
+      const record = item as Record<string, unknown>;
+      const kind = textValue(record.kind);
+      const label = textValue(record.label);
+      const reason = textValue(record.reason);
+      return [kind, label, reason].filter(Boolean).join(" / ");
+    })
+    .filter(Boolean);
+
+  return items.length ? `Potrzeby Story Bible: ${items.join("; ")}` : "";
 }

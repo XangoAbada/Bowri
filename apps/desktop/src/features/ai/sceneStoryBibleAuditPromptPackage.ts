@@ -28,6 +28,18 @@ export type SceneStoryBibleAuditCandidate = {
   suggestedType?: string;
 };
 
+export type SceneStoryBibleAuditSourceKind = "acceptedText" | "scenePlan";
+
+export type ScenePlanAuditSnapshot = {
+  title: string;
+  summary: string;
+  goal: string;
+  conflict: string;
+  outcome: string;
+  targetWordCount: number | null;
+  analysisText: string;
+};
+
 export type NormalizedSceneStoryBibleAudit = {
   kind: "scene_story_bible_audit";
   summary: string;
@@ -48,6 +60,8 @@ export type SceneStoryBibleAuditPromptPackage = {
     targetEntityId: string;
     scene: Scene;
     acceptedText: string;
+    scenePlan: ScenePlanAuditSnapshot | null;
+    sourceKind: SceneStoryBibleAuditSourceKind;
     sceneContext: ScenePromptContext;
     storyBible: {
       characters: CharacterWorkspace["characters"];
@@ -74,7 +88,9 @@ export function buildSceneStoryBibleAuditPromptPackage({
   sceneContext,
   characters,
   world,
-  acceptedText
+  acceptedText,
+  scenePlan,
+  sourceKind = acceptedText.trim() ? "acceptedText" : "scenePlan"
 }: {
   project: Project;
   book: Book;
@@ -83,6 +99,8 @@ export function buildSceneStoryBibleAuditPromptPackage({
   characters: CharacterWorkspace;
   world: WorldWorkspace;
   acceptedText: string;
+  scenePlan?: ScenePlanAuditSnapshot | null;
+  sourceKind?: SceneStoryBibleAuditSourceKind;
 }): SceneStoryBibleAuditPromptPackage {
   return {
     id: createPromptId("analyze_scene_story_bible_opportunities"),
@@ -91,12 +109,16 @@ export function buildSceneStoryBibleAuditPromptPackage({
     action: "analyze_scene_story_bible_opportunities",
     locale: project.language === "en" ? "en" : "pl",
     userInstruction:
-      "Przeanalizuj zaakceptowany fragment sceny i znajdź kandydatów do Story Bible: nowe postacie, wspomnienia postaci, elementy świata, reguły świata albo relacje.",
+      sourceKind === "acceptedText"
+        ? "Przeanalizuj zaakceptowany fragment sceny i znajdź kandydatów do Story Bible: nowe postacie, wspomnienia postaci, elementy świata, reguły świata albo relacje."
+        : "Przeanalizuj plan wygenerowanej sceny i znajdź kandydatów do Story Bible: nowe postacie, wspomnienia postaci, elementy świata, reguły świata albo relacje.",
     context: {
       targetField: SCENE_STORY_BIBLE_AUDIT_FIELD,
       targetEntityId: scene.id,
       scene,
       acceptedText,
+      scenePlan: scenePlan ?? null,
+      sourceKind,
       sceneContext,
       storyBible: {
         characters: characters.characters,
@@ -121,6 +143,12 @@ export function renderSceneStoryBibleAuditPromptPackage(
   promptPackage: SceneStoryBibleAuditPromptPackage
 ): string {
   const { context } = promptPackage;
+  const sourceBlock =
+    context.sourceKind === "acceptedText"
+      ? `# Accepted Text
+${context.acceptedText || "(brak zaakceptowanego tekstu)"}`
+      : `# Scene Plan
+${context.scenePlan?.analysisText || JSON.stringify(context.scenePlan ?? context.scene, null, 2)}`;
 
   return `# Role
 Jesteś asystentem pisarskim pracującym wewnątrz StoryForge2.
@@ -133,15 +161,14 @@ ${promptPackage.userInstruction}
 - Dla locale "pl" używaj poprawnych polskich znaków.
 - Nie zapisuj kanonu i nie twórz pełnych profili. Zwróć tylko kandydatów do ręcznej decyzji autora.
 - Nie dubluj istniejących postaci, wspomnień, elementów świata ani reguł, jeśli istniejąca encja już pokrywa odkrycie.
-- Wspomnienie postaci sugeruj tylko wtedy, gdy wynika z fragmentu sceny i da się wskazać istniejącą postać przez targetExistingCharacterId.
-- Każdy kandydat musi mieć krótki powód i krótki cytat/parafrazę dowodu ze sceny.
+- Wspomnienie postaci sugeruj tylko wtedy, gdy wynika z materiału sceny i da się wskazać istniejącą postać przez targetExistingCharacterId.
+- Każdy kandydat musi mieć krótki powód i krótki cytat/parafrazę dowodu ze sceny albo planu sceny.
 - Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
 
 # Scene Context
 ${JSON.stringify(context.sceneContext, null, 2)}
 
-# Accepted Text
-${context.acceptedText || "(brak zaakceptowanego tekstu)"}
+${sourceBlock}
 
 # Existing Story Bible
 ${JSON.stringify(context.storyBible, null, 2)}
@@ -157,7 +184,7 @@ Zwróć JSON:
       "kind": "character | characterMemory | worldElement | worldRule | characterRelation",
       "title": "Nazwa robocza",
       "reason": "Dlaczego warto to dodać",
-      "evidence": "Krótki fragment lub opis miejsca w scenie",
+      "evidence": "Krótki fragment albo opis miejsca w scenie",
       "targetExistingCharacterId": "opcjonalne id istniejącej postaci dla wspomnienia",
       "relatedCharacterIds": ["opcjonalne id postaci dla relacji"],
       "suggestedType": "opcjonalny typ: person, location, magic, wydarzenie, sekret itd."
@@ -209,7 +236,7 @@ function normalizeCandidate(value: unknown): SceneStoryBibleAuditCandidate | nul
     id: stringValue(record.id) || undefined,
     kind,
     title,
-    reason: stringValue(record.reason, "Wynika z zaakceptowanego fragmentu sceny."),
+    reason: stringValue(record.reason, "Wynika z materiału sceny."),
     evidence: stringValue(record.evidence, "Brak wskazanego fragmentu."),
     targetExistingCharacterId: stringValue(record.targetExistingCharacterId) || undefined,
     relatedCharacterIds: Array.isArray(record.relatedCharacterIds)
