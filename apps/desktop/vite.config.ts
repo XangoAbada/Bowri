@@ -6,7 +6,12 @@ export default defineConfig({
   clearScreen: false,
   server: {
     port: 5173,
-    strictPort: true
+    strictPort: true,
+    // Nie obserwuj katalogu Rust/Tauri — cargo trzyma tam blokady na plikach
+    // build (.exe), przez co watcher Vite wywala się z EBUSY podczas `tauri dev`.
+    watch: {
+      ignored: ["**/src-tauri/**"]
+    }
   },
   envPrefix: ["VITE_", "TAURI_"],
   test: {

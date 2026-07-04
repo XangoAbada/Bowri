@@ -29,6 +29,89 @@ describe("parseProposalResult", () => {
     expect(parsed.textValue).toBe("Wątek odsłania nowy trop w tym rozdziale.");
   });
 
+  it("keeps character *Json fields as a JSON array string", () => {
+    const parsed = parseProposalResult(
+      JSON.stringify({
+        version: 1,
+        kind: "character_field_suggestion",
+        field: "strengthsJson",
+        summary: "Siły postaci",
+        value: ["Silna wola", "Empatia"],
+        warnings: []
+      }),
+      "strengthsJson",
+      "generate_character_field"
+    );
+
+    expect(parsed.textValue).toBe(JSON.stringify(["Silna wola", "Empatia"]));
+  });
+
+  it("round-trips an empty character *Json field as [] instead of losing content", () => {
+    const parsed = parseProposalResult(
+      JSON.stringify({
+        version: 1,
+        kind: "character_field_suggestion",
+        field: "aliasesJson",
+        value: [],
+        warnings: []
+      }),
+      "aliasesJson",
+      "generate_character_field"
+    );
+
+    expect(parsed.textValue).toBe("[]");
+  });
+
+  it("coerces an array returned for a scalar character field into readable text", () => {
+    const parsed = parseProposalResult(
+      JSON.stringify({
+        version: 1,
+        kind: "character_field_suggestion",
+        field: "role",
+        value: ["mentor", "przewodnik"],
+        warnings: []
+      }),
+      "role",
+      "generate_character_field"
+    );
+
+    expect(parsed.textValue).toBe("mentor, przewodnik");
+    expect(parsed.textValue).not.toBe("[]");
+  });
+
+  it("coerces a world field value returned as an array into readable text", () => {
+    const parsed = parseProposalResult(
+      JSON.stringify({
+        version: 1,
+        kind: "world_field_suggestion",
+        field: "elementSummary",
+        value: ["Miasto na wodzie", "zasilane parą"],
+        warnings: []
+      }),
+      "elementSummary",
+      "generate_world_element_field"
+    );
+
+    expect(parsed.textValue).toBe("Miasto na wodzie, zasilane parą");
+    expect(parsed.textValue).not.toBe("[object Object]");
+  });
+
+  it("keeps a plain string world field value unchanged", () => {
+    const parsed = parseProposalResult(
+      JSON.stringify({
+        version: 1,
+        kind: "world_field_suggestion",
+        field: "elementSummary",
+        value: "Miasto na wodzie zasilane parą.",
+        warnings: []
+      }),
+      "elementSummary",
+      "generate_world_element_field"
+    );
+
+    expect(parsed.textValue).toBe("Miasto na wodzie zasilane parą.");
+  });
+
   it("maps accepted character profile JSON into a character upsert input", () => {
     const rawOutput = JSON.stringify({
       version: 1,

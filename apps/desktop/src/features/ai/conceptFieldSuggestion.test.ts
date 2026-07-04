@@ -88,4 +88,71 @@ describe("parseConceptFieldSuggestion", () => {
     expect(parsed.textValue).toBe("Samotny tytul");
   });
 
+  it("ignores an empty-collection literal in values and keeps the real value", () => {
+    const parsed = parseConceptFieldSuggestion(
+      JSON.stringify({
+        version: 1,
+        kind: "concept_field_suggestion",
+        field: "premise",
+        summary: "Premisa",
+        value: "W świecie, w którym maszyny wyparły magię, ostatni czarodziej...",
+        values: "[]",
+        rationale: "Uzasadnienie."
+      }),
+      "premise"
+    );
+
+    expect(parsed.textValue).toBe(
+      "W świecie, w którym maszyny wyparły magię, ostatni czarodziej..."
+    );
+    expect(parsed.textValue).not.toBe("[]");
+    expect(parsed.values).toEqual([]);
+  });
+
+  it("prefers the scalar value over a stray values array for a scalar field", () => {
+    const parsed = parseConceptFieldSuggestion(
+      JSON.stringify({
+        version: 1,
+        kind: "concept_field_suggestion",
+        field: "premise",
+        value: "Prawdziwa premisa historii.",
+        values: ["fragment a", "fragment b"]
+      }),
+      "premise"
+    );
+
+    expect(parsed.textValue).toBe("Prawdziwa premisa historii.");
+  });
+
+  it("tolerates value returned as an array for a scalar field", () => {
+    const parsed = parseConceptFieldSuggestion(
+      JSON.stringify({
+        version: 1,
+        kind: "concept_field_suggestion",
+        field: "premise",
+        summary: "Premisa",
+        value: ["Kaia ratuje magię", "zanim zniknie na zawsze"]
+      }),
+      "premise"
+    );
+
+    expect(parsed.textValue).toBe("Kaia ratuje magię, zanim zniknie na zawsze");
+    expect(parsed.textValue).not.toBe("[]");
+  });
+
+  it("tolerates value returned as an object without throwing", () => {
+    const parsed = parseConceptFieldSuggestion(
+      JSON.stringify({
+        version: 1,
+        kind: "concept_field_suggestion",
+        field: "premise",
+        value: { unexpected: "kształt" },
+        values: ["Zapasowy tekst premisy"]
+      }),
+      "premise"
+    );
+
+    expect(parsed.textValue).toBe("Zapasowy tekst premisy");
+  });
+
 });

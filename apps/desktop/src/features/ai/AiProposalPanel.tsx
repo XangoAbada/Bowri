@@ -2499,11 +2499,9 @@ function parseCharacterSuggestion(
     );
   }
   const rawValue = record.value;
-  const textValue = Array.isArray(rawValue)
-    ? JSON.stringify(rawValue.filter((item) => typeof item === "string"))
-    : typeof rawValue === "string"
-      ? rawValue
-      : String(rawValue ?? "");
+  const textValue = expectedField.endsWith("Json")
+    ? coerceProposalJsonArrayText(rawValue)
+    : coerceProposalText(rawValue);
 
   return {
     kind: "book_plan_suggestion",
@@ -2560,7 +2558,7 @@ function parseWorldSuggestion(
   return {
     kind: "book_plan_suggestion",
     summary: typeof record.summary === "string" ? record.summary : "Propozycja świata",
-    textValue: typeof record.value === "string" ? record.value : String(record.value ?? ""),
+    textValue: coerceProposalText(record.value),
     value: parsed,
     warnings: Array.isArray(record.warnings)
       ? record.warnings.filter((item): item is string => typeof item === "string")
@@ -2765,6 +2763,52 @@ function normalizeJsonArrayString(value: string): string {
   }
 
   return value ? JSON.stringify([value]) : "[]";
+}
+
+/**
+ * Sprowadza wartość zwróconą przez model do czytelnego tekstu dla pól
+ * tekstowych. Model bywa nieprzewidywalny (string, tablica, obiekt), a autor
+ * musi zobaczyć treść, a nie surowe `[]` czy `[object Object]`. Nigdy nie
+ * zwraca literalnego `"[]"` — pusta tablica staje się pustym stringiem.
+ */
+function coerceProposalText(raw: unknown): string {
+  if (typeof raw === "string") {
+    return raw;
+  }
+  if (raw === null || raw === undefined) {
+    return "";
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (typeof raw === "object") {
+    return Object.values(raw as Record<string, unknown>)
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+  return String(raw);
+}
+
+/**
+ * Sprowadza wartość do stringa tablicy JSON (`["a","b"]`) dla pól typu *Json,
+ * których ścieżka akceptacji ponownie parsuje wartość przez `JSON.parse`
+ * (patrz `normalizeJsonArrayString`). `"[]"` pojawia się tylko dla naprawdę
+ * pustej listy, co poprawnie się round-tripuje.
+ */
+function coerceProposalJsonArrayText(raw: unknown): string {
+  if (Array.isArray(raw)) {
+    return JSON.stringify(raw.filter((item): item is string => typeof item === "string"));
+  }
+  if (typeof raw === "string") {
+    return normalizeJsonArrayString(raw);
+  }
+  return "[]";
 }
 
 export function characterRelationInputFromProposal(

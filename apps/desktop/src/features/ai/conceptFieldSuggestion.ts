@@ -31,14 +31,54 @@ export const conceptFieldSuggestionResponseSchema = z.object({
   kind: z.literal("concept_field_suggestion"),
   field: conceptFieldKeySchema,
   summary: z.string().trim().optional().default(""),
-  value: z.string().trim().optional().nullable(),
-  // Model czasem zwraca pojedynczy string zamiast tablicy — tolerujemy to,
-  // opakowując go w jednoelementową listę zamiast wywracać całą propozycję.
+  // Model bywa nieprzewidywalny: pole `value` powinno być stringiem, ale
+  // czasem zwraca tablicę stringów albo obiekt. Zamiast wywracać całą
+  // propozycję błędem Zod (i chować zwrócony tekst przed autorem), sprowadzamy
+  // to do stringa. Dzięki temu tekst zawsze trafia do pola akceptacji.
+  value: z
+    .preprocess((raw) => {
+      if (raw === null || raw === undefined || typeof raw === "string") {
+        return raw;
+      }
+      if (Array.isArray(raw)) {
+        return raw
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .join(", ");
+      }
+      if (typeof raw === "object") {
+        return "";
+      }
+      return String(raw);
+    }, z.string().trim().optional().nullable()),
+  // Model bywa nieprzewidywalny w polu `values`:
+  // - potrafi zwrócić pojedynczy string zamiast tablicy → opakowujemy go,
+  // - potrafi zwrócić literał pustej kolekcji ("[]"/"{}") jako sygnał "brak
+  //   dodatkowych wartości" → traktujemy to jako pustą tablicę (inaczej trafiał
+  //   do propozycji jako dosłowne `[]` i chował prawdziwe `value`),
+  // - potrafi zwrócić tablicę zakodowaną jako string JSON → rozpakowujemy ją.
   values: z
-    .preprocess(
-      (raw) => (typeof raw === "string" ? [raw] : raw),
-      z.array(z.string().trim().min(1))
-    )
+    .preprocess((raw) => {
+      if (typeof raw !== "string") {
+        return raw;
+      }
+      const trimmed = raw.trim();
+      if (trimmed === "" || trimmed === "[]" || trimmed === "{}") {
+        return [];
+      }
+      if (trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed;
+          }
+        } catch {
+          // Nie był poprawnym JSON-em — potraktuj jak zwykły string.
+        }
+      }
+      return [trimmed];
+    }, z.array(z.string().trim().min(1)))
     .optional()
     .default([]),
   rationale: z.string().trim().optional().default(""),
@@ -78,8 +118,18 @@ export function parseConceptFieldSuggestion(
   }
 
   const values = normalizeValues(response, expectedField);
-  const textValue =
-    values.length > 0 ? values.join(", ") : response.value?.trim() ?? "";
+  const scalarValue = response.value?.trim() ?? "";
+  const isListField = expectedField
+    ? listConceptFields.includes(expectedField)
+    : response.values.length > 0;
+  // Pola listowe (np. gatunek, tagi) budujemy z `values`; pola skalarne
+  // (premise, tytuł, opisy) traktują `value` jako źródło prawdy — inaczej
+  // przypadkowe `values` przesłaniałoby prawdziwą treść.
+  const textValue = isListField
+    ? values.length > 0
+      ? values.join(", ")
+      : scalarValue
+    : scalarValue || (values.length > 0 ? values.join(", ") : "");
 
   if (!textValue) {
     throw new Error("Odpowiedź AI nie zawiera propozycji wartości.");
