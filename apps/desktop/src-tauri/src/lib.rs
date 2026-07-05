@@ -5979,6 +5979,592 @@ fn crc32(data: &[u8]) -> u32 {
     !crc
 }
 
+const PROJECT_TRANSFER_FORMAT_VERSION: i64 = 1;
+const PROJECT_TRANSFER_DATA_PREFIX: &str = "data/";
+const PROJECT_TRANSFER_ASSETS_PREFIX: &str = "assets/";
+
+/// Tabele wchodzące w skład paczki projektu wraz z predykatem zakresu.
+/// Kolejność jest istotna: import wstawia wiersze dokładnie w tym porządku,
+/// więc lista musi być bezpieczna dla kluczy obcych (m.in. visual_assets
+/// przed characters/world_elements przez FK image_asset_id, a characters
+/// i world_elements przed scenes przez FK pov_character_id/location_id).
+/// Lista jest twarda — sqlite_master zawiera pozostałości migracji
+/// (books_next itp.), których nie wolno eksportować. Pomijamy search_index:
+/// FTS odtwarza się samo triggerami przy INSERT.
+const PROJECT_TRANSFER_TABLES: &[(&str, &str)] = &[
+    ("projects", "id = ?"),
+    ("books", "project_id = ?"),
+    (
+        "plan_versions",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    (
+        "story_structures",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    (
+        "plot_threads",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    (
+        "acts",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    (
+        "beats",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    (
+        "chapters",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    ("visual_assets", "project_id = ?"),
+    ("characters", "project_id = ?"),
+    ("character_relations", "project_id = ?"),
+    ("character_memories", "project_id = ?"),
+    ("character_memory_links", "project_id = ?"),
+    ("world_elements", "project_id = ?"),
+    ("world_rules", "project_id = ?"),
+    (
+        "scenes",
+        "book_id IN (SELECT id FROM books WHERE project_id = ?)",
+    ),
+    (
+        "scene_characters",
+        "scene_id IN (SELECT id FROM scenes WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    (
+        "scene_threads",
+        "scene_id IN (SELECT id FROM scenes WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    (
+        "scene_world_elements",
+        "scene_id IN (SELECT id FROM scenes WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    (
+        "scene_world_rules",
+        "scene_id IN (SELECT id FROM scenes WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    (
+        "chapter_threads",
+        "chapter_id IN (SELECT id FROM chapters WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    (
+        "chapter_beats",
+        "chapter_id IN (SELECT id FROM chapters WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    (
+        "world_element_characters",
+        "element_id IN (SELECT id FROM world_elements WHERE project_id = ?)",
+    ),
+    (
+        "world_element_threads",
+        "element_id IN (SELECT id FROM world_elements WHERE project_id = ?)",
+    ),
+    (
+        "world_element_chapters",
+        "element_id IN (SELECT id FROM world_elements WHERE project_id = ?)",
+    ),
+    (
+        "world_element_rules",
+        "element_id IN (SELECT id FROM world_elements WHERE project_id = ?)",
+    ),
+    (
+        "world_rule_threads",
+        "rule_id IN (SELECT id FROM world_rules WHERE project_id = ?)",
+    ),
+    (
+        "world_rule_chapters",
+        "rule_id IN (SELECT id FROM world_rules WHERE project_id = ?)",
+    ),
+    (
+        "scene_snapshots",
+        "scene_id IN (SELECT id FROM scenes WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
+    ),
+    ("scene_critiques", "project_id = ?"),
+    ("export_presets", "project_id = ?"),
+    ("ai_runs", "project_id = ?"),
+    ("ai_proposals", "project_id = ?"),
+];
+
+/// Kolumny przechowujące ścieżki plików na dysku — jedyne miejsca w bazie
+/// z odwołaniami do systemu plików (zweryfikowane grep-em po migracjach).
+fn project_transfer_path_column(table: &str) -> Option<&'static str> {
+    match table {
+        "books" => Some("cover_image_path"),
+        "visual_assets" => Some("file_path"),
+        _ => None,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectTransferManifest {
+    format_version: i64,
+    app_version: String,
+    exported_at: String,
+    project_id: String,
+    project_name: String,
+    tables: std::collections::BTreeMap<String, i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportProjectInput {
+    pub project_id: String,
+    pub output_directory: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportProjectResult {
+    pub file_path: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportProjectResult {
+    pub project: Project,
+    pub warnings: Vec<String>,
+}
+
+fn zip_error(error: zip::result::ZipError) -> AppError {
+    AppError::Process(format!("Błąd archiwum ZIP: {error}"))
+}
+
+fn zip_deflate(files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, AppError> {
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    for (name, data) in files {
+        writer.start_file(name, options).map_err(zip_error)?;
+        writer.write_all(&data)?;
+    }
+    Ok(writer.finish().map_err(zip_error)?.into_inner())
+}
+
+fn sqlite_row_to_json(
+    row: &sqlx::sqlite::SqliteRow,
+) -> Result<serde_json::Map<String, Value>, AppError> {
+    use sqlx::{Column, Row, TypeInfo, ValueRef};
+    let mut map = serde_json::Map::new();
+    for (index, column) in row.columns().iter().enumerate() {
+        let raw = row.try_get_raw(index)?;
+        let value = if raw.is_null() {
+            Value::Null
+        } else {
+            match raw.type_info().name() {
+                "INTEGER" => Value::from(row.try_get::<i64, _>(index)?),
+                "REAL" => Value::from(row.try_get::<f64, _>(index)?),
+                _ => Value::from(row.try_get::<String, _>(index)?),
+            }
+        };
+        map.insert(column.name().to_string(), value);
+    }
+    Ok(map)
+}
+
+fn project_transfer_file_stem(raw: &str) -> String {
+    let mut stem = String::new();
+    for character in raw.trim().to_lowercase().chars() {
+        if character.is_ascii_alphanumeric() {
+            stem.push(character);
+        } else if character.is_whitespace() || character == '-' || character == '_' {
+            if !stem.ends_with('-') {
+                stem.push('-');
+            }
+        }
+    }
+    let stem = stem.trim_matches('-');
+    if stem.is_empty() {
+        "projekt".into()
+    } else {
+        stem.into()
+    }
+}
+
+fn row_string(row: &serde_json::Map<String, Value>, key: &str) -> String {
+    row.get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+pub async fn export_project_in_pool(
+    pool: &SqlitePool,
+    input: ExportProjectInput,
+    app_data_dir: &Path,
+) -> Result<ExportProjectResult, AppError> {
+    let mut tables: Vec<(String, Vec<serde_json::Map<String, Value>>)> = Vec::new();
+    for (table, predicate) in PROJECT_TRANSFER_TABLES {
+        let sql = format!("SELECT * FROM {table} WHERE {predicate}");
+        let rows = sqlx::query(&sql)
+            .bind(&input.project_id)
+            .fetch_all(pool)
+            .await?;
+        let rows = rows
+            .iter()
+            .map(sqlite_row_to_json)
+            .collect::<Result<Vec<_>, _>>()?;
+        tables.push((table.to_string(), rows));
+    }
+
+    let project_row = tables
+        .iter()
+        .find(|(table, _)| table == "projects")
+        .and_then(|(_, rows)| rows.first())
+        .ok_or_else(|| AppError::Process("Nie znaleziono projektu do eksportu.".into()))?;
+    let project_name = row_string(project_row, "name");
+
+    let mut warnings = Vec::new();
+    let mut asset_files: Vec<(String, Vec<u8>)> = Vec::new();
+    for (table, rows) in tables.iter_mut() {
+        let Some(path_column) = project_transfer_path_column(table) else {
+            continue;
+        };
+        for row in rows.iter_mut() {
+            let source_path = row_string(row, path_column);
+            if source_path.trim().is_empty() {
+                continue;
+            }
+            let row_id = row_string(row, "id");
+            match tokio::fs::read(&source_path).await {
+                Ok(bytes) => {
+                    let base_name = Path::new(&source_path)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "asset".into());
+                    let entry_name = format!("{PROJECT_TRANSFER_ASSETS_PREFIX}{row_id}_{base_name}");
+                    asset_files.push((entry_name.clone(), bytes));
+                    row.insert(path_column.to_string(), Value::String(entry_name));
+                }
+                Err(_) => {
+                    warnings.push(format!(
+                        "Nie znaleziono pliku obrazu \"{source_path}\" — pominięto go w eksporcie."
+                    ));
+                    row.insert(path_column.to_string(), Value::String(String::new()));
+                }
+            }
+        }
+    }
+
+    let manifest = ProjectTransferManifest {
+        format_version: PROJECT_TRANSFER_FORMAT_VERSION,
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        exported_at: Utc::now().to_rfc3339(),
+        project_id: input.project_id.clone(),
+        project_name: project_name.clone(),
+        tables: tables
+            .iter()
+            .map(|(table, rows)| (table.clone(), rows.len() as i64))
+            .collect(),
+    };
+
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    files.push(("manifest.json".into(), serde_json::to_vec_pretty(&manifest)?));
+    for (table, rows) in &tables {
+        files.push((
+            format!("{PROJECT_TRANSFER_DATA_PREFIX}{table}.json"),
+            serde_json::to_vec_pretty(rows)?,
+        ));
+    }
+    files.extend(asset_files);
+    let archive = zip_deflate(files)?;
+
+    let export_dir = match input.output_directory.as_deref().map(str::trim) {
+        Some(directory) if !directory.is_empty() => {
+            let path = PathBuf::from(directory);
+            if path.exists() && !path.is_dir() {
+                return Err(AppError::Process(
+                    "Wybrana lokalizacja eksportu nie jest folderem.".into(),
+                ));
+            }
+            path
+        }
+        _ => app_data_dir.join("exports").join(&input.project_id),
+    };
+    tokio::fs::create_dir_all(&export_dir).await?;
+    let file_name = format!(
+        "{}-{}.storyforge.zip",
+        project_transfer_file_stem(&project_name),
+        Utc::now().format("%Y%m%d-%H%M%S")
+    );
+    let file_path = export_dir.join(file_name);
+    tokio::fs::write(&file_path, archive).await?;
+
+    Ok(ExportProjectResult {
+        file_path: file_path.to_string_lossy().to_string(),
+        warnings,
+    })
+}
+
+/// Podmienia w tekście każdy 36-znakowy fragment o kształcie UUID, jeśli jest
+/// kluczem mapy. Pokrywa zarówno kolumny FK, jak i identyfikatory osadzone
+/// w kolumnach JSON (payload_json, settings_json itp.).
+fn remap_uuids_in_text(text: &str, id_map: &HashMap<String, String>) -> String {
+    fn looks_like_uuid(bytes: &[u8]) -> bool {
+        bytes.len() == 36
+            && bytes.iter().enumerate().all(|(index, byte)| match index {
+                8 | 13 | 18 | 23 => *byte == b'-',
+                _ => byte.is_ascii_hexdigit(),
+            })
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while !rest.is_empty() {
+        if rest.len() >= 36
+            && rest.is_char_boundary(36)
+            && looks_like_uuid(&rest.as_bytes()[..36])
+        {
+            if let Some(new_id) = id_map.get(&rest[..36]) {
+                out.push_str(new_id);
+                rest = &rest[36..];
+                continue;
+            }
+        }
+        let mut chars = rest.chars();
+        if let Some(character) = chars.next() {
+            out.push(character);
+        }
+        rest = chars.as_str();
+    }
+    out
+}
+
+async fn sqlite_table_columns(
+    pool: &SqlitePool,
+    table: &str,
+) -> Result<std::collections::HashSet<String>, AppError> {
+    use sqlx::Row;
+    let rows = sqlx::query(&format!("PRAGMA table_info({table})"))
+        .fetch_all(pool)
+        .await?;
+    Ok(rows
+        .iter()
+        .map(|row| row.get::<String, _>("name"))
+        .collect())
+}
+
+fn project_transfer_asset_target_dir(table: &str, row: &serde_json::Map<String, Value>) -> &'static str {
+    if table == "visual_assets" && row_string(row, "related_type") == "character" {
+        "characters"
+    } else {
+        "covers"
+    }
+}
+
+pub async fn import_project_in_pool(
+    pool: &SqlitePool,
+    zip_path: &str,
+    app_data_dir: &Path,
+) -> Result<ImportProjectResult, AppError> {
+    let bytes = tokio::fs::read(zip_path).await.map_err(|error| {
+        AppError::Process(format!("Nie udało się odczytać pliku projektu: {error}"))
+    })?;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| {
+        AppError::Process("To nie jest prawidłowy plik ZIP z projektem StoryForge.".into())
+    })?;
+    let mut entries: HashMap<String, Vec<u8>> = HashMap::new();
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).map_err(zip_error)?;
+        if !file.is_file() {
+            continue;
+        }
+        let name = file.name().replace('\\', "/");
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut data)?;
+        entries.insert(name, data);
+    }
+
+    let manifest_bytes = entries.get("manifest.json").ok_or_else(|| {
+        AppError::Process(
+            "Brak manifest.json — wybrany plik nie jest paczką projektu StoryForge.".into(),
+        )
+    })?;
+    let manifest: ProjectTransferManifest = serde_json::from_slice(manifest_bytes)
+        .map_err(|_| AppError::Process("Nieprawidłowy manifest paczki projektu.".into()))?;
+    if manifest.format_version != PROJECT_TRANSFER_FORMAT_VERSION {
+        return Err(AppError::Process(format!(
+            "Nieobsługiwana wersja formatu pliku projektu ({}). Zaktualizuj aplikację StoryForge.",
+            manifest.format_version
+        )));
+    }
+
+    let mut tables: Vec<(&str, Vec<serde_json::Map<String, Value>>)> = Vec::new();
+    for (table, _) in PROJECT_TRANSFER_TABLES {
+        let rows = match entries.get(&format!("{PROJECT_TRANSFER_DATA_PREFIX}{table}.json")) {
+            Some(bytes) => serde_json::from_slice::<Vec<serde_json::Map<String, Value>>>(bytes)
+                .map_err(|_| {
+                    AppError::Process(format!("Nieprawidłowe dane tabeli {table} w paczce."))
+                })?,
+            None => Vec::new(),
+        };
+        tables.push((table, rows));
+    }
+
+    // Świeże UUID dla każdego wiersza — ten sam ZIP można importować wielokrotnie.
+    let mut id_map: HashMap<String, String> = HashMap::new();
+    for (_, rows) in &tables {
+        for row in rows {
+            if let Some(Value::String(id)) = row.get("id") {
+                id_map
+                    .entry(id.clone())
+                    .or_insert_with(|| Uuid::new_v4().to_string());
+            }
+        }
+    }
+
+    for (table, rows) in tables.iter_mut() {
+        // Kolumny ścieżek wskazują wpisy assets/... w archiwum — ich nazwy
+        // zawierają stare UUID i muszą pozostać nietknięte do czasu kopiowania.
+        let path_column = project_transfer_path_column(table);
+        for row in rows.iter_mut() {
+            for (key, value) in row.iter_mut() {
+                if path_column == Some(key.as_str()) {
+                    continue;
+                }
+                if let Value::String(text) = value {
+                    if text.len() == 36 {
+                        if let Some(new_id) = id_map.get(text.as_str()) {
+                            *text = new_id.clone();
+                        }
+                    } else if text.len() > 36 {
+                        *text = remap_uuids_in_text(text, &id_map);
+                    }
+                }
+            }
+        }
+    }
+
+    let new_project_id = {
+        let (_, project_rows) = tables
+            .iter_mut()
+            .find(|(table, _)| *table == "projects")
+            .expect("projects zawsze na liście tabel");
+        let row = project_rows
+            .first_mut()
+            .ok_or_else(|| AppError::Process("Paczka nie zawiera danych projektu.".into()))?;
+        let name = row_string(row, "name");
+        row.insert(
+            "name".into(),
+            Value::String(format!("{} (import)", name.trim())),
+        );
+        row.insert("updated_at".into(), Value::String(Utc::now().to_rfc3339()));
+        row_string(row, "id")
+    };
+
+    let mut warnings = Vec::new();
+    let mut copied_files: Vec<PathBuf> = Vec::new();
+    let import_result: Result<(), AppError> = async {
+        // Skopiuj obrazy z paczki do katalogów aplikacji i przepisz ścieżki.
+        for (table, rows) in tables.iter_mut() {
+            let Some(path_column) = project_transfer_path_column(table) else {
+                continue;
+            };
+            for row in rows.iter_mut() {
+                let entry_name = row_string(row, path_column);
+                if entry_name.trim().is_empty() {
+                    continue;
+                }
+                let Some(data) = entries.get(&entry_name) else {
+                    warnings.push(format!(
+                        "W paczce brakuje pliku obrazu \"{entry_name}\" — pole zostanie puste."
+                    ));
+                    row.insert(path_column.to_string(), Value::String(String::new()));
+                    continue;
+                };
+                let extension = Path::new(&entry_name)
+                    .extension()
+                    .map(|ext| format!(".{}", ext.to_string_lossy()))
+                    .unwrap_or_default();
+                let row_id = row_string(row, "id");
+                let target_dir = app_data_dir.join(project_transfer_asset_target_dir(table, row));
+                tokio::fs::create_dir_all(&target_dir).await?;
+                let target_path = target_dir.join(format!("import-{row_id}{extension}"));
+                tokio::fs::write(&target_path, data).await?;
+                copied_files.push(target_path.clone());
+                row.insert(
+                    path_column.to_string(),
+                    Value::String(target_path.to_string_lossy().to_string()),
+                );
+            }
+        }
+
+        let mut tx = pool.begin().await?;
+        for (table, rows) in &tables {
+            if rows.is_empty() {
+                continue;
+            }
+            let known_columns = sqlite_table_columns(pool, table).await?;
+            let mut skipped_columns: Vec<String> = Vec::new();
+            for row in rows {
+                let columns: Vec<&String> = row
+                    .keys()
+                    .filter(|key| {
+                        let known = known_columns.contains(*key);
+                        if !known && !skipped_columns.contains(key) {
+                            skipped_columns.push((*key).clone());
+                        }
+                        known
+                    })
+                    .collect();
+                if columns.is_empty() {
+                    continue;
+                }
+                let sql = format!(
+                    "INSERT INTO {table} ({}) VALUES ({})",
+                    columns
+                        .iter()
+                        .map(|column| column.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    vec!["?"; columns.len()].join(", ")
+                );
+                let mut query = sqlx::query(&sql);
+                for column in &columns {
+                    query = match row.get(*column) {
+                        None | Some(Value::Null) => query.bind(Option::<String>::None),
+                        Some(Value::Bool(flag)) => query.bind(*flag as i64),
+                        Some(Value::Number(number)) if number.is_i64() => {
+                            query.bind(number.as_i64().unwrap_or_default())
+                        }
+                        Some(Value::Number(number)) => {
+                            query.bind(number.as_f64().unwrap_or_default())
+                        }
+                        Some(Value::String(text)) => query.bind(text.clone()),
+                        Some(other) => query.bind(other.to_string()),
+                    };
+                }
+                query.execute(&mut *tx).await?;
+            }
+            for column in skipped_columns {
+                warnings.push(format!(
+                    "Pominięto nieznaną kolumnę \"{column}\" tabeli {table} (paczka z nowszej wersji aplikacji)."
+                ));
+            }
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+    .await;
+
+    if let Err(error) = import_result {
+        for path in copied_files {
+            let _ = tokio::fs::remove_file(path).await;
+        }
+        return Err(error);
+    }
+
+    let project: Project = sqlx::query_as("SELECT * FROM projects WHERE id = ?")
+        .bind(&new_project_id)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(ImportProjectResult { project, warnings })
+}
+
 async fn validate_export_artwork_target(
     pool: &SqlitePool,
     project_id: &str,
@@ -6647,6 +7233,49 @@ async fn export_book(
     export_book_in_pool(&app, &state.db, input)
         .await
         .map_err(command_error)
+}
+
+#[tauri::command]
+async fn export_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: ExportProjectInput,
+) -> Result<ExportProjectResult, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        format!("Nie udało się ustalić katalogu danych aplikacji: {error}")
+    })?;
+    export_project_in_pool(&state.db, input, &app_data_dir)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn import_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    zip_path: String,
+) -> Result<ImportProjectResult, String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        format!("Nie udało się ustalić katalogu danych aplikacji: {error}")
+    })?;
+    import_project_in_pool(&state.db, &zip_path, &app_data_dir)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn choose_import_file() -> Result<Option<String>, String> {
+    let selected = tokio::task::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Wybierz plik projektu StoryForge")
+            .add_filter("Projekt StoryForge (ZIP)", &["zip"])
+            .pick_file()
+            .map(|path| path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|error| format!("Nie udało się otworzyć wyboru pliku: {error}"))?;
+
+    Ok(selected)
 }
 
 #[tauri::command]
@@ -8585,6 +9214,9 @@ pub fn run() {
             generate_character_image,
             accept_generated_character_image,
             export_book,
+            export_project,
+            import_project,
+            choose_import_file,
             choose_export_directory,
             reveal_export_file,
             list_export_presets,
@@ -10151,5 +10783,266 @@ mod tests {
             8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 0, 1, 0, 0,
             5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
         ]
+    }
+
+    fn transfer_test_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("storyforge2-transfer-{label}-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    async fn seed_transfer_project(pool: &SqlitePool) -> (Project, Book, Scene, String, String) {
+        let created = create_project_in_pool(
+            pool,
+            CreateProjectInput {
+                name: "Projekt paczki".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        let scene = upsert_scene_in_pool(
+            pool,
+            scene_input(&created.book.id, "Scena paczki", "<p>Smok strzegl archiwum.</p>"),
+        )
+        .await
+        .unwrap();
+
+        let now = Utc::now().to_rfc3339();
+        let character_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO characters (id, project_id, name, short_description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&character_id)
+        .bind(&created.project.id)
+        .bind("Archiwistka Lena")
+        .bind("Strazniczka archiwum.")
+        .bind(&now)
+        .bind(&now)
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO scene_characters (scene_id, character_id) VALUES (?, ?)")
+            .bind(&scene.id)
+            .bind(&character_id)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        let ai_run_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO ai_runs (id, project_id, provider_id, action, prompt_package_json, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&ai_run_id)
+        .bind(&created.project.id)
+        .bind(PROVIDER_ID)
+        .bind("test")
+        .bind("{}")
+        .bind("completed")
+        .bind(&now)
+        .execute(pool)
+        .await
+        .unwrap();
+        let proposal_payload = format!("{{\"sceneId\":\"{}\"}}", scene.id);
+        sqlx::query(
+            "INSERT INTO ai_proposals (id, ai_run_id, project_id, proposal_type, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&ai_run_id)
+        .bind(&created.project.id)
+        .bind("scene_draft")
+        .bind(&proposal_payload)
+        .bind(&now)
+        .bind(&now)
+        .execute(pool)
+        .await
+        .unwrap();
+
+        // okladka jako plik na dysku
+        let cover_path = std::env::temp_dir().join(format!("storyforge2-cover-{}.png", Uuid::new_v4()));
+        std::fs::write(&cover_path, tiny_png()).unwrap();
+        sqlx::query("UPDATE books SET cover_image_path = ? WHERE id = ?")
+            .bind(cover_path.to_string_lossy().to_string())
+            .bind(&created.book.id)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        (
+            created.project,
+            created.book,
+            scene,
+            character_id,
+            cover_path.to_string_lossy().to_string(),
+        )
+    }
+
+    #[tokio::test]
+    async fn export_import_round_trip_copies_project() {
+        let pool = test_pool().await;
+        let (project, _book, scene, character_id, _cover_path) =
+            seed_transfer_project(&pool).await;
+
+        let export_dir = transfer_test_dir("export");
+        let app_data_dir = transfer_test_dir("appdata");
+        let exported = export_project_in_pool(
+            &pool,
+            ExportProjectInput {
+                project_id: project.id.clone(),
+                output_directory: Some(export_dir.to_string_lossy().to_string()),
+            },
+            &app_data_dir,
+        )
+        .await
+        .unwrap();
+        assert!(exported.warnings.is_empty(), "warnings: {:?}", exported.warnings);
+        assert!(exported.file_path.ends_with(".storyforge.zip"));
+
+        let imported = import_project_in_pool(&pool, &exported.file_path, &app_data_dir)
+            .await
+            .unwrap();
+        assert!(imported.warnings.is_empty(), "warnings: {:?}", imported.warnings);
+        assert_ne!(imported.project.id, project.id);
+        assert_eq!(imported.project.name, "Projekt paczki (import)");
+
+        // nowa ksiazka, wskaznik active_book_id przemapowany
+        let new_book: Book = sqlx::query_as("SELECT * FROM books WHERE project_id = ?")
+            .bind(&imported.project.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(imported.project.active_book_id.as_deref(), Some(new_book.id.as_str()));
+
+        // scena skopiowana z trescia, ale z nowym id
+        let (new_scene_id, manuscript): (String, String) = sqlx::query_as(
+            "SELECT id, manuscript_content FROM scenes WHERE book_id = ?",
+        )
+        .bind(&new_book.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_ne!(new_scene_id, scene.id);
+        assert_eq!(manuscript, "<p>Smok strzegl archiwum.</p>");
+
+        // relacja scena-postac przemapowana na nowe identyfikatory
+        let (linked_character,): (String,) = sqlx::query_as(
+            "SELECT character_id FROM scene_characters WHERE scene_id = ?",
+        )
+        .bind(&new_scene_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_ne!(linked_character, character_id);
+
+        // id sceny osadzone w payload_json propozycji tez przemapowane
+        let (payload,): (String,) = sqlx::query_as(
+            "SELECT payload_json FROM ai_proposals WHERE project_id = ?",
+        )
+        .bind(&imported.project.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(payload.contains(&new_scene_id), "payload: {payload}");
+        assert!(!payload.contains(&scene.id), "payload: {payload}");
+
+        // okladka skopiowana do katalogu aplikacji i podpieta pod nowa sciezke
+        assert!(!new_book.cover_image_path.is_empty());
+        assert_ne!(new_book.cover_image_path, _cover_path);
+        assert!(Path::new(&new_book.cover_image_path).is_file());
+        assert_eq!(std::fs::read(&new_book.cover_image_path).unwrap(), tiny_png());
+
+        // wyszukiwarka widzi zaimportowana scene (triggery FTS zadzialy)
+        let hits = search_project_in_pool(&pool, &imported.project.id, "smok")
+            .await
+            .unwrap();
+        assert!(hits.iter().any(|hit| hit.entity_type == "scene"));
+    }
+
+    #[tokio::test]
+    async fn import_same_zip_twice_creates_two_projects() {
+        let pool = test_pool().await;
+        let (project, _, _, _, _) = seed_transfer_project(&pool).await;
+        let export_dir = transfer_test_dir("export-twice");
+        let app_data_dir = transfer_test_dir("appdata-twice");
+        let exported = export_project_in_pool(
+            &pool,
+            ExportProjectInput {
+                project_id: project.id.clone(),
+                output_directory: Some(export_dir.to_string_lossy().to_string()),
+            },
+            &app_data_dir,
+        )
+        .await
+        .unwrap();
+
+        let first = import_project_in_pool(&pool, &exported.file_path, &app_data_dir)
+            .await
+            .unwrap();
+        let second = import_project_in_pool(&pool, &exported.file_path, &app_data_dir)
+            .await
+            .unwrap();
+        assert_ne!(first.project.id, second.project.id);
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM projects")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 3);
+    }
+
+    #[tokio::test]
+    async fn import_rejects_unsupported_format_version() {
+        let pool = test_pool().await;
+        let app_data_dir = transfer_test_dir("appdata-badver");
+        let manifest = serde_json::json!({
+            "formatVersion": 99,
+            "appVersion": "9.9.9",
+            "exportedAt": Utc::now().to_rfc3339(),
+            "projectId": "x",
+            "projectName": "x",
+            "tables": {}
+        });
+        let archive = zip_deflate(vec![(
+            "manifest.json".into(),
+            serde_json::to_vec(&manifest).unwrap(),
+        )])
+        .unwrap();
+        let zip_path = app_data_dir.join("zly-format.storyforge.zip");
+        std::fs::write(&zip_path, archive).unwrap();
+
+        let error = import_project_in_pool(&pool, &zip_path.to_string_lossy(), &app_data_dir)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("Nieobsługiwana wersja formatu"));
+    }
+
+    #[tokio::test]
+    async fn import_rejects_file_without_manifest() {
+        let pool = test_pool().await;
+        let app_data_dir = transfer_test_dir("appdata-nomanifest");
+        let archive = zip_deflate(vec![("data/projects.json".into(), b"[]".to_vec())]).unwrap();
+        let zip_path = app_data_dir.join("bez-manifestu.zip");
+        std::fs::write(&zip_path, archive).unwrap();
+
+        let error = import_project_in_pool(&pool, &zip_path.to_string_lossy(), &app_data_dir)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("manifest.json"));
+    }
+
+    #[test]
+    fn remap_uuids_in_text_replaces_only_known_ids() {
+        let old_id = "0f9a52a4-77c7-4c9e-9df6-2a4c2b8f01ab";
+        let new_id = "11111111-2222-4333-8444-555555555555";
+        let mut map = HashMap::new();
+        map.insert(old_id.to_string(), new_id.to_string());
+        let text = format!(
+            "{{\"sceneId\":\"{old_id}\",\"other\":\"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\",\"note\":\"zażółć\"}}"
+        );
+        let remapped = remap_uuids_in_text(&text, &map);
+        assert!(remapped.contains(new_id));
+        assert!(!remapped.contains(old_id));
+        assert!(remapped.contains("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"));
+        assert!(remapped.contains("zażółć"));
     }
 }

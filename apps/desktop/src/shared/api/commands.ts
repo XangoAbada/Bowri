@@ -27,7 +27,10 @@ import {
   browserGenerateExportArtwork,
   browserAcceptGeneratedExportArtwork,
   browserChooseExportDirectory,
+  browserChooseImportFile,
   browserExportBook,
+  browserExportProject,
+  browserImportProject,
   browserRevealExportFile,
   browserListExportPresets,
   browserSaveExportPreset,
@@ -110,6 +113,9 @@ import type {
   ExportBookInput,
   ExportBookResult,
   ExportPreset,
+  ExportProjectInput,
+  ExportProjectResult,
+  ImportProjectResult,
   ExportArtworkResult,
   GenerateBookCoverInput,
   GenerateCharacterImageInput,
@@ -803,6 +809,32 @@ export function exportBook(input: ExportBookInput): Promise<ExportBookResult> {
   }
 
   return invoke("export_book", { input });
+}
+
+export function exportProject(
+  input: ExportProjectInput
+): Promise<ExportProjectResult> {
+  if (!isTauriRuntime()) {
+    return browserExportProject(input);
+  }
+
+  return invoke("export_project", { input });
+}
+
+export function importProject(zipPath: string): Promise<ImportProjectResult> {
+  if (!isTauriRuntime()) {
+    return browserImportProject(zipPath);
+  }
+
+  return invoke("import_project", { zipPath });
+}
+
+export function chooseImportFile(): Promise<string | null> {
+  if (!isTauriRuntime()) {
+    return browserChooseImportFile();
+  }
+
+  return invoke("choose_import_file");
 }
 
 export function chooseExportDirectory(): Promise<string | null> {

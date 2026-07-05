@@ -9,9 +9,13 @@ import { DashboardPage } from "./DashboardPage";
 import type { ProjectDetails, ProjectSummary } from "../../shared/api/types";
 import {
   checkCodexCli,
+  chooseExportDirectory,
+  chooseImportFile,
   createProject,
+  exportProject,
   generateNewProjectTitle,
   getProject,
+  importProject,
   listCodexModels,
   listProjects,
   runCodexPrompt,
@@ -42,8 +46,13 @@ vi.mock("../../shared/api/commands", async () => ({
   ),
   cancelActiveCodexRun: vi.fn(),
   checkCodexCli: vi.fn(),
+  chooseExportDirectory: vi.fn(),
+  chooseImportFile: vi.fn(),
   createProject: vi.fn(),
   deleteProject: vi.fn(),
+  exportProject: vi.fn(),
+  importProject: vi.fn(),
+  revealExportFile: vi.fn(() => Promise.resolve()),
   generateNewProjectTitle: vi.fn(),
   getProject: vi.fn(),
   listActiveCodexRuns: vi.fn(() => Promise.resolve([])),
@@ -256,6 +265,75 @@ describe("DashboardPage", () => {
     await waitFor(() => expect(titleInput).toHaveValue("Siostra z mgły"));
     expect(createProject).not.toHaveBeenCalled();
     expect(updateBookConcept).not.toHaveBeenCalled();
+  });
+
+  it("exports a project to a chosen directory and reports the file path", async () => {
+    vi.mocked(chooseExportDirectory).mockResolvedValue("C:\\eksporty");
+    vi.mocked(exportProject).mockResolvedValue({
+      filePath: "C:\\eksporty\\projekt-testowy.storyforge.zip",
+      warnings: ["Nie znaleziono pliku obrazu."]
+    });
+    renderDashboard();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Eksportuj projekt Roboczy tytuł do pliku ZIP/i
+      })
+    );
+
+    await waitFor(() =>
+      expect(exportProject).toHaveBeenCalledWith({
+        projectId: "project-1",
+        outputDirectory: "C:\\eksporty"
+      })
+    );
+    expect(
+      await screen.findByText(/Wyeksportowano projekt do pliku/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Nie znaleziono pliku obrazu.")
+    ).toBeInTheDocument();
+  });
+
+  it("does not export when the directory dialog is cancelled", async () => {
+    vi.mocked(chooseExportDirectory).mockResolvedValue(null);
+    renderDashboard();
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Eksportuj projekt Roboczy tytuł do pliku ZIP/i
+      })
+    );
+
+    await waitFor(() => expect(chooseExportDirectory).toHaveBeenCalled());
+    expect(exportProject).not.toHaveBeenCalled();
+  });
+
+  it("imports a project from a zip file and refreshes the shelf", async () => {
+    vi.mocked(chooseImportFile).mockResolvedValue(
+      "C:\\eksporty\\projekt-testowy.storyforge.zip"
+    );
+    vi.mocked(importProject).mockResolvedValue({
+      project: { ...projectDetails.project, name: "Projekt testowy (import)" },
+      warnings: []
+    });
+    renderDashboard();
+    await screen.findByText("Roboczy tytuł");
+    vi.mocked(listProjects).mockClear();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Importuj projekt z pliku ZIP/i })
+    );
+
+    await waitFor(() =>
+      expect(importProject).toHaveBeenCalledWith(
+        "C:\\eksporty\\projekt-testowy.storyforge.zip"
+      )
+    );
+    expect(
+      await screen.findByText(/Zaimportowano projekt „Projekt testowy \(import\)”/i)
+    ).toBeInTheDocument();
+    await waitFor(() => expect(listProjects).toHaveBeenCalled());
   });
 
   it("uses dashboard prompt context comment for a new project title", async () => {

@@ -1037,6 +1037,21 @@ export type ExportBookResult = {
   warning?: string | null;
 };
 
+export type ExportProjectInput = {
+  projectId: string;
+  outputDirectory?: string | null;
+};
+
+export type ExportProjectResult = {
+  filePath: string;
+  warnings: string[];
+};
+
+export type ImportProjectResult = {
+  project: Project;
+  warnings: string[];
+};
+
 export type ExportPreset = {
   id: string;
   projectId: string;

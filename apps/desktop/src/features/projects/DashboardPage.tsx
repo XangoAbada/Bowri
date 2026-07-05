@@ -1,13 +1,18 @@
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { Download, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   checkCodexCli,
+  chooseExportDirectory,
+  chooseImportFile,
   createProject,
   deleteProject,
+  exportProject,
   getProject,
-  listProjects
+  importProject,
+  listProjects,
+  revealExportFile
 } from "../../shared/api/commands";
 import { coverImageSource } from "../../shared/api/assets";
 import { formatLocalDateTime } from "../../shared/date";
@@ -99,6 +104,54 @@ export function DashboardPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteProject,
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+    }
+  });
+
+  const [transferInfo, setTransferInfo] = useState("");
+  const [transferWarnings, setTransferWarnings] = useState<string[]>([]);
+
+  const exportProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const outputDirectory = await chooseExportDirectory();
+      if (!outputDirectory) {
+        return null;
+      }
+      const result = await exportProject({ projectId, outputDirectory });
+      await revealExportFile(result.filePath);
+      return result;
+    },
+    onMutate: () => {
+      setTransferInfo("");
+      setTransferWarnings([]);
+    },
+    onSuccess: (result) => {
+      if (!result) {
+        return;
+      }
+      setTransferInfo(`Wyeksportowano projekt do pliku: ${result.filePath}`);
+      setTransferWarnings(result.warnings);
+    }
+  });
+
+  const importProjectMutation = useMutation({
+    mutationFn: async () => {
+      const zipPath = await chooseImportFile();
+      if (!zipPath) {
+        return null;
+      }
+      return importProject(zipPath);
+    },
+    onMutate: () => {
+      setTransferInfo("");
+      setTransferWarnings([]);
+    },
+    onSuccess: async (result) => {
+      if (!result) {
+        return;
+      }
+      setTransferInfo(`Zaimportowano projekt „${result.project.name}”.`);
+      setTransferWarnings(result.warnings);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
     }
   });
@@ -341,6 +394,15 @@ export function DashboardPage() {
             <h2>Twoja półka</h2>
             <div className="rule" aria-hidden="true" />
             {projectCount > 0 ? <span>{projectCountLabel(projectCount)}</span> : null}
+            <Button
+              variant="icon"
+              onClick={() => importProjectMutation.mutate()}
+              disabled={importProjectMutation.isPending}
+              title="Importuj projekt z pliku ZIP"
+              aria-label="Importuj projekt z pliku ZIP"
+            >
+              {importProjectMutation.isPending ? <Spinner /> : <Upload size={15} />}
+            </Button>
           </div>
 
           {projectsQuery.isLoading ? (
@@ -438,6 +500,20 @@ export function DashboardPage() {
                     </Button>
                     <Button
                       variant="icon"
+                      onClick={() => exportProjectMutation.mutate(project.id)}
+                      disabled={exportProjectMutation.isPending}
+                      title="Eksportuj projekt do pliku ZIP"
+                      aria-label={`Eksportuj projekt ${displayTitle} do pliku ZIP`}
+                    >
+                      {exportProjectMutation.isPending &&
+                      exportProjectMutation.variables === project.id ? (
+                        <Spinner />
+                      ) : (
+                        <Download size={15} />
+                      )}
+                    </Button>
+                    <Button
+                      variant="icon"
                       className="book-delete"
                       onClick={() => requestProjectDelete(project.id, displayTitle)}
                       disabled={deleteMutation.isPending}
@@ -460,6 +536,28 @@ export function DashboardPage() {
           {aiError ? <p className="warning-text">{aiError}</p> : null}
           {deleteMutation.isError ? (
             <p className="warning-text">Nie udało się usunąć projektu.</p>
+          ) : null}
+          {transferInfo ? <p className="muted-text">{transferInfo}</p> : null}
+          {transferWarnings.map((warning) => (
+            <p className="warning-text" key={warning}>
+              {warning}
+            </p>
+          ))}
+          {exportProjectMutation.isError ? (
+            <p className="warning-text">
+              Nie udało się wyeksportować projektu:{" "}
+              {exportProjectMutation.error instanceof Error
+                ? exportProjectMutation.error.message
+                : String(exportProjectMutation.error)}
+            </p>
+          ) : null}
+          {importProjectMutation.isError ? (
+            <p className="warning-text">
+              Nie udało się zaimportować projektu:{" "}
+              {importProjectMutation.error instanceof Error
+                ? importProjectMutation.error.message
+                : String(importProjectMutation.error)}
+            </p>
           ) : null}
         </section>
       </div>

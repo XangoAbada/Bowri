@@ -29,6 +29,9 @@ import type {
   ExportBookInput,
   ExportBookResult,
   ExportPreset,
+  ExportProjectInput,
+  ExportProjectResult,
+  ImportProjectResult,
   ExportArtworkResult,
   GenerateBookCoverInput,
   GenerateCharacterImageInput,
@@ -1803,6 +1806,22 @@ export async function browserChooseExportDirectory(): Promise<string | null> {
 
 export async function browserRevealExportFile(_filePath: string): Promise<void> {
   return Promise.resolve();
+}
+
+export async function browserExportProject(
+  _input: ExportProjectInput
+): Promise<ExportProjectResult> {
+  throw new Error("Eksport projektu jest dostępny tylko w aplikacji desktopowej.");
+}
+
+export async function browserImportProject(
+  _zipPath: string
+): Promise<ImportProjectResult> {
+  throw new Error("Import projektu jest dostępny tylko w aplikacji desktopowej.");
+}
+
+export async function browserChooseImportFile(): Promise<string | null> {
+  return null;
 }
 
 export async function browserListExportPresets(
