@@ -164,6 +164,7 @@ export type Scene = {
   manuscriptContent: string;
   autoSummary: string;
   autoSummarySourceHash: string;
+  isStyleReference: number;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -551,6 +552,11 @@ export type SaveSceneAutoSummaryInput = {
   sceneId: string;
   autoSummary: string;
   sourceHash: string;
+};
+
+export type SetSceneStyleReferenceInput = {
+  sceneId: string;
+  isStyleReference: number;
 };
 
 export type SaveChapterAutoSummaryInput = {

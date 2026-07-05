@@ -28,7 +28,8 @@ const FULL_LENGTH_KEYS = new Set([
   "knowledgeNotes",
   "storySoFar",
   "autoSummary",
-  "textTail"
+  "textTail",
+  "excerpt"
 ]);
 
 export function truncateStringsDeep(value: unknown): unknown {

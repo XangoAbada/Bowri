@@ -498,6 +498,7 @@ pub struct Scene {
     pub manuscript_content: String,
     pub auto_summary: String,
     pub auto_summary_source_hash: String,
+    pub is_style_reference: i64,
     pub status: String,
     pub created_at: String,
     pub updated_at: String,
@@ -924,6 +925,13 @@ pub struct SaveSceneAutoSummaryInput {
     pub scene_id: String,
     pub auto_summary: String,
     pub source_hash: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSceneStyleReferenceInput {
+    pub scene_id: String,
+    pub is_style_reference: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -2708,6 +2716,38 @@ pub async fn save_scene_auto_summary_in_pool(
     .bind(&input.scene_id)
     .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
+
+    sqlx::query_as::<_, Scene>("SELECT * FROM scenes WHERE id = ?")
+        .bind(&input.scene_id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn set_scene_style_reference_in_pool(
+    pool: &SqlitePool,
+    input: SetSceneStyleReferenceInput,
+) -> Result<Scene, AppError> {
+    let now = Utc::now().to_rfc3339();
+    let mut tx = pool.begin().await?;
+    let book_id: String = sqlx::query_scalar("SELECT book_id FROM scenes WHERE id = ?")
+        .bind(&input.scene_id)
+        .fetch_one(&mut *tx)
+        .await?;
+    sqlx::query(
+        r#"
+        UPDATE scenes
+        SET is_style_reference = ?, updated_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(input.is_style_reference)
+    .bind(&now)
+    .bind(&input.scene_id)
+    .execute(&mut *tx)
+    .await?;
+    touch_project_for_book(&mut tx, &book_id, &now).await?;
     tx.commit().await?;
 
     sqlx::query_as::<_, Scene>("SELECT * FROM scenes WHERE id = ?")
@@ -6160,6 +6200,16 @@ async fn save_scene_auto_summary(
 }
 
 #[tauri::command]
+async fn set_scene_style_reference(
+    state: State<'_, AppState>,
+    input: SetSceneStyleReferenceInput,
+) -> Result<Scene, String> {
+    set_scene_style_reference_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
 async fn save_chapter_auto_summary(
     state: State<'_, AppState>,
     input: SaveChapterAutoSummaryInput,
@@ -8386,6 +8436,7 @@ pub fn run() {
             get_scene_snapshot,
             restore_scene_snapshot,
             save_scene_auto_summary,
+            set_scene_style_reference,
             save_chapter_auto_summary,
             save_story_so_far,
             reorder_scenes,

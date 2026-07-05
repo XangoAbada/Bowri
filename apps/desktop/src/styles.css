@@ -50,7 +50,7 @@
 
 .scene-list-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 4px;
   align-items: start;
 }
@@ -3266,6 +3266,45 @@
 .chapter-card-topline .plan-card-delete-icon {
   margin-left: auto;
   order: 10;
+}
+
+/* Gwiazdka sceny wzorcowej stylu (few-shot dla AI) */
+.scene-style-reference-button,
+.scene-style-reference-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  color: var(--text-soft);
+}
+
+.scene-style-reference-button:hover:not(:disabled),
+.scene-style-reference-icon:hover:not(:disabled) {
+  border-color: rgba(176, 128, 30, 0.6);
+  background: rgba(201, 150, 42, 0.1);
+  color: #a8791a;
+}
+
+.scene-style-reference-button.active,
+.scene-style-reference-icon.active {
+  border-color: rgba(176, 128, 30, 0.55);
+  background: rgba(201, 150, 42, 0.16);
+  color: #a8791a;
+}
+
+.chapter-card-topline .scene-style-reference-icon {
+  margin-left: auto;
+  order: 9;
+}
+
+.chapter-card-topline .scene-style-reference-icon + .plan-card-delete-icon {
+  margin-left: 0;
 }
 
 .thread-summary-hitarea {

@@ -211,6 +211,8 @@ ${renderUnwantedThemesRule(context.sceneContext.book.unwantedThemes)}- Docelową
 ${authorPriority ? `# Author Priority\n${authorPriority}\n` : ""}
 ${renderNarrativeContract(context.sceneContext)}
 
+${renderStyleReferences(context.sceneContext)}
+
 ${renderStorySoFar(context.sceneContext)}
 
 # Book Context
@@ -272,6 +274,7 @@ function renderSceneContextForPrompt(sceneContext: ScenePromptContext): string {
     previousChapters: _previousChapters,
     previousScene: _previousScene,
     chapterSoFar: _chapterSoFar,
+    styleReferences: _styleReferences,
     ...rest
   } = sceneContext;
   const {
@@ -307,6 +310,23 @@ function renderNarrativeContract(sceneContext: ScenePromptContext): string {
   return lines.length
     ? `# Kontrakt narracyjny\nTe ustalenia są nadrzędne wobec reszty kontekstu:\n${lines.join("\n")}`
     : "";
+}
+
+// Few-shot stylu: fragmenty scen oznaczonych przez autora jako wzorcowe.
+// Defensywnie wobec pakietów sprzed tej funkcji (brak pola styleReferences).
+function renderStyleReferences(sceneContext: ScenePromptContext): string {
+  const references = (sceneContext.styleReferences ?? []).filter((item) => item.excerpt.trim());
+  if (!references.length) {
+    return "";
+  }
+  const fragments = references
+    .map((item) => `## ${item.sceneTitle || "Scena wzorcowa"}\n${item.excerpt}`)
+    .join("\n\n");
+  return `# Style Reference
+Poniższe fragmenty pochodzą z zaakceptowanych scen tej książki i definiują docelowy styl prozy.
+Naśladuj ich rytm zdań, gęstość opisu i sposób prowadzenia dialogów. NIE kopiuj z nich treści, wydarzeń ani sformułowań.
+
+${fragments}`;
 }
 
 // Warstwowa "piramida kontekstu": story-so-far książki -> streszczenia

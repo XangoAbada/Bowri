@@ -52,6 +52,7 @@ import {
   browserRunCodexPrompt,
   browserSaveChapterAutoSummary,
   browserSaveSceneAutoSummary,
+  browserSetSceneStyleReference,
   browserSaveStorySoFar,
   browserSaveStoryStructure,
   browserSetActivePlanVersion,
@@ -122,6 +123,7 @@ import type {
   RunCodexPromptRequest,
   SaveChapterAutoSummaryInput,
   SaveSceneAutoSummaryInput,
+  SetSceneStyleReferenceInput,
   SaveStorySoFarInput,
   SaveStoryStructureInput,
   SaveExportPresetInput,
@@ -403,6 +405,14 @@ export function saveSceneAutoSummary(input: SaveSceneAutoSummaryInput): Promise<
   }
 
   return invoke("save_scene_auto_summary", { input });
+}
+
+export function setSceneStyleReference(input: SetSceneStyleReferenceInput): Promise<Scene> {
+  if (!isTauriRuntime()) {
+    return browserSetSceneStyleReference(input);
+  }
+
+  return invoke("set_scene_style_reference", { input });
 }
 
 export function saveChapterAutoSummary(input: SaveChapterAutoSummaryInput): Promise<Chapter> {

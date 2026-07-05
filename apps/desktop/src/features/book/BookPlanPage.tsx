@@ -23,6 +23,7 @@ import {
   Save,
   Search,
   Sparkles,
+  Star,
   Target,
   Trash2,
   X
@@ -56,6 +57,7 @@ import {
   saveStoryStructure,
   setActivePlanVersion,
   setSceneRelations,
+  setSceneStyleReference,
   upsertAct,
   upsertBeat,
   upsertChapter,
@@ -603,6 +605,18 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onSuccess: invalidatePlan,
     onError: showError
   });
+  const styleReferenceMutation = useMutation({
+    mutationFn: setSceneStyleReference,
+    onSuccess: async (scene) => {
+      setMessage(
+        scene.isStyleReference
+          ? "Oznaczono scenę jako wzorzec stylu dla AI."
+          : "Usunięto oznaczenie wzorca stylu."
+      );
+      await invalidatePlan();
+    },
+    onError: showError
+  });
   const duplicatePlanMutation = useMutation({
     mutationFn: () =>
       createPlanVersionFromActive({
@@ -888,6 +902,12 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         onEditScene={(sceneId) => setSceneModal({ mode: "edit", sceneId })}
         onRequestDelete={requestDelete}
         onSetRelations={(input) => sceneRelationsMutation.mutate(input)}
+        onToggleStyleReference={(scene) =>
+          styleReferenceMutation.mutate({
+            sceneId: scene.id,
+            isStyleReference: scene.isStyleReference ? 0 : 1
+          })
+        }
         onDuplicatePlan={() => duplicatePlanMutation.mutate()}
         onSetActivePlan={(planVersionId) => activePlanMutation.mutate(planVersionId)}
         onDeletePlanVersion={(planVersionId) => deletePlanVersionMutation.mutate(planVersionId)}
@@ -1173,6 +1193,7 @@ function ScenesStep({
   onEditScene,
   onRequestDelete,
   onSetRelations,
+  onToggleStyleReference,
   onDuplicatePlan,
   onSetActivePlan,
   onDeletePlanVersion,
@@ -1188,6 +1209,7 @@ function ScenesStep({
   onEditScene: (sceneId: string) => void;
   onRequestDelete: (target: DeleteTarget) => void;
   onSetRelations: (input: SetSceneRelationsInput) => void;
+  onToggleStyleReference: (scene: Scene) => void;
   onDuplicatePlan: () => void;
   onSetActivePlan: (planVersionId: string) => void;
   onDeletePlanVersion: (planVersionId: string) => void;
@@ -1314,6 +1336,25 @@ function ScenesStep({
                 <span className="chapter-card-topline">
                   <span className="chapter-number-badge">{scene.orderIndex + 1}</span>
                   <span>{sceneStatusLabel(scene.status)}</span>
+                  <button
+                    type="button"
+                    className={scene.isStyleReference ? "scene-style-reference-icon active" : "scene-style-reference-icon"}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleStyleReference(scene);
+                    }}
+                    disabled={saving}
+                    title={
+                      scene.isStyleReference
+                        ? "Scena wzorcowa stylu — AI naśladuje jej prozę (kliknij, by odznaczyć)"
+                        : "Oznacz jako scenę wzorcową stylu dla AI"
+                    }
+                    aria-label={`Wzorzec stylu: ${scene.title || "Scena bez tytułu"}`}
+                    aria-pressed={Boolean(scene.isStyleReference)}
+                  >
+                    <Star size={14} fill={scene.isStyleReference ? "currentColor" : "none"} />
+                  </button>
                   <button
                     type="button"
                     className="plan-card-delete-icon"

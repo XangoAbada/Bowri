@@ -159,6 +159,7 @@ function scene(
     manuscriptContent,
     autoSummary: "",
     autoSummarySourceHash: "",
+    isStyleReference: 0,
     status: "draft",
     createdAt: "",
     updatedAt: ""

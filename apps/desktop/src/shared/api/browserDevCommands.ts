@@ -45,6 +45,7 @@ import type {
   RunCodexPromptRequest,
   SaveChapterAutoSummaryInput,
   SaveSceneAutoSummaryInput,
+  SetSceneStyleReferenceInput,
   SaveStorySoFarInput,
   SaveStoryStructureInput,
   SaveExportPresetInput,
@@ -674,6 +675,20 @@ export async function browserSaveSceneAutoSummary(
   return scene;
 }
 
+export async function browserSetSceneStyleReference(
+  input: SetSceneStyleReferenceInput
+): Promise<Scene> {
+  const state = readState();
+  const scene = findBrowserScene(state, input.sceneId);
+  if (!scene) {
+    throw new Error("Nie znaleziono sceny.");
+  }
+  scene.isStyleReference = input.isStyleReference;
+  scene.updatedAt = new Date().toISOString();
+  writeState(state);
+  return scene;
+}
+
 export async function browserSaveChapterAutoSummary(
   input: SaveChapterAutoSummaryInput
 ): Promise<Chapter> {
@@ -781,6 +796,7 @@ export async function browserUpsertScene(input: UpsertSceneInput): Promise<Scene
     manuscriptContent: input.manuscriptContent ?? existing?.manuscriptContent ?? "",
     autoSummary: existing?.autoSummary ?? "",
     autoSummarySourceHash: existing?.autoSummarySourceHash ?? "",
+    isStyleReference: existing?.isStyleReference ?? 0,
     status: input.status || "planned",
     createdAt: existing?.createdAt ?? now,
     updatedAt: now

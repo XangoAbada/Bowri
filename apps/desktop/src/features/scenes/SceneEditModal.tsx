@@ -949,6 +949,7 @@ function sceneDraftPromptEntity(draft: UpsertSceneInput, id: string): Scene {
     manuscriptContent: draft.manuscriptContent ?? "",
     autoSummary: "",
     autoSummarySourceHash: "",
+    isStyleReference: 0,
     status: draft.status,
     createdAt: now,
     updatedAt: now

@@ -1,7 +1,7 @@
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { FileText, List, PenLine, Pilcrow, Plus, Redo2, Save, Sparkles, Undo2 } from "lucide-react";
+import { FileText, List, PenLine, Pilcrow, Plus, Redo2, Save, Sparkles, Star, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,6 +16,7 @@ import {
   listSceneSnapshots,
   restoreSceneSnapshot,
   setSceneRelations,
+  setSceneStyleReference,
   upsertChapter,
   upsertChapterThreadRelation,
   upsertScene
@@ -270,6 +271,21 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       setSelectedSceneId(null);
       setDraft(null);
       setStatusText("Usunięto scenę");
+      await invalidatePlan();
+    },
+    onError: (error) => {
+      setStatusText(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const styleReferenceMutation = useMutation({
+    mutationFn: setSceneStyleReference,
+    onSuccess: async (scene) => {
+      setStatusText(
+        scene.isStyleReference
+          ? "Oznaczono scenę jako wzorzec stylu dla AI"
+          : "Usunięto oznaczenie wzorca stylu"
+      );
       await invalidatePlan();
     },
     onError: (error) => {
@@ -689,6 +705,26 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                   </button>
                   <Button
                     variant="icon"
+                    className={scene.isStyleReference ? "scene-style-reference-button active" : "scene-style-reference-button"}
+                    onClick={() =>
+                      styleReferenceMutation.mutate({
+                        sceneId: scene.id,
+                        isStyleReference: scene.isStyleReference ? 0 : 1
+                      })
+                    }
+                    disabled={styleReferenceMutation.isPending}
+                    title={
+                      scene.isStyleReference
+                        ? "Scena wzorcowa stylu — AI naśladuje jej prozę (kliknij, by odznaczyć)"
+                        : "Oznacz jako scenę wzorcową stylu dla AI"
+                    }
+                    aria-label={`Wzorzec stylu: ${scene.title || "Scena bez tytułu"}`}
+                    aria-pressed={Boolean(scene.isStyleReference)}
+                  >
+                    <Star size={14} fill={scene.isStyleReference ? "currentColor" : "none"} />
+                  </Button>
+                  <Button
+                    variant="icon"
                     className="scene-context-add-button"
                     onClick={() => addSceneEditorContextSource(scenePromptContextSource(scene))}
                     disabled={!activePromptContextTarget || contextSourceAlreadyAdded(activePromptContextTarget.sources, scenePromptContextSource(scene).key)}
@@ -1073,6 +1109,7 @@ function sceneDraftPromptEntity(draft: UpsertSceneInput): Scene {
     manuscriptContent: draft.manuscriptContent ?? "",
     autoSummary: "",
     autoSummarySourceHash: "",
+    isStyleReference: 0,
     status: draft.status,
     createdAt: now,
     updatedAt: now

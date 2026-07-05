@@ -26,6 +26,11 @@ export type PreviousChapterSummary = {
   summary: string;
 };
 
+export type StyleReferenceExcerpt = {
+  sceneTitle: string;
+  excerpt: string;
+};
+
 export type ScenePromptContext = {
   book: Pick<
     Book,
@@ -48,6 +53,8 @@ export type ScenePromptContext = {
     knowledgeNotes: string;
   } | null;
   characters: Array<{ id: string; name: string; role: string; voiceNotes: string; knowledgeNotes: string }>;
+  /** Fragmenty scen oznaczonych gwiazdką — few-shot wzorzec stylu prozy. */
+  styleReferences: StyleReferenceExcerpt[];
   threads: PlotThread[];
   location: WorldElement | null;
   worldElements: WorldElement[];
@@ -157,6 +164,7 @@ export function buildScenePromptContext({
         voiceNotes: item.voiceNotes,
         knowledgeNotes: item.knowledgeNotes
       })),
+    styleReferences: styleReferenceExcerpts(plan, scene.id),
     threads: sceneThreadIds
       .map((id) => plan.threads.find((item) => item.id === id))
       .filter((item): item is PlotThread => Boolean(item)),
@@ -230,11 +238,45 @@ function lastSceneOfPreviousChapter(plan: BookPlan, chapter: Chapter | null): Sc
  * (manuscript to HTML z Tiptapa). 80 słów było za mało, by utrzymać ciągłość.
  */
 function manuscriptTail(html: string, maxWords = 400): string {
-  const text = html
+  const words = manuscriptWords(html);
+  return words.slice(Math.max(0, words.length - maxWords)).join(" ");
+}
+
+function manuscriptWords(html: string): string[] {
+  return html
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
-  const words = text.split(" ").filter(Boolean);
-  return words.slice(Math.max(0, words.length - maxWords)).join(" ");
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+/** ~400 słów ze środka prozy — otwarcia i finały scen bywają stylistycznie nietypowe. */
+function manuscriptMiddleExcerpt(html: string, maxWords = 400): string {
+  const words = manuscriptWords(html);
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+  const start = Math.floor((words.length - maxWords) / 2);
+  return words.slice(start, start + maxWords).join(" ");
+}
+
+/** Maks. 2 sceny wzorcowe (bez bieżącej), w kolejności książki. */
+function styleReferenceExcerpts(plan: BookPlan, currentSceneId: string): StyleReferenceExcerpt[] {
+  const chapterOrder = new Map(plan.chapters.map((item) => [item.id, item.orderIndex]));
+  const orderOf = (scene: Scene) =>
+    scene.chapterId != null ? chapterOrder.get(scene.chapterId) ?? Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+  return plan.scenes
+    .filter(
+      (item) =>
+        item.id !== currentSceneId && Boolean(item.isStyleReference) && item.manuscriptContent.trim()
+    )
+    .sort((a, b) => orderOf(a) - orderOf(b) || a.orderIndex - b.orderIndex)
+    .slice(0, 2)
+    .map((item) => ({
+      sceneTitle: item.title,
+      excerpt: manuscriptMiddleExcerpt(item.manuscriptContent)
+    }))
+    .filter((item) => item.excerpt);
 }

@@ -1,0 +1,1 @@
+ALTER TABLE scenes ADD COLUMN is_style_reference INTEGER NOT NULL DEFAULT 0;
