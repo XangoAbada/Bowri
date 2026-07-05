@@ -25,6 +25,7 @@ import { Button, Chip, Field, StatusPill } from "../../shared/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   checkCodexCli,
+  getAiSettings,
   getProject,
   updateBookConcept
 } from "../../shared/api/commands";
@@ -45,6 +46,7 @@ import {
   renderPromptPackage
 } from "../ai/promptPackage";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
+import { describeTextProvider } from "../ai/textProviderInfo";
 import {
   createConceptPromptContextTarget,
   conceptPromptContextTargetId,
@@ -186,7 +188,7 @@ const conceptStages: ConceptStage[] = [
   },
   {
     key: "readerVoice",
-    title: "Rynek i forma",
+    title: "Gatunek i forma",
     summary: "Gatunek, odbiorca, ton, perspektywa i skala książki.",
     fields: ["genre", "subgenre", "targetAudience", "tone", "pointOfView", "targetWordCount"]
   },
@@ -298,6 +300,12 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   const codexStatusQuery = useQuery({
     queryKey: ["codex-cli", codexPath],
     queryFn: () => checkCodexCli(codexPath),
+    retry: 0
+  });
+
+  const aiSettingsQuery = useQuery({
+    queryKey: ["ai-settings"],
+    queryFn: getAiSettings,
     retry: 0
   });
 
@@ -518,7 +526,12 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
     });
   }
 
-  const codexUnavailable = codexStatusQuery.data?.available === false;
+  const providerInfo = describeTextProvider(aiSettingsQuery.data);
+  // Status Codex CLI blokuje generowanie tylko wtedy, gdy Codex jest aktywnym
+  // dostawcą tekstu w ustawieniach AI. Dla pozostałych dostawców jego brak nie
+  // powinien niczego wyłączać ani wyświetlać komunikatu o Codeksie.
+  const codexUnavailable =
+    providerInfo.isCodex && codexStatusQuery.data?.available === false;
   const aiDisabled = !projectQuery.data || codexUnavailable;
   const fieldStatus = (field: ConceptFieldKey): AiProposalStatus | null =>
     pendingProposalStatus(proposals, {
@@ -1072,8 +1085,8 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
       {codexUnavailable ? (
         <p className="warning-text">
-          Codex CLI nie jest gotowy. Skonfiguruj go w prawym panelu albo
-          ekranie AI.
+          {providerInfo.providerLabel} nie jest gotowy. Skonfiguruj dostawcę
+          tekstu na ekranie AI.
         </p>
       ) : null}
 

@@ -16,16 +16,19 @@ import {
   acceptGeneratedBookCover,
   checkCodexCli,
   generateBookCover,
+  getAiSettings,
   getProject,
   runCodexPrompt,
   updateBookConcept
 } from "../../shared/api/commands";
+import { DEFAULT_AI_SETTINGS } from "../../shared/api/types";
 
 vi.mock("../../shared/api/commands", () => ({
   acceptGeneratedBookCover: vi.fn(),
   cancelActiveCodexRun: vi.fn(),
   checkCodexCli: vi.fn(),
   generateBookCover: vi.fn(),
+  getAiSettings: vi.fn(),
   getProject: vi.fn(),
   listActiveCodexRuns: vi.fn(() => Promise.resolve([])),
   listAiProposals: vi.fn(() => Promise.resolve([])),
@@ -134,6 +137,7 @@ describe("BookConceptPage AI flow", () => {
       version: "codex 1.0.0",
       authLikelyReady: null
     });
+    vi.mocked(getAiSettings).mockResolvedValue({ ...DEFAULT_AI_SETTINGS });
     vi.mocked(runCodexPrompt).mockResolvedValue(successfulRun());
     vi.mocked(generateBookCover).mockResolvedValue({
       book: {
@@ -255,7 +259,7 @@ describe("BookConceptPage AI flow", () => {
       target: { value: "Prawda wychodzi na jaw, ale bohaterka płaci wspomnieniem." }
     });
 
-    fireEvent.click(screen.getByRole("tab", { name: /Rynek i forma/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /Gatunek i forma/i }));
     fireEvent.change(screen.getByLabelText("Docelowa liczba słów"), {
       target: { value: "85000" }
     });
@@ -322,7 +326,7 @@ describe("BookConceptPage AI flow", () => {
         labels: ["Stawki", "Kierunek zakończenia", "Rozszerzona premisa"]
       },
       {
-        tab: /Rynek i forma/i,
+        tab: /Gatunek i forma/i,
         labels: [
           "Gatunek",
           "Podgatunek",
@@ -489,7 +493,7 @@ describe("BookConceptPage AI flow", () => {
     const panel = await screen.findByLabelText("Kontekst promptu AI");
     expect(within(panel).queryByLabelText("Kontekst: Odbiorcy")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: /Rynek i forma/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /Gatunek i forma/i }));
     fireEvent.click(
       screen.getByRole("button", {
         name: /Dodaj Odbiorcy do kontekstu promptu/i
@@ -681,7 +685,7 @@ describe("BookConceptPage AI flow", () => {
     const genreAiButton = await screen.findByRole("button", {
       name: /Generuj Gatunek z AI/i
     });
-    expect(screen.getByRole("tab", { name: /Rynek i forma/i })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /Gatunek i forma/i })).toHaveAttribute(
       "aria-selected",
       "true"
     );
