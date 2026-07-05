@@ -6426,10 +6426,11 @@ pub async fn import_project_in_pool(
                     continue;
                 }
                 if let Value::String(text) = value {
-                    if text.len() == 36 {
-                        if let Some(new_id) = id_map.get(text.as_str()) {
-                            *text = new_id.clone();
-                        }
+                    // Najpierw dokładne dopasowanie całej wartości — id wierszy
+                    // nie zawsze są UUID (np. ai_proposals dostaje z frontendu
+                    // deterministyczne klucze typu "generate_working_title:...").
+                    if let Some(new_id) = id_map.get(text.as_str()) {
+                        *text = new_id.clone();
                     } else if text.len() > 36 {
                         *text = remap_uuids_in_text(text, &id_map);
                     }
@@ -10844,10 +10845,12 @@ mod tests {
         .await
         .unwrap();
         let proposal_payload = format!("{{\"sceneId\":\"{}\"}}", scene.id);
+        // ai_proposals dostaje z frontendu deterministyczne, nie-UUID-owe id —
+        // import musi je przemapować, inaczej drugi import łamie UNIQUE(id).
         sqlx::query(
             "INSERT INTO ai_proposals (id, ai_run_id, project_id, proposal_type, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
-        .bind(Uuid::new_v4().to_string())
+        .bind("generate_working_title:concept")
         .bind(&ai_run_id)
         .bind(&created.project.id)
         .bind("scene_draft")
