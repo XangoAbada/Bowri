@@ -53,6 +53,13 @@ import {
   browserGetSceneSnapshot,
   browserRestoreSceneSnapshot,
   browserRunCodexPrompt,
+  browserListBrainstormSessions,
+  browserCreateBrainstormSession,
+  browserRenameBrainstormSession,
+  browserDeleteBrainstormSession,
+  browserListBrainstormMessages,
+  browserAppendBrainstormMessage,
+  browserUpdateBrainstormMessageSuggestions,
   browserListSceneCritiques,
   browserSaveChapterAutoSummary,
   browserSaveSceneAutoSummary,
@@ -98,6 +105,10 @@ import type {
   BookCoverResult,
   BookConceptInput,
   BookPlan,
+  AppendBrainstormMessageInput,
+  BrainstormMessage,
+  BrainstormSession,
+  CreateBrainstormSessionInput,
   Chapter,
   Character,
   CharacterImageResult,
@@ -431,6 +442,69 @@ export function listSceneCritiques(bookId: string): Promise<SceneCritiqueRecord[
   }
 
   return invoke("list_scene_critiques", { bookId });
+}
+
+export function listBrainstormSessions(projectId: string): Promise<BrainstormSession[]> {
+  if (!isTauriRuntime()) {
+    return browserListBrainstormSessions(projectId);
+  }
+
+  return invoke("list_brainstorm_sessions", { projectId });
+}
+
+export function createBrainstormSession(
+  input: CreateBrainstormSessionInput
+): Promise<BrainstormSession> {
+  if (!isTauriRuntime()) {
+    return browserCreateBrainstormSession(input);
+  }
+
+  return invoke("create_brainstorm_session", { input });
+}
+
+export function renameBrainstormSession(id: string, name: string): Promise<BrainstormSession> {
+  if (!isTauriRuntime()) {
+    return browserRenameBrainstormSession(id, name);
+  }
+
+  return invoke("rename_brainstorm_session", { id, name });
+}
+
+export function deleteBrainstormSession(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteBrainstormSession(id);
+  }
+
+  return invoke("delete_brainstorm_session", { id });
+}
+
+export function listBrainstormMessages(sessionId: string): Promise<BrainstormMessage[]> {
+  if (!isTauriRuntime()) {
+    return browserListBrainstormMessages(sessionId);
+  }
+
+  return invoke("list_brainstorm_messages", { sessionId });
+}
+
+export function appendBrainstormMessage(
+  input: AppendBrainstormMessageInput
+): Promise<BrainstormMessage> {
+  if (!isTauriRuntime()) {
+    return browserAppendBrainstormMessage(input);
+  }
+
+  return invoke("append_brainstorm_message", { input });
+}
+
+export function updateBrainstormMessageSuggestions(
+  id: string,
+  suggestionsJson: string
+): Promise<BrainstormMessage> {
+  if (!isTauriRuntime()) {
+    return browserUpdateBrainstormMessageSuggestions(id, suggestionsJson);
+  }
+
+  return invoke("update_brainstorm_message_suggestions", { id, suggestionsJson });
 }
 
 export function setSceneStyleReference(input: SetSceneStyleReferenceInput): Promise<Scene> {

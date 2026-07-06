@@ -36,7 +36,7 @@ import {
 
 type ProjectShellProps = {
   projectId: string;
-  activeSection: "concept" | "plan" | "characters" | "world" | "editor" | "editing" | "export" | "ai" | "aiLog";
+  activeSection: "brainstorm" | "concept" | "plan" | "characters" | "world" | "editor" | "editing" | "export" | "ai" | "aiLog";
   children: ReactNode;
 };
 
@@ -105,7 +105,9 @@ export function ProjectShell({
     projectQuery.data?.project.name ||
     "Projekt";
   const subtitle =
-    activeSection === "concept"
+    activeSection === "brainstorm"
+      ? "Faza 1: Burza mózgów"
+      : activeSection === "concept"
       ? "Faza 2: Koncepcja książki"
       : activeSection === "plan"
         ? "Faza 3: Plan powieści"
@@ -226,13 +228,14 @@ export function ProjectShell({
         <nav className="sidebar-nav" aria-label="Etapy pisania">
           {(
             [
-              ["concept", "01", "Koncepcja"],
-              ["plan", "02", "Plan"],
-              ["characters", "03", "Postacie"],
-              ["world", "04", "Świat"],
-              ["editor", "05", "Edytor"],
-              ["editing", "06", "Redakcja"],
-              ["export", "07", "Eksport"]
+              ["brainstorm", "01", "Brainstorm"],
+              ["concept", "02", "Koncepcja"],
+              ["plan", "03", "Plan"],
+              ["characters", "04", "Postacie"],
+              ["world", "05", "Świat"],
+              ["editor", "06", "Edytor"],
+              ["editing", "07", "Redakcja"],
+              ["export", "08", "Eksport"]
             ] as const
           ).map(([section, num, label]) => (
             <Link

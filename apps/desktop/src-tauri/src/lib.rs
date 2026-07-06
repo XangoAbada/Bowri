@@ -965,6 +965,51 @@ pub struct SaveSceneCritiqueInput {
     pub source_hash: String,
 }
 
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BrainstormSession {
+    pub id: String,
+    pub project_id: String,
+    pub book_id: String,
+    pub name: String,
+    pub state_summary: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct BrainstormMessage {
+    pub id: String,
+    pub session_id: String,
+    pub project_id: String,
+    pub role: String,
+    pub content: String,
+    pub suggestions_json: String,
+    pub ai_run_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateBrainstormSessionInput {
+    pub project_id: String,
+    pub book_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppendBrainstormMessageInput {
+    pub session_id: String,
+    pub project_id: String,
+    pub role: String,
+    pub content: String,
+    pub suggestions_json: String,
+    pub ai_run_id: Option<String>,
+    pub state_summary: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveChapterAutoSummaryInput {
@@ -2817,6 +2862,152 @@ pub async fn list_scene_critiques_in_pool(
     .fetch_all(pool)
     .await
     .map_err(AppError::from)
+}
+
+pub async fn list_brainstorm_sessions_in_pool(
+    pool: &SqlitePool,
+    project_id: &str,
+) -> Result<Vec<BrainstormSession>, AppError> {
+    sqlx::query_as::<_, BrainstormSession>(
+        "SELECT * FROM brainstorm_sessions WHERE project_id = ? ORDER BY updated_at DESC",
+    )
+    .bind(project_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn create_brainstorm_session_in_pool(
+    pool: &SqlitePool,
+    input: CreateBrainstormSessionInput,
+) -> Result<BrainstormSession, AppError> {
+    let now = Utc::now().to_rfc3339();
+    let id = Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO brainstorm_sessions (
+            id, project_id, book_id, name, state_summary, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, '', ?, ?)
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.project_id)
+    .bind(&input.book_id)
+    .bind(&input.name)
+    .bind(&now)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as::<_, BrainstormSession>("SELECT * FROM brainstorm_sessions WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn rename_brainstorm_session_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+    name: &str,
+) -> Result<BrainstormSession, AppError> {
+    let now = Utc::now().to_rfc3339();
+    sqlx::query("UPDATE brainstorm_sessions SET name = ?, updated_at = ? WHERE id = ?")
+        .bind(name)
+        .bind(&now)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    sqlx::query_as::<_, BrainstormSession>("SELECT * FROM brainstorm_sessions WHERE id = ?")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn delete_brainstorm_session_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM brainstorm_sessions WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn list_brainstorm_messages_in_pool(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> Result<Vec<BrainstormMessage>, AppError> {
+    sqlx::query_as::<_, BrainstormMessage>(
+        "SELECT * FROM brainstorm_messages WHERE session_id = ? ORDER BY created_at",
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn append_brainstorm_message_in_pool(
+    pool: &SqlitePool,
+    input: AppendBrainstormMessageInput,
+) -> Result<BrainstormMessage, AppError> {
+    let now = Utc::now().to_rfc3339();
+    let id = Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO brainstorm_messages (
+            id, session_id, project_id, role, content, suggestions_json, ai_run_id, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(&id)
+    .bind(&input.session_id)
+    .bind(&input.project_id)
+    .bind(&input.role)
+    .bind(&input.content)
+    .bind(&input.suggestions_json)
+    .bind(&input.ai_run_id)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "UPDATE brainstorm_sessions SET updated_at = ?, state_summary = COALESCE(?, state_summary) WHERE id = ?",
+    )
+    .bind(&now)
+    .bind(&input.state_summary)
+    .bind(&input.session_id)
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as::<_, BrainstormMessage>("SELECT * FROM brainstorm_messages WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn update_brainstorm_message_suggestions_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+    suggestions_json: &str,
+) -> Result<BrainstormMessage, AppError> {
+    sqlx::query("UPDATE brainstorm_messages SET suggestions_json = ? WHERE id = ?")
+        .bind(suggestions_json)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    sqlx::query_as::<_, BrainstormMessage>("SELECT * FROM brainstorm_messages WHERE id = ?")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
 }
 
 pub async fn set_scene_style_reference_in_pool(
@@ -6082,6 +6273,8 @@ const PROJECT_TRANSFER_TABLES: &[(&str, &str)] = &[
         "scene_id IN (SELECT id FROM scenes WHERE book_id IN (SELECT id FROM books WHERE project_id = ?))",
     ),
     ("scene_critiques", "project_id = ?"),
+    ("brainstorm_sessions", "project_id = ?"),
+    ("brainstorm_messages", "project_id = ?"),
     ("export_presets", "project_id = ?"),
     ("ai_runs", "project_id = ?"),
     ("ai_proposals", "project_id = ?"),
@@ -6898,6 +7091,78 @@ async fn list_scene_critiques(
     book_id: String,
 ) -> Result<Vec<SceneCritiqueRecord>, String> {
     list_scene_critiques_in_pool(&state.db, &book_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn list_brainstorm_sessions(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<BrainstormSession>, String> {
+    list_brainstorm_sessions_in_pool(&state.db, &project_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn create_brainstorm_session(
+    state: State<'_, AppState>,
+    input: CreateBrainstormSessionInput,
+) -> Result<BrainstormSession, String> {
+    create_brainstorm_session_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn rename_brainstorm_session(
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+) -> Result<BrainstormSession, String> {
+    rename_brainstorm_session_in_pool(&state.db, &id, &name)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_brainstorm_session(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    delete_brainstorm_session_in_pool(&state.db, &id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn list_brainstorm_messages(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<BrainstormMessage>, String> {
+    list_brainstorm_messages_in_pool(&state.db, &session_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn append_brainstorm_message(
+    state: State<'_, AppState>,
+    input: AppendBrainstormMessageInput,
+) -> Result<BrainstormMessage, String> {
+    append_brainstorm_message_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn update_brainstorm_message_suggestions(
+    state: State<'_, AppState>,
+    id: String,
+    suggestions_json: String,
+) -> Result<BrainstormMessage, String> {
+    update_brainstorm_message_suggestions_in_pool(&state.db, &id, &suggestions_json)
         .await
         .map_err(command_error)
 }
@@ -9184,6 +9449,13 @@ pub fn run() {
             save_scene_auto_summary,
             save_scene_critique,
             list_scene_critiques,
+            list_brainstorm_sessions,
+            create_brainstorm_session,
+            rename_brainstorm_session,
+            delete_brainstorm_session,
+            append_brainstorm_message,
+            list_brainstorm_messages,
+            update_brainstorm_message_suggestions,
             set_scene_style_reference,
             save_chapter_auto_summary,
             save_story_so_far,

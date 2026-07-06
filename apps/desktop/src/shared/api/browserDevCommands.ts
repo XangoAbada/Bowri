@@ -50,6 +50,10 @@ import type {
   SaveSceneAutoSummaryInput,
   SaveSceneCritiqueInput,
   SceneCritiqueRecord,
+  AppendBrainstormMessageInput,
+  BrainstormMessage,
+  BrainstormSession,
+  CreateBrainstormSessionInput,
   SetSceneStyleReferenceInput,
   SaveStorySoFarInput,
   SaveStoryStructureInput,
@@ -98,6 +102,8 @@ type BrowserPreviewState = {
   exportPresets: ExportPreset[];
   /** Opcjonalne, żeby stare zapisy localStorage nie wymagały migracji. */
   sceneCritiques?: SceneCritiqueRecord[];
+  brainstormSessions?: BrainstormSession[];
+  brainstormMessages?: BrainstormMessage[];
 };
 
 let memoryState: BrowserPreviewState = {
@@ -715,6 +721,113 @@ export async function browserListSceneCritiques(
 ): Promise<SceneCritiqueRecord[]> {
   const state = readState();
   return (state.sceneCritiques ?? []).filter((item) => item.bookId === bookId);
+}
+
+export async function browserListBrainstormSessions(
+  projectId: string
+): Promise<BrainstormSession[]> {
+  const state = readState();
+  return (state.brainstormSessions ?? [])
+    .filter((item) => item.projectId === projectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function browserCreateBrainstormSession(
+  input: CreateBrainstormSessionInput
+): Promise<BrainstormSession> {
+  const state = readState();
+  const now = new Date().toISOString();
+  const session: BrainstormSession = {
+    id: crypto.randomUUID(),
+    projectId: input.projectId,
+    bookId: input.bookId,
+    name: input.name,
+    stateSummary: "",
+    createdAt: now,
+    updatedAt: now
+  };
+  state.brainstormSessions = [session, ...(state.brainstormSessions ?? [])];
+  writeState(state);
+  return session;
+}
+
+export async function browserRenameBrainstormSession(
+  id: string,
+  name: string
+): Promise<BrainstormSession> {
+  const state = readState();
+  const sessions = state.brainstormSessions ?? [];
+  const session = sessions.find((item) => item.id === id);
+  if (!session) {
+    throw new Error("Nie znaleziono sesji brainstormingu.");
+  }
+  const updated: BrainstormSession = { ...session, name, updatedAt: new Date().toISOString() };
+  state.brainstormSessions = sessions.map((item) => (item.id === id ? updated : item));
+  writeState(state);
+  return updated;
+}
+
+export async function browserDeleteBrainstormSession(id: string): Promise<void> {
+  const state = readState();
+  state.brainstormSessions = (state.brainstormSessions ?? []).filter((item) => item.id !== id);
+  state.brainstormMessages = (state.brainstormMessages ?? []).filter(
+    (item) => item.sessionId !== id
+  );
+  writeState(state);
+}
+
+export async function browserListBrainstormMessages(
+  sessionId: string
+): Promise<BrainstormMessage[]> {
+  const state = readState();
+  return (state.brainstormMessages ?? [])
+    .filter((item) => item.sessionId === sessionId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function browserAppendBrainstormMessage(
+  input: AppendBrainstormMessageInput
+): Promise<BrainstormMessage> {
+  const state = readState();
+  const now = new Date().toISOString();
+  const message: BrainstormMessage = {
+    id: crypto.randomUUID(),
+    sessionId: input.sessionId,
+    projectId: input.projectId,
+    role: input.role,
+    content: input.content,
+    suggestionsJson: input.suggestionsJson,
+    aiRunId: input.aiRunId ?? null,
+    createdAt: now
+  };
+  state.brainstormMessages = [...(state.brainstormMessages ?? []), message];
+  state.brainstormSessions = (state.brainstormSessions ?? []).map((item) =>
+    item.id === input.sessionId
+      ? {
+          ...item,
+          updatedAt: now,
+          stateSummary: input.stateSummary ?? item.stateSummary
+        }
+      : item
+  );
+  writeState(state);
+  return message;
+}
+
+export async function browserUpdateBrainstormMessageSuggestions(
+  id: string,
+  suggestionsJson: string
+): Promise<BrainstormMessage> {
+  const state = readState();
+  const messages = state.brainstormMessages ?? [];
+  const message = messages.find((item) => item.id === id);
+  if (!message) {
+    throw new Error("Nie znaleziono wiadomości brainstormingu.");
+  }
+  const updated: BrainstormMessage = { ...message, suggestionsJson };
+  state.brainstormMessages = messages.map((item) => (item.id === id ? updated : item));
+  writeState(state);
+  return updated;
 }
 
 export async function browserSetSceneStyleReference(
@@ -1960,7 +2073,13 @@ function readState(): BrowserPreviewState {
           characterWorkspaces: normalizeCharacterWorkspaces(parsed.characterWorkspaces),
           worldWorkspaces: normalizeWorldWorkspaces(parsed.worldWorkspaces),
           exportPresets: Array.isArray(parsed.exportPresets) ? parsed.exportPresets : [],
-          sceneCritiques: Array.isArray(parsed.sceneCritiques) ? parsed.sceneCritiques : []
+          sceneCritiques: Array.isArray(parsed.sceneCritiques) ? parsed.sceneCritiques : [],
+          brainstormSessions: Array.isArray(parsed.brainstormSessions)
+            ? parsed.brainstormSessions
+            : [],
+          brainstormMessages: Array.isArray(parsed.brainstormMessages)
+            ? parsed.brainstormMessages
+            : []
         })
       : { projects: [], aiRuns: [], aiProposals: [], plans: {}, characterWorkspaces: {}, worldWorkspaces: {}, exportPresets: [] };
   } catch {

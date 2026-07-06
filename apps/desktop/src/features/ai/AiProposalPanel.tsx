@@ -135,6 +135,15 @@ import {
   useProposalStore
 } from "./proposalStore";
 import { CoverImageLightbox } from "./CoverImageLightbox";
+import {
+  characterDraftFromDiscovery,
+  worldElementDraftFromDiscovery,
+  worldRuleDraftFromDiscovery
+} from "./discoveryDrafts";
+import {
+  BrainstormSuggestionPanel,
+  usePendingBrainstormSuggestions
+} from "../brainstorm/BrainstormSuggestionPanel";
 import { Button } from "../../shared/ui";
 import {
   characterPromptContextTargetId,
@@ -502,6 +511,7 @@ export function AiProposalPanel({
     [critiques, projectId]
   );
   const hydrateCritiques = useSceneCritiqueStore((state) => state.hydrate);
+  const brainstormSuggestions = usePendingBrainstormSuggestions();
   const panelProjectQuery = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
@@ -914,7 +924,8 @@ export function AiProposalPanel({
     visibleDiscoveries.length === 0 &&
     visibleAuditPrompts.length === 0 &&
     visibleAssignments.length === 0 &&
-    visibleCritiques.length === 0
+    visibleCritiques.length === 0 &&
+    brainstormSuggestions.length === 0
   ) {
     return (
       <section className="context-section compact">
@@ -948,6 +959,7 @@ export function AiProposalPanel({
       <SceneAuditPromptPanel prompts={visibleAuditPrompts} />
       <SceneAssignmentPanel projectId={projectId} assignments={visibleAssignments} />
       <SceneDiscoveryPanel projectId={projectId} discoveries={visibleDiscoveries} />
+      <BrainstormSuggestionPanel projectId={projectId} suggestions={brainstormSuggestions} />
       <SceneCritiquePanel critiques={visibleCritiques} />
 
       <div className="proposal-queue-list">
@@ -3629,36 +3641,6 @@ function assignmentKindLabel(kind: PendingSceneAssignment["kind"]): string {
   return "Relacja";
 }
 
-function characterDraftFromDiscovery(discovery: SceneDiscovery): Character {
-  const now = new Date().toISOString();
-  return {
-    id: `audit-character:${discovery.id}`,
-    projectId: discovery.projectId,
-    characterType: discovery.suggestedType || "person",
-    name: discovery.title,
-    aliasesJson: "[]",
-    role: "",
-    shortDescription: discovery.reason,
-    appearance: "",
-    externalGoal: "",
-    internalNeed: "",
-    wound: "",
-    falseBelief: "",
-    secret: "",
-    strengthsJson: "[]",
-    weaknessesJson: "[]",
-    voiceNotes: "",
-    arcSummary: "",
-    knowledgeNotes: discovery.evidence,
-    visualPrompt: "",
-    imageAssetId: null,
-    status: "draft",
-    orderIndex: 0,
-    createdAt: now,
-    updatedAt: now
-  };
-}
-
 function characterMemoryDraftFromDiscovery(
   discovery: SceneDiscovery,
   character: Character
@@ -3747,46 +3729,6 @@ function relationCharacterIdsFromDiscovery(
     .slice(0, 2);
 
   return [relatedIds[0] ?? null, relatedIds[1] ?? null];
-}
-
-function worldElementDraftFromDiscovery(discovery: SceneDiscovery): WorldElement {
-  const now = new Date().toISOString();
-  return {
-    id: `audit-world-element:${discovery.id}`,
-    projectId: discovery.projectId,
-    elementType: discovery.suggestedType || "location",
-    name: discovery.title,
-    summary: discovery.reason,
-    details: discovery.evidence,
-    storyPurpose: "",
-    constraints: "",
-    visualPrompt: "",
-    imageAssetId: null,
-    status: "draft",
-    orderIndex: 0,
-    createdAt: now,
-    updatedAt: now
-  };
-}
-
-function worldRuleDraftFromDiscovery(discovery: SceneDiscovery): WorldRule {
-  const now = new Date().toISOString();
-  return {
-    id: `audit-world-rule:${discovery.id}`,
-    projectId: discovery.projectId,
-    name: discovery.title,
-    description: discovery.reason,
-    scope: discovery.evidence,
-    cost: "",
-    limitation: "",
-    exceptions: "",
-    violationConsequences: "",
-    sceneExamples: "",
-    status: "draft",
-    orderIndex: 0,
-    createdAt: now,
-    updatedAt: now
-  };
 }
 
 function serializeListValue(value: string): string {

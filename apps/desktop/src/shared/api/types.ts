@@ -586,6 +586,62 @@ export type SetSceneStyleReferenceInput = {
   isStyleReference: number;
 };
 
+export type BrainstormSuggestionKind =
+  | "conceptField"
+  | "character"
+  | "worldElement"
+  | "worldRule"
+  | "plotThread";
+
+export type BrainstormSuggestionStatus = "pending" | "applied" | "dismissed";
+
+export type BrainstormSuggestion = {
+  id: string;
+  kind: BrainstormSuggestionKind;
+  conceptField?: string;
+  title: string;
+  value: string;
+  reason: string;
+  status: BrainstormSuggestionStatus;
+};
+
+export type BrainstormSession = {
+  id: string;
+  projectId: string;
+  bookId: string;
+  name: string;
+  stateSummary: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BrainstormMessage = {
+  id: string;
+  sessionId: string;
+  projectId: string;
+  role: "user" | "assistant";
+  content: string;
+  suggestionsJson: string;
+  aiRunId: string | null;
+  createdAt: string;
+};
+
+export type CreateBrainstormSessionInput = {
+  projectId: string;
+  bookId: string;
+  name: string;
+};
+
+export type AppendBrainstormMessageInput = {
+  sessionId: string;
+  projectId: string;
+  role: "user" | "assistant";
+  content: string;
+  suggestionsJson: string;
+  aiRunId?: string | null;
+  stateSummary?: string | null;
+};
+
 export type SaveChapterAutoSummaryInput = {
   chapterId: string;
   autoSummary: string;
@@ -772,7 +828,8 @@ export type AIAction =
   | "critique_scene"
   | "summarize_scene"
   | "summarize_chapter"
-  | "summarize_story_so_far";
+  | "summarize_story_so_far"
+  | "brainstorm_chat";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "xhigh";
 

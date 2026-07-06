@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { DashboardPage } from "../features/projects/DashboardPage";
 import { ProjectShell } from "./ProjectShell";
 import { BookConceptPage } from "../features/book/BookConceptPage";
+import { BrainstormPage } from "../features/brainstorm/BrainstormPage";
 import { BookPlanPage } from "../features/book/BookPlanPage";
 import { CharactersPage } from "../features/characters/CharactersPage";
 import { WorldPage } from "../features/world/WorldPage";
@@ -26,6 +27,12 @@ const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects/$projectId",
   component: ProjectConceptRoute
+});
+
+const projectBrainstormRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId/brainstorm",
+  component: ProjectBrainstormRoute
 });
 
 const projectConceptRoute = createRoute({
@@ -96,6 +103,7 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute,
   settingsRoute,
   projectRoute,
+  projectBrainstormRoute,
   projectConceptRoute,
   projectPlanRoute,
   projectCharactersRoute,
@@ -114,6 +122,15 @@ export const router = createRouter({
 
 function RootLayout() {
   return <Outlet />;
+}
+
+function ProjectBrainstormRoute() {
+  const projectId = useProjectId();
+  return (
+    <ProjectShell projectId={projectId} activeSection="brainstorm">
+      <BrainstormPage projectId={projectId} />
+    </ProjectShell>
+  );
 }
 
 function ProjectConceptRoute() {
