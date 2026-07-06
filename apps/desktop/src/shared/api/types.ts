@@ -881,6 +881,8 @@ export type AiTokenUsage = {
 export type AiRunResult = {
   id: string;
   providerId: string;
+  /** Model użyty do generacji (do wyceny). Opcjonalny dla starszych makiet/testów. */
+  model?: string | null;
   promptPackageId: string;
   action: string;
   status: "success" | "error" | "cancelled" | "timeout" | string;

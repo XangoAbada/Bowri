@@ -112,6 +112,9 @@ export type ActiveAiProposal = AiPromptSnapshot & {
   errorMessage: string;
   durationMs?: number;
   usage?: AiTokenUsage;
+  /** Dostawca i model użyte do tej generacji — do wyceny niezależnej od bieżących ustawień. */
+  usageProviderId?: string;
+  usageModel?: string | null;
   coverImagePath?: string;
   coverGeneratedAt?: string;
   characterImagePath?: string;
@@ -142,6 +145,8 @@ type ProposalResult = Pick<
     Pick<
       ActiveAiProposal,
       | "usage"
+      | "usageProviderId"
+      | "usageModel"
       | "editableFields"
       | "selectedFields"
       | "coverImagePath"
@@ -336,6 +341,8 @@ export const useProposalStore = create<ProposalState>((set) => ({
                 errorMessage: "",
                 durationMs: undefined,
                 usage: undefined,
+                usageProviderId: undefined,
+                usageModel: undefined,
                 coverImagePath: undefined,
                 coverGeneratedAt: undefined,
                 characterImagePath: undefined,

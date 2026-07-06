@@ -271,6 +271,7 @@ pub struct CoverGenerationProgress {
 pub struct AiRunResult {
     pub id: String,
     pub provider_id: String,
+    pub model: String,
     pub prompt_package_id: String,
     pub action: String,
     pub status: String,
@@ -4947,6 +4948,7 @@ pub(crate) async fn generate_book_cover_in_pool(
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             tokens_estimated: false,
+            model: String::new(),
         },
         image_path: final_image_path_text,
         prompt: input.cover_prompt,
@@ -5123,6 +5125,7 @@ pub(crate) async fn generate_character_image_in_pool(
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             tokens_estimated: false,
+            model: String::new(),
         },
         image_path: final_image_path_text,
         prompt: input.image_prompt,
@@ -5207,6 +5210,7 @@ pub async fn accept_generated_character_image_in_pool(
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             tokens_estimated: false,
+            model: String::new(),
         },
         image_path: input.image_path,
         prompt: input.image_prompt,
@@ -5535,6 +5539,7 @@ pub(crate) async fn generate_export_artwork_in_pool(
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             tokens_estimated: false,
+            model: String::new(),
         },
         image_path: file_path,
         prompt: input.image_prompt,
@@ -5591,6 +5596,7 @@ pub async fn accept_generated_export_artwork_in_pool(
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             tokens_estimated: false,
+            model: String::new(),
         },
         image_path: input.image_path,
         prompt: input.image_prompt,
@@ -7885,6 +7891,10 @@ pub(crate) async fn generate_new_project_title_with_codex(
     Ok(AiRunResult {
         id: ai_run_id,
         provider_id,
+        model: settings
+            .effective_text_model()
+            .or_else(|| codex_request.model.clone())
+            .unwrap_or_default(),
         prompt_package_id: codex_request.prompt_package_id,
         action: codex_request.action,
         status,
@@ -8010,6 +8020,7 @@ pub(crate) async fn run_codex_prompt_in_pool(
     Ok(AiRunResult {
         id: ai_run_id,
         provider_id,
+        model: effective_model.unwrap_or_default(),
         prompt_package_id: request.prompt_package_id,
         action: request.action,
         status,

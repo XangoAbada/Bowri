@@ -17,10 +17,13 @@ export type CostBreakdown = {
   hasPricing: boolean;
 };
 
-// Oficjalny cennik Anthropic (USD / 1M tokenów).
+// Oficjalny cennik Anthropic (USD / 1M tokenów). Cache read = 0.1× input,
+// cache write (5 min) = 1.25× input.
+// UWAGA: Sonnet 5 ma cenę wprowadzającą 2/10 do 2026-08-31 — potem wraca do 3/15
+// (i cache 0.3 / 3.75). Zaktualizuj po tej dacie.
 const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
   "claude-opus-4-8": { inputPer1M: 5, outputPer1M: 25, cacheReadPer1M: 0.5, cacheWritePer1M: 6.25 },
-  "claude-sonnet-5": { inputPer1M: 3, outputPer1M: 15, cacheReadPer1M: 0.3, cacheWritePer1M: 3.75 },
+  "claude-sonnet-5": { inputPer1M: 2, outputPer1M: 10, cacheReadPer1M: 0.2, cacheWritePer1M: 2.5 },
   "claude-haiku-4-5": { inputPer1M: 1, outputPer1M: 5, cacheReadPer1M: 0.1, cacheWritePer1M: 1.25 }
 };
 

@@ -2052,7 +2052,11 @@ function ProposalQueueItem({
         <p className="muted-text proposal-cost">
           Koszt:{" "}
           {formatCostLabel(
-            costOf(proposal.usage, providerId, model),
+            costOf(
+              proposal.usage,
+              proposal.usageProviderId ?? providerId,
+              proposal.usageModel ?? model
+            ),
             plnPerUsd
           )}{" "}
           · {proposal.usage.inputTokens + proposal.usage.outputTokens} tok.
@@ -2343,6 +2347,8 @@ function useAiQueueRunner() {
             editableValue: result.imagePath,
             durationMs: result.aiRun.durationMs,
             usage: usageFromRun(result.aiRun),
+            usageProviderId: result.aiRun.providerId,
+            usageModel: result.aiRun.model,
             coverImagePath: result.imagePath,
             coverGeneratedAt: result.generatedAt,
             progressMessage: "Okładka gotowa do akceptacji.",
@@ -2408,6 +2414,8 @@ function useAiQueueRunner() {
             editableValue: result.imagePath,
             durationMs: result.aiRun.durationMs,
             usage: usageFromRun(result.aiRun),
+            usageProviderId: result.aiRun.providerId,
+            usageModel: result.aiRun.model,
             coverImagePath: result.imagePath,
             characterImagePath: result.imagePath,
             characterGeneratedAt: result.generatedAt,
@@ -2479,6 +2487,8 @@ function useAiQueueRunner() {
             editableValue: result.imagePath,
             durationMs: result.aiRun.durationMs,
             usage: usageFromRun(result.aiRun),
+            usageProviderId: result.aiRun.providerId,
+            usageModel: result.aiRun.model,
             coverImagePath: result.imagePath,
             exportArtworkPath: result.imagePath,
             exportArtworkGeneratedAt: result.generatedAt,
@@ -2592,7 +2602,9 @@ function useAiQueueRunner() {
           editableFields: editableFieldsFromParsed(parsed),
           selectedFields: selectedFieldsFromParsed(parsed),
           durationMs: result.durationMs,
-          usage: usageFromRun(result)
+          usage: usageFromRun(result),
+          usageProviderId: result.providerId,
+          usageModel: result.model
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

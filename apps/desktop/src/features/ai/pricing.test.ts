@@ -17,10 +17,10 @@ const oneMillion: AiTokenUsage = {
 };
 
 describe("costOf", () => {
-  it("prices Anthropic Sonnet 5 at 1M/1M input/output", () => {
+  it("prices Anthropic Sonnet 5 at 1M/1M input/output (intro pricing)", () => {
     const cost = costOf(oneMillion, "anthropic-api", "claude-sonnet-5");
     expect(cost.hasPricing).toBe(true);
-    expect(cost.usd).toBeCloseTo(18, 6); // 3 + 15
+    expect(cost.usd).toBeCloseTo(12, 6); // 2 + 10 (cena wprowadzająca do 2026-08-31)
   });
 
   it("prices Anthropic Opus 4.8 at 1M/1M input/output", () => {
@@ -95,7 +95,7 @@ describe("totalCostOf", () => {
       }
     ];
     const total = totalCostOf(groups);
-    expect(total.usd).toBeCloseTo(3, 6); // only the Sonnet group is priced
+    expect(total.usd).toBeCloseTo(2, 6); // tylko grupa Sonnet (cena wprowadzająca: 2/1M input)
     expect(total.hasPricing).toBe(true);
   });
 });
