@@ -37,15 +37,28 @@ account.
 - **📝 Rich scene editor** — a TipTap-based editor built for drafting and redrafting prose.
 - **📦 Portable projects** — export a project as a self-contained ZIP and re-import it anywhere.
 - **🌍 Bilingual UI** — Polish and English out of the box (i18next).
-- **🔒 Local-first & private** — SQLite on disk, no accounts, no telemetry, no credentials stored by the app.
+- **🔌 Bring your own AI** — use a CLI subscription (OpenAI Codex or Anthropic Claude Code) or plug in an OpenAI / Anthropic API key.
+- **🔒 Local-first & private** — SQLite on disk, no accounts, no telemetry. Your manuscript never leaves your machine.
 
-## AI provider
+## AI providers
 
-Bowri's V1 AI backend is **`codex-cli-bridge`**. The app shells out to the
-official [Codex CLI](https://developers.openai.com/codex/cli) through Tauri
-commands, so it reuses your existing Codex authentication for both text and
-image generation. Bowri stores no tokens or credentials of its own — run
-`codex login` once and you are set.
+Bowri never hosts a model itself — it drives **your** AI account. Pick a text
+provider in the in-app AI settings:
+
+| Provider              | Auth                                   | Notes                                          |
+| --------------------- | -------------------------------------- | ---------------------------------------------- |
+| **Codex CLI** (default) | Your Codex CLI login (`codex login`)   | Reuses the official Codex CLI; also does image generation |
+| **Claude Code CLI**   | Your Claude Code CLI login (subscription) | Runs through the official Claude Code CLI       |
+| **Anthropic API**     | Anthropic API key                      | Claude Sonnet / Opus / Haiku                    |
+| **OpenAI API**        | OpenAI API key                         | GPT-5.x / GPT-4.1                               |
+
+**CLI providers** reuse the login you already have — Bowri stores no tokens of
+its own. **API providers** need a key, which is saved locally in the app's data
+directory (plaintext JSON today; a keyring-backed store is the planned upgrade).
+
+Image generation (covers, character art, editorial illustrations) currently
+runs through the **Codex CLI**, so `codex login` is required for those features
+regardless of the text provider you choose.
 
 ## Tech stack
 
@@ -57,7 +70,7 @@ image generation. Bowri stores no tokens or credentials of its own — run
 | State/data | TanStack Query, Zustand, Zod                           |
 | Editor     | TipTap 3                                               |
 | Storage    | SQLite (local)                                         |
-| AI         | `codex-cli-bridge` → official Codex CLI                |
+| AI         | Codex CLI · Claude Code CLI · Anthropic API · OpenAI API |
 | i18n       | i18next / react-i18next (Polish + English)             |
 
 ## Getting started
@@ -66,7 +79,8 @@ image generation. Bowri stores no tokens or credentials of its own — run
 
 - **Node.js** 18+ and npm
 - **Rust** (stable, MSVC toolchain on Windows) — required for the desktop build
-- **Codex CLI** — required for AI text and image generation
+- An **AI provider** — a Codex CLI or Claude Code CLI login, or an OpenAI / Anthropic API key (see [AI providers](#ai-providers))
+- **Codex CLI** — required for image generation (covers, character art) regardless of text provider
 
 Install Rust on Windows if you don't have it:
 
@@ -76,12 +90,16 @@ rustup default stable
 cargo --version
 ```
 
-Authenticate the Codex CLI (used for all AI features):
+Authenticate the Codex CLI (default text provider, and required for image
+generation):
 
 ```powershell
 codex --version
 codex login
 ```
+
+> Prefer a different text model? Switch the provider to Claude Code CLI,
+> Anthropic API, or OpenAI API in the app's AI settings.
 
 ### Run the desktop app
 
