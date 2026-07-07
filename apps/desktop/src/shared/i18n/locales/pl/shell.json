@@ -1,0 +1,67 @@
+{
+  "shell": {
+    "defaultProjectTitle": "Projekt",
+    "phase": {
+      "brainstorm": "Faza 1: Burza mózgów",
+      "concept": "Faza 2: Koncepcja książki",
+      "plan": "Faza 3: Plan powieści",
+      "characters": "Faza 4: Postacie i relacje",
+      "world": "Faza 5: Świat i reguły",
+      "editor": "Faza 7: Edytor scen i rozdziałów",
+      "editing": "Faza 8: Redakcja i statystyki",
+      "export": "Eksport książki",
+      "aiLog": "Log AI",
+      "aiSettings": "Ustawienia AI"
+    },
+    "model": {
+      "currentlySelected": "Aktualnie wybrany model",
+      "catalogFallback": "Fallback, gdy katalog modeli jest niedostępny"
+    },
+    "nav": {
+      "stagesLabel": "Etapy pisania",
+      "brainstorm": "Brainstorm",
+      "concept": "Koncepcja",
+      "plan": "Plan",
+      "characters": "Postacie",
+      "world": "Świat",
+      "editor": "Edytor",
+      "editing": "Redakcja",
+      "export": "Eksport",
+      "settings": "Ustawienia"
+    },
+    "panel": {
+      "projectLabel": "Panel projektu",
+      "resizeTitle": "Przeciągnij, aby zmienić szerokość panelu",
+      "resizeAriaLabel": "Zmień szerokość panelu projektu",
+      "statusLabel": "Status projektu",
+      "autosaved": "Zapisano automatycznie • 10:42",
+      "costChipTitle": "Szacunkowy łączny koszt generacji AI w tym projekcie wg oficjalnych cenników (jakby przez API). ~ oznacza wynik częściowo szacowany.",
+      "noPricing": "≈ brak cennika"
+    },
+    "modelMenu": {
+      "modelLabel": "Model",
+      "codexModelTitle": "Model używany przez codex exec przy generowaniu treści pól.",
+      "providerModelTitle": "Model używany przez {{provider}}.",
+      "reasoningLevel": "Poziom reasoning",
+      "openAiSettings": "Otwórz ustawienia AI"
+    },
+    "aiLog": {
+      "close": "Zamknij log AI",
+      "open": "Otwórz log AI",
+      "label": "Log AI"
+    },
+    "search": {
+      "kind": {
+        "scene": "Scena",
+        "character": "Postać",
+        "world_element": "Świat"
+      },
+      "placeholder": "Szukaj w projekcie…",
+      "ariaLabel": "Szukaj w projekcie",
+      "resultsLabel": "Wyniki wyszukiwania",
+      "noResults": "Brak wyników.",
+      "untitled": "Bez tytułu"
+    },
+    "back": "Wróć do projektów"
+  }
+}

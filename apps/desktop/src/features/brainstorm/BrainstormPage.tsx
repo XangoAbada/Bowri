@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lightbulb, Pencil, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 import { Button, Chip, EmptyState, Field, Modal, TwoPane } from "../../shared/ui";
@@ -37,6 +38,7 @@ const DEVELOP_MESSAGE =
   "Zacznijmy od tego, co już mam w koncepcji i story bible. Podsumuj obecny pomysł własnymi słowami, wskaż najsłabsze punkty i białe plamy, a potem zaproponuj, co warto pogłębić w pierwszej kolejności.";
 
 export function BrainstormPage({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
   const timeoutSeconds = useCodexSettingsStore((state) => state.timeoutSeconds);
@@ -216,7 +218,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
   }
 
   async function removeSession(sessionId: string) {
-    if (!window.confirm("Usunąć sesję razem z całą rozmową i sugestiami?")) {
+    if (!window.confirm(t("brainstorm.confirmDeleteSession"))) {
       return;
     }
     await deleteBrainstormSession(sessionId);
@@ -289,7 +291,8 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
       });
       if (result.status !== "success" || !result.rawOutput) {
         throw new Error(
-          result.errorMessage || `Generowanie ${providerInfo.providerLabel} nie powiodło się.`
+          result.errorMessage ||
+            t("brainstorm.generationFailed", { provider: providerInfo.providerLabel })
         );
       }
 
@@ -366,19 +369,19 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                     setSendError(null);
                   }}
                 >
-                  <span className="t">{session.name || "Sesja bez nazwy"}</span>
+                  <span className="t">{session.name || t("brainstorm.sessionUntitled")}</span>
                   <span className="m">
                     {new Date(session.updatedAt).toLocaleDateString("pl-PL")}
                   </span>
                 </button>
               ))}
               {sessions.length === 0 ? (
-                <p className="bible-list-empty">Brak sesji — zacznij pierwszą burzę mózgów.</p>
+                <p className="bible-list-empty">{t("brainstorm.emptySessions")}</p>
               ) : null}
             </div>
             <Button variant="secondary" block onClick={() => void createSession()}>
               <Plus size={15} aria-hidden />
-              Nowa sesja
+              {t("brainstorm.newSession")}
             </Button>
           </>
         }
@@ -390,25 +393,24 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                 <Lightbulb size={18} aria-hidden />
               </div>
               <div className="bible-editor-heading-body">
-                <p className="eyebrow">Brainstorming</p>
-                <h3>{activeSession.name || "Sesja bez nazwy"}</h3>
-                <p className="muted-text">
-                  Rozwijaj pomysł w rozmowie — sugestie do koncepcji, postaci, świata i wątków
-                  zbierają się w panelu AI po prawej.
-                </p>
+                <p className="eyebrow">{t("brainstorm.eyebrow")}</p>
+                <h3>{activeSession.name || t("brainstorm.sessionUntitled")}</h3>
+                <p className="muted-text">{t("brainstorm.intro")}</p>
                 {sessionCost.hasPricing ? (
                   <span
                     className="ai-cost-chip"
-                    title="Szacunkowy łączny koszt tej sesji brainstormu wg oficjalnych cenników (jakby przez API). ~ oznacza tokeny szacowane."
+                    title={t("brainstorm.sessionCostTitle")}
                   >
-                    Koszt sesji: {formatCostLabel(sessionCost, plnPerUsd)}
+                    {t("brainstorm.sessionCost", {
+                      cost: formatCostLabel(sessionCost, plnPerUsd)
+                    })}
                   </span>
                 ) : null}
               </div>
               <div className="button-row">
                 <Button variant="ghost" size="sm" onClick={() => setRenameDraft(activeSession.name)}>
                   <Pencil size={14} aria-hidden />
-                  Zmień nazwę
+                  {t("brainstorm.rename")}
                 </Button>
                 <Button
                   variant="danger"
@@ -416,7 +418,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                   onClick={() => void removeSession(activeSession.id)}
                 >
                   <Trash2 size={14} aria-hidden />
-                  Usuń
+                  {t("brainstorm.delete")}
                 </Button>
               </div>
             </div>
@@ -426,8 +428,8 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                 <div className="brainstorm-starter">
                   <p>
                     {hasMaterial
-                      ? "Projekt ma już zarys — AI oprze rozmowę na Twojej koncepcji i story bible."
-                      : "Możesz zacząć od czegokolwiek — jednego obrazu, emocji, pytania. A jeśli nie masz nic, AI zaproponuje punkty startowe."}
+                      ? t("brainstorm.starterWithMaterial")
+                      : t("brainstorm.starterNoMaterial")}
                   </p>
                   <Button
                     variant="ai"
@@ -437,8 +439,8 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                   >
                     <Sparkles size={14} aria-hidden />
                     {hasMaterial
-                      ? "Podsumuj i pogłęb mój pomysł"
-                      : "Nie mam pomysłu — zaproponuj startery"}
+                      ? t("brainstorm.developButton")
+                      : t("brainstorm.starterButton")}
                   </Button>
                 </div>
               ) : null}
@@ -448,7 +450,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                   className={`brainstorm-message ${message.role === "user" ? "user" : "assistant"}`}
                 >
                   <span className="brainstorm-message-author">
-                    {message.role === "user" ? "Ty" : "AI"}
+                    {message.role === "user" ? t("brainstorm.authorUser") : t("brainstorm.authorAi")}
                   </span>
                   {message.role === "assistant" ? (
                     <BrainstormMarkdown
@@ -464,7 +466,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                   runCostById.get(message.aiRunId)?.hasPricing ? (
                     <span
                       className="ai-cost-chip brainstorm-message-cost"
-                      title="Szacunkowy koszt tej odpowiedzi wg oficjalnego cennika (jakby przez API)."
+                      title={t("brainstorm.messageCostTitle")}
                     >
                       {formatCostLabel(runCostById.get(message.aiRunId)!, plnPerUsd)}
                     </span>
@@ -473,9 +475,9 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
               ))}
               {isSending ? (
                 <article className="brainstorm-message assistant pending">
-                  <span className="brainstorm-message-author">AI</span>
+                  <span className="brainstorm-message-author">{t("brainstorm.authorAi")}</span>
                   <p className="brainstorm-plain">
-                    {providerInfo.providerLabel} myśli nad odpowiedzią…
+                    {t("brainstorm.thinking", { provider: providerInfo.providerLabel })}
                   </p>
                 </article>
               ) : null}
@@ -486,7 +488,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                 <p>{sendError}</p>
                 {canRetry ? (
                   <Button variant="secondary" size="sm" onClick={() => void requestAssistantReply()}>
-                    Ponów
+                    {t("brainstorm.retry")}
                   </Button>
                 ) : null}
               </div>
@@ -508,7 +510,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                         tone="ai"
                         pressed
                         onClick={() => toggleChip(label)}
-                        title={`Usuń „${label}”`}
+                        title={t("brainstorm.removeChipTitle", { label })}
                       >
                         {label}
                       </Chip>
@@ -519,7 +521,7 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                   className="ui-input"
                   value={draft}
                   rows={3}
-                  placeholder="Opisz pomysł, wątpliwość albo zadaj pytanie…"
+                  placeholder={t("brainstorm.composerPlaceholder")}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Backspace" && draft === "" && selectedChips.length > 0) {
@@ -541,19 +543,19 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
                 disabled={!contextReady || (!draft.trim() && selectedChips.length === 0)}
               >
                 <Send size={15} aria-hidden />
-                Wyślij
+                {t("brainstorm.send")}
               </Button>
             </form>
           </main>
         ) : (
           <EmptyState
             icon={<Lightbulb size={28} aria-hidden />}
-            title="Burza mózgów nad historią"
-            description="Utwórz sesję i rozwijaj pomysł w rozmowie z AI — nawet bez najmniejszego zarysu. Wnioski zamienisz jednym kliknięciem w pola koncepcji, postacie, elementy świata i wątki."
+            title={t("brainstorm.emptyTitle")}
+            description={t("brainstorm.emptyDescription")}
             action={
               <Button variant="primary" onClick={() => void createSession()}>
                 <Plus size={15} aria-hidden />
-                Nowa sesja
+                {t("brainstorm.newSession")}
               </Button>
             }
           />
@@ -561,9 +563,9 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
       </TwoPane>
 
       {renameDraft !== null && activeSession ? (
-        <Modal title="Zmień nazwę sesji" size="sm" onClose={() => setRenameDraft(null)}>
+        <Modal title={t("brainstorm.renameModalTitle")} size="sm" onClose={() => setRenameDraft(null)}>
           <form onSubmit={(event) => void submitRename(event)}>
-            <Field label="Nazwa sesji">
+            <Field label={t("brainstorm.sessionNameLabel")}>
               <input
                 className="ui-input"
                 value={renameDraft}
@@ -573,10 +575,10 @@ export function BrainstormPage({ projectId }: { projectId: string }) {
             </Field>
             <div className="button-row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
               <Button variant="ghost" onClick={() => setRenameDraft(null)}>
-                Anuluj
+                {t("brainstorm.cancel")}
               </Button>
               <Button variant="primary" type="submit">
-                Zapisz
+                {t("brainstorm.save")}
               </Button>
             </div>
           </form>
@@ -604,8 +606,13 @@ function BrainstormMarkdown({
   selectedChipKeys,
   onToggleChip
 }: { content: string } & ChipHandlers) {
+  const { t } = useTranslation();
   const blocks = useMemo(() => parseMarkdownBlocks(content), [content]);
-  const handlers: ChipHandlers = { selectedChipKeys, onToggleChip };
+  const handlers: ChipHandlers & { addChipTitle: (label: string) => string } = {
+    selectedChipKeys,
+    onToggleChip,
+    addChipTitle: (label) => t("brainstorm.addChipTitle", { label })
+  };
   return (
     <div className="brainstorm-message-body">
       {blocks.map((block, index) => {
@@ -709,7 +716,10 @@ export function chipKey(label: string): string {
   return label.trim().toLowerCase();
 }
 
-function renderInlineMarkdown(text: string, handlers: ChipHandlers): ReactNode[] {
+function renderInlineMarkdown(
+  text: string,
+  handlers: ChipHandlers & { addChipTitle: (label: string) => string }
+): ReactNode[] {
   return parseInlineSegments(text).map((segment, index) => {
     if (segment.type === "bold") {
       return <strong key={index}>{segment.text}</strong>;
@@ -721,7 +731,7 @@ function renderInlineMarkdown(text: string, handlers: ChipHandlers): ReactNode[]
           tone="ai"
           pressed={handlers.selectedChipKeys.has(chipKey(segment.label))}
           onClick={() => handlers.onToggleChip(segment.label)}
-          title={`Dodaj „${segment.label}” do odpowiedzi`}
+          title={handlers.addChipTitle(segment.label)}
         >
           {segment.label}
         </Chip>

@@ -13,6 +13,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   chooseExportDirectory,
@@ -58,15 +59,16 @@ type ExportedFile = ExportBookResult & {
   createdAt: string;
 };
 
-const exportFormats: Array<{ value: ExportFormat; label: string; hint: string }> = [
-  { value: "markdown", label: "Markdown", hint: ".md do dalszej pracy" },
-  { value: "txt", label: "TXT", hint: "czysty tekst" },
-  { value: "docx", label: "DOCX", hint: "z numeracją stron" },
-  { value: "epub", label: "EPUB", hint: "ebook" },
-  { value: "mobi", label: "MOBI", hint: "konwersja z EPUB" }
+const exportFormats: Array<{ value: ExportFormat; label: string; hintKey: string }> = [
+  { value: "markdown", label: "Markdown", hintKey: "export.hintMarkdown" },
+  { value: "txt", label: "TXT", hintKey: "export.hintTxt" },
+  { value: "docx", label: "DOCX", hintKey: "export.hintDocx" },
+  { value: "epub", label: "EPUB", hintKey: "export.hintEpub" },
+  { value: "mobi", label: "MOBI", hintKey: "export.hintMobi" }
 ];
 
 export function ExportPage({ projectId }: ExportPageProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const proposals = useProposalStore((state) => state.proposals);
@@ -77,9 +79,15 @@ export function ExportPage({ projectId }: ExportPageProps) {
   const [format, setFormat] = useState<ExportFormat>("docx");
   const [contentMode, setContentMode] = useState<ExportContentMode>("manuscript");
   const [selectedChapterIds, setSelectedChapterIds] = useState<string[]>([]);
-  const [style, setStyle] = useState<ExportStyleSettings>(defaultExportStyle);
+  const [style, setStyle] = useState<ExportStyleSettings>(() => ({
+    ...defaultExportStyle,
+    chapterSeparator: {
+      ...defaultExportStyle.chapterSeparator,
+      text: t("export.defaultChapterSeparator")
+    }
+  }));
   const [outputDirectory, setOutputDirectory] = useState("");
-  const [presetName, setPresetName] = useState("Domyślny eksport");
+  const [presetName, setPresetName] = useState(t("export.defaultPresetName"));
   const [statusText, setStatusText] = useState("");
   const [exportedFiles, setExportedFiles] = useState<ExportedFile[]>([]);
 
@@ -139,10 +147,10 @@ export function ExportPage({ projectId }: ExportPageProps) {
     onSuccess: (selectedDirectory) => {
       if (selectedDirectory) {
         setOutputDirectory(selectedDirectory);
-        setStatusText(`Folder eksportu: ${selectedDirectory}`);
+        setStatusText(t("export.folderSet", { directory: selectedDirectory }));
         return;
       }
-      setStatusText("Nie wybrano folderu eksportu.");
+      setStatusText(t("export.folderNotChosen"));
     },
     onError: (error) => {
       setStatusText(error instanceof Error ? error.message : String(error));
@@ -152,7 +160,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
   const exportMutation = useMutation({
     mutationFn: () => {
       if (!book) {
-        throw new Error("Nie znaleziono książki.");
+        throw new Error(t("export.bookNotFound"));
       }
       return exportBook({
         projectId,
@@ -165,7 +173,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
       });
     },
     onMutate: () => {
-      setStatusText("Tworzę plik eksportu...");
+      setStatusText(t("export.creatingFile"));
     },
     onSuccess: (result) => {
       setExportedFiles((current) => [
@@ -178,8 +186,8 @@ export function ExportPage({ projectId }: ExportPageProps) {
       ]);
       setStatusText(
         result.warning
-          ? `${result.warning} Plik: ${result.filePath}`
-          : `Zapisano eksport: ${result.filePath}`
+          ? t("export.exportSavedWithWarning", { warning: result.warning, path: result.filePath })
+          : t("export.exportSaved", { path: result.filePath })
       );
     },
     onError: (error) => {
@@ -190,7 +198,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
   const revealMutation = useMutation({
     mutationFn: revealExportFile,
     onSuccess: () => {
-      setStatusText("Otworzono lokalizację pliku eksportu.");
+      setStatusText(t("export.revealOpened"));
     },
     onError: (error) => {
       setStatusText(error instanceof Error ? error.message : String(error));
@@ -200,7 +208,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
   const presetMutation = useMutation({
     mutationFn: () => {
       if (!book) {
-        throw new Error("Nie znaleziono książki.");
+        throw new Error(t("export.bookNotFound"));
       }
       return saveExportPreset({
         projectId,
@@ -210,7 +218,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
       });
     },
     onSuccess: async () => {
-      setStatusText("Zapisano preset eksportu.");
+      setStatusText(t("export.presetSaved"));
       await queryClient.invalidateQueries({ queryKey: ["export-presets", projectId, bookId] });
     },
     onError: (error) => {
@@ -268,9 +276,9 @@ export function ExportPage({ projectId }: ExportPageProps) {
       if (typeof parsed.outputDirectory === "string") {
         setOutputDirectory(parsed.outputDirectory);
       }
-      setStatusText("Wczytano preset.");
+      setStatusText(t("export.presetLoaded"));
     } catch {
-      setStatusText("Nie udało się wczytać presetu.");
+      setStatusText(t("export.presetLoadError"));
     }
   }
 
@@ -283,15 +291,15 @@ export function ExportPage({ projectId }: ExportPageProps) {
     const relatedId = relatedType === "chapter" && firstChapter ? firstChapter.id : book.id;
     const targetLabel =
       relatedType === "chapter" && firstChapter
-        ? `rozdziału ${firstChapter.number}: ${firstChapter.workingTitle}`
-        : "książki";
+        ? t("export.artworkTargetChapter", { number: firstChapter.number, title: firstChapter.workingTitle })
+        : t("export.artworkTargetBook");
     const imagePrompt = [
-      `Elegancka grafika separatora eksportu dla ${targetLabel}.`,
-      `Tytuł: ${book.title || book.workingTitle}.`,
-      book.genre ? `Gatunek: ${book.genre}.` : "",
-      book.tone ? `Ton: ${book.tone}.` : "",
-      book.styleGuide ? `Style guide: ${book.styleGuide}.` : "",
-      "Bez tekstu na obrazie, czytelny ornament, użyteczne jako separator w książce."
+      t("export.artworkPromptIntro", { target: targetLabel }),
+      t("export.artworkPromptTitle", { title: book.title || book.workingTitle }),
+      book.genre ? t("export.artworkPromptGenre", { genre: book.genre }) : "",
+      book.tone ? t("export.artworkPromptTone", { tone: book.tone }) : "",
+      book.styleGuide ? t("export.artworkPromptStyleGuide", { styleGuide: book.styleGuide }) : "",
+      t("export.artworkPromptFooter")
     ]
       .filter(Boolean)
       .join("\n");
@@ -322,14 +330,14 @@ export function ExportPage({ projectId }: ExportPageProps) {
       promptPackageJson,
       prompt: imagePrompt,
       coverPrompt: imagePrompt,
-      coverNegativePrompt: "tekst, litery, logo, watermark, niska jakość"
+      coverNegativePrompt: t("export.artworkNegativePrompt")
     });
-    setStatusText("Dodano grafikę eksportu do kolejki AI.");
+    setStatusText(t("export.artworkQueued"));
   }
 
   function showExportFile(filePath: string) {
     if (filePath.startsWith("browser-preview://")) {
-      setStatusText("W trybie podglądu przeglądarkowego plik nie istnieje na dysku.");
+      setStatusText(t("export.browserPreviewNoFile"));
       return;
     }
     revealMutation.mutate(filePath);
@@ -348,8 +356,8 @@ export function ExportPage({ projectId }: ExportPageProps) {
     <section className="export-workbench">
       <div className="export-toolbar">
         <div>
-          <p className="eyebrow">Eksport</p>
-          <h2>{book?.workingTitle || "Manuskrypt"}</h2>
+          <p className="eyebrow">{t("export.eyebrow")}</p>
+          <h2>{book?.workingTitle || t("export.manuscript")}</h2>
         </div>
         <Button
           variant="primary"
@@ -358,11 +366,11 @@ export function ExportPage({ projectId }: ExportPageProps) {
           disabled={!book}
         >
           {exportMutation.isPending ? (
-            "Eksportuję..."
+            t("export.exporting")
           ) : (
             <>
               <Download size={17} />
-              Eksportuj
+              {t("export.export")}
             </>
           )}
         </Button>
@@ -383,17 +391,17 @@ export function ExportPage({ projectId }: ExportPageProps) {
         <div className="export-job-copy">
           <strong>
             {exportState === "running"
-              ? "Trwa generowanie eksportu"
+              ? t("export.jobRunning")
               : exportState === "error"
-                ? "Eksport nie powiódł się"
+                ? t("export.jobError")
                 : exportState === "success"
-                  ? "Ostatni eksport gotowy"
-                  : "Eksport gotowy do uruchomienia"}
+                  ? t("export.jobSuccess")
+                  : t("export.jobIdle")}
           </strong>
           <span>
             {exportState === "running"
-              ? `Tworzę plik ${formatLabel(format)} dla ${selectedChapterCount} rozdz.`
-              : statusText || "Wybierz format, zakres i kliknij Eksportuj."}
+              ? t("export.jobRunningDetail", { format: formatLabel(format), count: selectedChapterCount })
+              : statusText || t("export.jobIdleDetail")}
           </span>
           {exportState === "running" ? <span className="export-progress-bar" /> : null}
         </div>
@@ -404,17 +412,17 @@ export function ExportPage({ projectId }: ExportPageProps) {
             disabled={revealMutation.isPending}
           >
             <FolderOpen size={16} />
-            Pokaż plik
+            {t("export.showFile")}
           </Button>
         ) : null}
       </section>
 
       <div className="export-layout">
-        <aside className="export-controls" aria-label="Ustawienia eksportu">
+        <aside className="export-controls" aria-label={t("export.settingsAria")}>
           <section className="export-panel">
             <div className="section-title-row">
               <FileArchive size={18} />
-              <h3>Format</h3>
+              <h3>{t("export.format")}</h3>
             </div>
             <div className="format-grid">
               {exportFormats.map((item) => (
@@ -425,34 +433,34 @@ export function ExportPage({ projectId }: ExportPageProps) {
                   onClick={() => setFormat(item.value)}
                 >
                   <strong>{item.label}</strong>
-                  <span>{item.hint}</span>
+                  <span>{t(item.hintKey)}</span>
                 </button>
               ))}
             </div>
             {format !== "docx" ? (
-              <p className="muted-text">Numeracja stron jest dostępna tylko dla DOCX.</p>
+              <p className="muted-text">{t("export.docxOnlyPageNumbers")}</p>
             ) : null}
           </section>
 
           <section className="export-panel">
             <div className="section-title-row">
               <FolderOpen size={18} />
-              <h3>Folder zapisu</h3>
+              <h3>{t("export.saveFolder")}</h3>
             </div>
-            <Field label="Lokalizacja eksportu">
+            <Field label={t("export.exportLocation")}>
               <div className="folder-field-row">
                 <input
                   value={outputDirectory}
                   readOnly
-                  placeholder="Domyślny folder aplikacji"
-                  title={outputDirectory || "Domyślny folder aplikacji"}
+                  placeholder={t("export.defaultAppFolder")}
+                  title={outputDirectory || t("export.defaultAppFolder")}
                 />
                 <Button
                   variant="icon"
                   onClick={() => chooseDirectoryMutation.mutate()}
                   disabled={chooseDirectoryMutation.isPending}
-                  title="Wybierz folder zapisu eksportu"
-                  aria-label="Wybierz folder zapisu eksportu"
+                  title={t("export.chooseFolderTitle")}
+                  aria-label={t("export.chooseFolderTitle")}
                 >
                   {chooseDirectoryMutation.isPending ? (
                     <Loader2 size={16} className="ui-spin" />
@@ -464,7 +472,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
             </Field>
             {outputDirectory ? (
               <Button variant="ghost" size="sm" onClick={() => setOutputDirectory("")}>
-                Użyj folderu domyślnego
+                {t("export.useDefaultFolder")}
               </Button>
             ) : null}
           </section>
@@ -472,15 +480,15 @@ export function ExportPage({ projectId }: ExportPageProps) {
           <section className="export-panel">
             <div className="section-title-row">
               <FileText size={18} />
-              <h3>Zakres</h3>
+              <h3>{t("export.scope")}</h3>
             </div>
             <Segmented
-              ariaLabel="Tryb treści eksportu"
+              ariaLabel={t("export.contentModeAria")}
               value={contentMode}
               onChange={setContentMode}
               items={[
-                { id: "manuscript", label: "Rękopis" },
-                { id: "manuscript_with_summaries", label: "Z adnotacjami" }
+                { id: "manuscript", label: t("export.contentManuscript") },
+                { id: "manuscript_with_summaries", label: t("export.contentWithSummaries") }
               ]}
             />
             <div className="chapter-export-list">
@@ -492,7 +500,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
                     onChange={() => toggleChapter(chapter.id)}
                   />
                   <span>
-                    <b>{chapter.number}.</b> {chapter.workingTitle || "Bez tytułu"}
+                    <b>{chapter.number}.</b> {chapter.workingTitle || t("export.untitled")}
                   </span>
                 </label>
               ))}
@@ -502,16 +510,16 @@ export function ExportPage({ projectId }: ExportPageProps) {
           <section className="export-panel">
             <div className="section-title-row">
               <Save size={18} />
-              <h3>Presety</h3>
+              <h3>{t("export.presets")}</h3>
             </div>
             <Field
-              label="Nazwa presetu"
+              label={t("export.presetName")}
               actions={
                 <Button
                   variant="icon"
-                  title="Zaproponuj nazwę presetu"
-                  aria-label="Zaproponuj nazwę presetu"
-                  onClick={() => setPresetName("Eksport z separatorami")}
+                  title={t("export.suggestPresetName")}
+                  aria-label={t("export.suggestPresetName")}
+                  onClick={() => setPresetName(t("export.presetNameSuggestion"))}
                 >
                   <Bot size={15} />
                 </Button>
@@ -529,7 +537,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
               disabled={!book}
             >
               <Save size={16} />
-              Zapisz preset
+              {t("export.savePreset")}
             </Button>
             {presetsQuery.data?.length ? (
               <div className="preset-list">
@@ -537,7 +545,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
                   <Chip
                     key={preset.id}
                     tone="accent"
-                    title="Wczytaj preset"
+                    title={t("export.loadPreset")}
                     onClick={() => applyPreset(preset.settingsJson)}
                   >
                     {preset.name}
@@ -552,11 +560,11 @@ export function ExportPage({ projectId }: ExportPageProps) {
           <section className="export-panel style-panel">
             <div className="section-title-row">
               <Palette size={18} />
-              <h3>Styl separatorów</h3>
+              <h3>{t("export.separatorStyle")}</h3>
             </div>
             <div className="separator-grid">
               <SeparatorEditor
-                title="Rozdziały"
+                title={t("export.separatorChapters")}
                 settings={style.chapterSeparator}
                 assets={acceptedExportAssets}
                 onChange={(patch) => updateSeparator("chapterSeparator", patch)}
@@ -564,7 +572,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
                 pending={Boolean(pendingArtworkStatus)}
               />
               <SeparatorEditor
-                title="Sceny"
+                title={t("export.separatorScenes")}
                 settings={style.sceneSeparator}
                 assets={acceptedExportAssets}
                 onChange={(patch) => updateSeparator("sceneSeparator", patch)}
@@ -577,8 +585,8 @@ export function ExportPage({ projectId }: ExportPageProps) {
           <section className="export-panel preview-panel">
             <div className="section-title-row">
               <CheckCircle2 size={18} />
-              <h3>Podgląd próbki</h3>
-              <span className="pill">{selectedChapterCount} rozdz.</span>
+              <h3>{t("export.previewSample")}</h3>
+              <span className="pill">{t("export.chaptersShort", { count: selectedChapterCount })}</span>
             </div>
             <div className="export-preview-page">
               {previewBlocks.length ? (
@@ -591,7 +599,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
                   />
                 ))
               ) : (
-                <p className="muted-text">Brak treści do podglądu.</p>
+                <p className="muted-text">{t("export.noPreviewContent")}</p>
               )}
             </div>
           </section>
@@ -601,7 +609,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
       <section className="export-panel export-files-panel">
         <div className="section-title-row">
           <FolderOpen size={18} />
-          <h3>Utworzone pliki</h3>
+          <h3>{t("export.createdFiles")}</h3>
         </div>
         {exportedFiles.length ? (
           <div className="export-file-list">
@@ -617,7 +625,7 @@ export function ExportPage({ projectId }: ExportPageProps) {
                 <code>{file.filePath}</code>
                 {file.warning ? <p className="warning-text">{file.warning}</p> : null}
                 {file.fallbackFilePath && file.fallbackFilePath !== file.filePath ? (
-                  <small className="muted-text">Plik zapasowy: {file.fallbackFilePath}</small>
+                  <small className="muted-text">{t("export.backupFile", { path: file.fallbackFilePath })}</small>
                 ) : null}
                 <div className="export-file-actions">
                   <Button
@@ -627,16 +635,14 @@ export function ExportPage({ projectId }: ExportPageProps) {
                     disabled={revealMutation.isPending}
                   >
                     <ExternalLink size={15} />
-                    Pokaż w folderze
+                    {t("export.showInFolder")}
                   </Button>
                 </div>
               </article>
             ))}
           </div>
         ) : (
-          <p className="muted-text">
-            Po eksporcie pojawią się tutaj utworzone pliki z szybką akcją otwarcia lokalizacji.
-          </p>
+          <p className="muted-text">{t("export.noFilesYet")}</p>
         )}
       </section>
     </section>
@@ -660,6 +666,7 @@ function SeparatorEditor({
   onChange,
   onGenerateArtwork
 }: SeparatorEditorProps) {
+  const { t } = useTranslation();
   return (
     <div className="separator-editor">
       <div className="separator-editor-heading">
@@ -669,20 +676,27 @@ function SeparatorEditor({
           size="sm"
           busy={pending}
           onClick={onGenerateArtwork}
-          title="Wygeneruj grafikę separatora"
-          aria-label="Wygeneruj grafikę separatora"
+          title={t("export.generateSeparatorArtwork")}
+          aria-label={t("export.generateSeparatorArtwork")}
         >
           {pending ? null : <Sparkles size={15} />}
         </Button>
       </div>
       <Field
-        label="Tekst / ornament"
+        label={t("export.textOrnament")}
         actions={
           <Button
             variant="icon"
-            title="Zaproponuj ornament dla tego separatora"
-            aria-label="Zaproponuj ornament dla tego separatora"
-            onClick={() => onChange({ text: title === "Rozdziały" ? "Rozdział {number}. {title}" : "✦ ✦ ✦" })}
+            title={t("export.suggestOrnament")}
+            aria-label={t("export.suggestOrnament")}
+            onClick={() =>
+              onChange({
+                text:
+                  title === t("export.separatorChapters")
+                    ? t("export.ornamentSuggestionChapter")
+                    : t("export.ornamentSuggestionScene")
+              })
+            }
           >
             <Bot size={15} />
           </Button>
@@ -694,7 +708,7 @@ function SeparatorEditor({
         />
       </Field>
       <div className="separator-controls">
-        <Field label="Rozmiar">
+        <Field label={t("export.size")}>
           <input
             type="number"
             min={10}
@@ -703,7 +717,7 @@ function SeparatorEditor({
             onChange={(event) => onChange({ fontSize: clampNumber(Number(event.target.value), 10, 48) })}
           />
         </Field>
-        <Field label="Przed">
+        <Field label={t("export.before")}>
           <input
             type="number"
             min={0}
@@ -712,7 +726,7 @@ function SeparatorEditor({
             onChange={(event) => onChange({ spacingBefore: clampNumber(Number(event.target.value), 0, 80) })}
           />
         </Field>
-        <Field label="Po">
+        <Field label={t("export.after")}>
           <input
             type="number"
             min={0}
@@ -723,24 +737,24 @@ function SeparatorEditor({
         </Field>
       </div>
       <div className="separator-controls">
-        <Field label="Wyrównanie">
+        <Field label={t("export.align")}>
           <select
             value={settings.align}
             onChange={(event) => onChange({ align: event.target.value as ExportSeparatorSettings["align"] })}
           >
-            <option value="left">Lewo</option>
-            <option value="center">Środek</option>
-            <option value="right">Prawo</option>
+            <option value="left">{t("export.alignLeft")}</option>
+            <option value="center">{t("export.alignCenter")}</option>
+            <option value="right">{t("export.alignRight")}</option>
           </select>
         </Field>
-        <Field label="Kolor" className="color-field">
+        <Field label={t("export.color")} className="color-field">
           <input
             type="color"
             value={settings.color}
             onChange={(event) => onChange({ color: event.target.value })}
           />
         </Field>
-        <Field label="Tło" className="color-field">
+        <Field label={t("export.background")} className="color-field">
           <input
             type="color"
             value={settings.background}
@@ -754,14 +768,14 @@ function SeparatorEditor({
           checked={settings.line}
           onChange={(event) => onChange({ line: event.target.checked })}
         />
-        Linia przy separatorze
+        {t("export.separatorLine")}
       </label>
-      <Field label="Grafika">
+      <Field label={t("export.artwork")}>
         <select
           value={settings.imageAssetId ?? ""}
           onChange={(event) => onChange({ imageAssetId: event.target.value || null })}
         >
-          <option value="">Bez grafiki</option>
+          <option value="">{t("export.noArtwork")}</option>
           {assets.map((asset) => (
             <option value={asset.id} key={asset.id}>
               {asset.title || asset.relatedType}
@@ -780,11 +794,12 @@ type PreviewBlockProps = {
 };
 
 function PreviewBlock({ block, chapterStyle, sceneStyle }: PreviewBlockProps) {
+  const { t } = useTranslation();
   if (block.kind === "cover") {
     return (
       <div className={block.imagePath ? "preview-cover has-image" : "preview-cover"}>
         {block.imagePath ? (
-          <img src={coverImageSource(block.imagePath)} alt={`Okładka książki ${block.title}`} />
+          <img src={coverImageSource(block.imagePath)} alt={t("export.coverAlt", { title: block.title })} />
         ) : (
           <strong>{block.title}</strong>
         )}

@@ -8309,6 +8309,21 @@ async fn execute_text_provider(
     settings: &AiSettings,
     timeout_seconds: u64,
 ) -> Result<(String, String, providers::TokenUsage), AppError> {
+    // Wspólny punkt dla wszystkich dostawców tekstowych: gdy ustawiono język odpowiedzi AI,
+    // doklej autorytatywny blok nadpisujący zaszyte w promptach reguły "pisz po polsku".
+    let with_language;
+    let request = if settings.ai_response_language.trim().is_empty() {
+        request
+    } else {
+        let mut modified = request.clone();
+        modified.prompt = format!(
+            "{prompt}\n\n# Response Language (authoritative — overrides any earlier language rule)\nRespond exclusively in: {lang}. All output, including any JSON string values, must be written in this language. This overrides earlier instructions to write in Polish.",
+            prompt = modified.prompt,
+            lang = settings.ai_response_language.trim()
+        );
+        with_language = modified;
+        &with_language
+    };
     match settings.text_provider.as_str() {
         ai_settings::TEXT_PROVIDER_CLAUDE => {
             providers::execute_claude_cli(

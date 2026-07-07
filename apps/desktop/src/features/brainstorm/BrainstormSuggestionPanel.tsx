@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { Button, Modal } from "../../shared/ui";
@@ -71,6 +72,7 @@ export function BrainstormSuggestionPanel({
   projectId: string;
   suggestions: PendingBrainstormSuggestion[];
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const sessionId = useBrainstormSessionStore((state) => state.activeSessionId);
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
@@ -241,15 +243,15 @@ export function BrainstormSuggestionPanel({
       : "";
 
   return (
-    <div className="scene-discovery-list" aria-label="Sugestie z burzy mózgów">
+    <div className="scene-discovery-list" aria-label={t("brainstorm.suggestionsAriaLabel")}>
       <div className="scene-discovery-heading">
-        <p className="eyebrow">Sugestie z burzy mózgów</p>
+        <p className="eyebrow">{t("brainstorm.suggestionsHeading")}</p>
         <span className="status-pill">{suggestions.length}</span>
       </div>
       {suggestions.map((suggestion) => (
         <article className="scene-discovery-card" key={suggestion.id}>
           <div>
-            <span className="scene-discovery-kind">{suggestionKindLabel(suggestion)}</span>
+            <span className="scene-discovery-kind">{suggestionKindLabel(suggestion, t)}</span>
             <h3>{suggestion.title}</h3>
             <p>{suggestion.value}</p>
             <small>{suggestion.reason}</small>
@@ -258,18 +260,18 @@ export function BrainstormSuggestionPanel({
             {suggestion.kind === "conceptField" ? (
               <Button variant="ai" size="sm" onClick={() => setConceptPreview(suggestion)}>
                 <Sparkles size={14} aria-hidden />
-                Zastosuj
+                {t("brainstorm.apply")}
               </Button>
             ) : (
               <Button
                 variant="ai"
                 size="sm"
                 disabled={!contextReady}
-                title="Dodaj pełną propozycję do kolejki AI"
+                title={t("brainstorm.generateTitle")}
                 onClick={() => queueEntitySuggestion(suggestion)}
               >
                 <Sparkles size={14} aria-hidden />
-                Generuj
+                {t("brainstorm.generate")}
               </Button>
             )}
             <Button
@@ -279,7 +281,7 @@ export function BrainstormSuggestionPanel({
                 void setSuggestionStatus(suggestion.messageId, suggestion.id, "dismissed")
               }
             >
-              Odrzuć
+              {t("brainstorm.dismiss")}
             </Button>
           </div>
         </article>
@@ -287,13 +289,15 @@ export function BrainstormSuggestionPanel({
 
       {conceptPreview && conceptPreviewField ? (
         <Modal
-          title={`Pole koncepcji: ${conceptFieldConfigs[conceptPreviewField].label}`}
+          title={t("brainstorm.conceptFieldModalTitle", {
+            label: conceptFieldConfigs[conceptPreviewField].label
+          })}
           size="lg"
           onClose={() => setConceptPreview(null)}
           footer={
             <>
               <Button variant="ghost" onClick={() => setConceptPreview(null)}>
-                Anuluj
+                {t("brainstorm.cancel")}
               </Button>
               <Button
                 variant="ghost"
@@ -305,28 +309,28 @@ export function BrainstormSuggestionPanel({
                   ).then(() => setConceptPreview(null))
                 }
               >
-                Odrzuć
+                {t("brainstorm.dismiss")}
               </Button>
               {conceptCurrentValue ? (
                 <Button variant="secondary" onClick={() => void applyConceptSuggestion("append")}>
-                  Dopisz
+                  {t("brainstorm.append")}
                 </Button>
               ) : null}
               <Button variant="primary" onClick={() => void applyConceptSuggestion("replace")}>
-                {conceptCurrentValue ? "Zastąp" : "Wstaw"}
+                {conceptCurrentValue ? t("brainstorm.replace") : t("brainstorm.insert")}
               </Button>
             </>
           }
         >
           <div className="brainstorm-concept-preview">
             <section>
-              <p className="eyebrow">Obecna treść</p>
+              <p className="eyebrow">{t("brainstorm.currentContent")}</p>
               <p className="brainstorm-concept-value">
-                {conceptCurrentValue || "(pole jest puste)"}
+                {conceptCurrentValue || t("brainstorm.emptyFieldPlaceholder")}
               </p>
             </section>
             <section>
-              <p className="eyebrow">Propozycja z burzy mózgów</p>
+              <p className="eyebrow">{t("brainstorm.proposalFromBrainstorm")}</p>
               <p className="brainstorm-concept-value">{conceptPreview.value}</p>
               <small className="muted-text">{conceptPreview.reason}</small>
             </section>
@@ -346,14 +350,19 @@ function parseSuggestions(message: BrainstormMessage): BrainstormSuggestion[] {
   }
 }
 
-function suggestionKindLabel(suggestion: BrainstormSuggestion): string {
+function suggestionKindLabel(
+  suggestion: BrainstormSuggestion,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   if (suggestion.kind === "conceptField") {
     return isBrainstormConceptField(suggestion.conceptField)
-      ? `Koncepcja · ${conceptFieldConfigs[suggestion.conceptField].label}`
-      : "Koncepcja";
+      ? t("brainstorm.kindConceptWithField", {
+          label: conceptFieldConfigs[suggestion.conceptField].label
+        })
+      : t("brainstorm.kindConcept");
   }
-  if (suggestion.kind === "character") return "Postać";
-  if (suggestion.kind === "worldElement") return "Element świata";
-  if (suggestion.kind === "worldRule") return "Reguła świata";
-  return "Wątek fabularny";
+  if (suggestion.kind === "character") return t("brainstorm.kindCharacter");
+  if (suggestion.kind === "worldElement") return t("brainstorm.kindWorldElement");
+  if (suggestion.kind === "worldRule") return t("brainstorm.kindWorldRule");
+  return t("brainstorm.kindPlotThread");
 }

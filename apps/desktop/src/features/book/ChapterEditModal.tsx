@@ -14,6 +14,7 @@ import {
   X
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Beat, BookPlan, Chapter, UpsertChapterInput } from "../../shared/api/types";
 import { Button, Field, Modal, StatusPill } from "../../shared/ui";
 import {
@@ -54,6 +55,7 @@ export function ChapterEditModal({
   onGenerate: (field: PlanFieldKey, targetEntity?: ChapterPromptEntity) => void;
   onActivatePrompt: (field: PlanFieldKey, targetEntity?: ChapterPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const chapter =
     state?.mode === "edit"
       ? plan.chapters.find((candidate) => candidate.id === state.chapterId)
@@ -65,8 +67,11 @@ export function ChapterEditModal({
 
   const modalTitle =
     state.mode === "edit" && chapter
-      ? `Rozdział ${dynamicChapterNumber(plan, chapter.id)}: ${chapter.workingTitle}`
-      : "Nowy rozdział";
+      ? t("book.chapterModalTitle", {
+          number: dynamicChapterNumber(plan, chapter.id),
+          title: chapter.workingTitle
+        })
+      : t("book.chapterModalNewTitle");
 
   return (
     <Modal
@@ -78,14 +83,14 @@ export function ChapterEditModal({
           {chapter && onDelete ? (
             <Button variant="danger" onClick={() => onDelete(chapter.id)} disabled={saving}>
               <Trash2 size={15} aria-hidden />
-              Usuń
+              {t("book.delete")}
             </Button>
           ) : null}
           <Button variant="ghost" onClick={onClose}>
-            Anuluj
+            {t("book.cancel")}
           </Button>
           <Button variant="primary" type="submit" form={chapterFormId} busy={saving}>
-            {saving ? "Zapisuję" : "Zapisz zmiany"}
+            {saving ? t("book.saving") : t("book.saveChangesShort")}
           </Button>
         </>
       }
@@ -126,6 +131,7 @@ function ChapterForm({
   onGenerate: (field: PlanFieldKey, targetEntity?: ChapterPromptEntity) => void;
   onActivatePrompt: (field: PlanFieldKey, targetEntity?: ChapterPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const chapterThreadIds = chapter ? chapterThreadIdsForChapter(plan, chapter.id) : [];
   const chapterBeatIds = chapter ? chapterBeatIdsForChapter(plan, chapter.id) : [];
   const defaultActId = defaultChapterActId(initialActId, plan);
@@ -214,33 +220,33 @@ function ChapterForm({
   const skeletonComplete = skeletonItems.every((item) => item.complete);
   const contractComplete = contractItems.every((item) => item.complete);
   const visualStatus = !skeletonComplete
-    ? "Szkic szkieletu"
+    ? t("book.chapterStatusSkeletonDraft")
     : contractComplete
-      ? "Kontrakt gotowy"
-      : "Szkielet gotowy";
+      ? t("book.chapterStatusContractReady")
+      : t("book.chapterStatusSkeletonReady");
   const visualTone = contractComplete ? "success" : skeletonComplete ? "accent" : "muted";
 
   return (
     <form id={chapterFormId} className="chapter-edit-form" onSubmit={submit}>
-      <div className="chapter-edit-metrics" aria-label="Najważniejsze informacje o rozdziale">
+      <div className="chapter-edit-metrics" aria-label={t("book.chapterMetricsAria")}>
         <span className="chapter-edit-metric">
           <BookOpen size={16} />
-          <span>Akt:</span>
-          <strong>{selectedAct?.name ?? "Bez aktu"}</strong>
+          <span>{t("book.chapterMetricAct")}</span>
+          <strong>{selectedAct?.name ?? t("book.chapterMetricNoAct")}</strong>
         </span>
         <span className="chapter-edit-metric">
           <Hash size={16} />
-          <span>Numer:</span>
+          <span>{t("book.chapterMetricNumber")}</span>
           <strong>{dynamicNumber}</strong>
         </span>
         <span className="chapter-edit-metric">
           <Target size={16} />
-          <span>Cel słów:</span>
-          <strong>{targetWords ? targetWords.toLocaleString("pl-PL") : "Brak"}</strong>
+          <span>{t("book.chapterMetricWordGoal")}</span>
+          <strong>{targetWords ? targetWords.toLocaleString("pl-PL") : t("book.chapterMetricNoGoal")}</strong>
         </span>
         <span className="chapter-edit-metric">
           <CheckCircle2 size={16} />
-          <span>Uzupełnione:</span>
+          <span>{t("book.chapterMetricCompleted")}</span>
           <strong>
             {completedItems} / {completionItems.length}
           </strong>
@@ -253,11 +259,11 @@ function ChapterForm({
           <section className="chapter-edit-section">
             <div className="chapter-section-heading">
               <LayoutList size={17} />
-              <h4>Szkielet i kontrakt rozdziału</h4>
+              <h4>{t("book.chapterSectionSkeletonHeading")}</h4>
             </div>
             <div className="chapter-field-stack">
               <PlanInlineField
-                label="Tytuł roboczy"
+                label={t("book.chapterFieldWorkingTitle")}
                 value={workingTitle}
                 rows={1}
                 field="chapterSummary"
@@ -267,7 +273,7 @@ function ChapterForm({
                 onActivatePrompt={onActivatePrompt}
               />
               <PlanInlineField
-                label="Streszczenie"
+                label={t("book.chapterFieldSummary")}
                 value={summary}
                 rows={4}
                 field="chapterSummary"
@@ -277,7 +283,7 @@ function ChapterForm({
                 onActivatePrompt={onActivatePrompt}
               />
               <PlanInlineField
-                label="Cel"
+                label={t("book.chapterFieldPurpose")}
                 value={purpose}
                 rows={3}
                 field="chapterPurpose"
@@ -287,7 +293,7 @@ function ChapterForm({
                 onActivatePrompt={onActivatePrompt}
               />
               <PlanInlineField
-                label="Konflikt"
+                label={t("book.chapterFieldConflict")}
                 value={conflict}
                 rows={3}
                 field="chapterConflict"
@@ -297,7 +303,7 @@ function ChapterForm({
                 onActivatePrompt={onActivatePrompt}
               />
               <PlanInlineField
-                label="Punkt zwrotny"
+                label={t("book.chapterFieldTurningPoint")}
                 value={turningPoint}
                 rows={3}
                 field="chapterTurningPoint"
@@ -312,18 +318,18 @@ function ChapterForm({
           <section className="chapter-edit-section">
             <div className="chapter-section-heading">
               <Target size={17} />
-              <h4>Ustawienia rozdziału</h4>
+              <h4>{t("book.chapterSectionSettingsHeading")}</h4>
             </div>
             <div className="scene-settings-grid">
-              <Field label="Akt">
+              <Field label={t("book.chapterFieldAct")}>
                 <select value={actId} onChange={(event) => setActId(event.target.value)}>
-                  <option value="">Bez aktu</option>
+                  <option value="">{t("book.chapterFieldNoAct")}</option>
                   {plan.acts.map((act) => (
                     <option key={act.id} value={act.id}>{act.name}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="Cel słów">
+              <Field label={t("book.chapterFieldWordGoal")}>
                 <input
                   type="number"
                   min={0}
@@ -335,11 +341,11 @@ function ChapterForm({
           </section>
         </main>
 
-        <aside className="chapter-edit-sidebar" aria-label="Powiązania rozdziału">
+        <aside className="chapter-edit-sidebar" aria-label={t("book.chapterSidebarAria")}>
           <section className="chapter-side-section">
             <div className="chapter-side-heading">
               <Link2 size={16} />
-              <h4>Powiązane wątki</h4>
+              <h4>{t("book.chapterLinkedThreads")}</h4>
               <ChapterRelationActions
                 field="chapterThreadSuggestions"
                 chapter={chapter}
@@ -350,28 +356,28 @@ function ChapterForm({
             <div className="chapter-side-chip-list">
               {selectedThreads.length > 0 ? (
                 selectedThreads.map((thread) => (
-                  <span className="chapter-side-chip thread" key={thread.id} title={thread.description || "Brak opisu wątku."}>
+                  <span className="chapter-side-chip thread" key={thread.id} title={thread.description || t("book.chapterNoThreadDescription")}>
                     {thread.name}
                     <button
                       type="button"
                       className="chapter-side-chip-remove"
                       onClick={() => setThreadIds((currentIds) => currentIds.filter((threadId) => threadId !== thread.id))}
-                      aria-label={`Odepnij wątek ${thread.name}`}
-                      title={`Odepnij wątek ${thread.name}`}
+                      aria-label={t("book.chapterUnpinThread", { name: thread.name })}
+                      title={t("book.chapterUnpinThread", { name: thread.name })}
                     >
                       -
                     </button>
                   </span>
                 ))
               ) : (
-                <span className="chapter-side-empty">Brak powiązanych wątków</span>
+                <span className="chapter-side-empty">{t("book.chapterNoLinkedThreads")}</span>
               )}
             </div>
           </section>
           <section className="chapter-side-section">
             <div className="chapter-side-heading">
               <Route size={16} />
-              <h4>Powiązane beaty</h4>
+              <h4>{t("book.chapterLinkedBeats")}</h4>
               <ChapterRelationActions
                 field="chapterBeatSuggestions"
                 chapter={chapter}
@@ -388,15 +394,15 @@ function ChapterForm({
                       type="button"
                       className="chapter-side-chip-remove"
                       onClick={() => setBeatIds((currentIds) => currentIds.filter((beatId) => beatId !== beat.id))}
-                      aria-label={`Odepnij beat ${beat.name}`}
-                      title={`Odepnij beat ${beat.name}`}
+                      aria-label={t("book.chapterUnpinBeat", { name: beat.name })}
+                      title={t("book.chapterUnpinBeat", { name: beat.name })}
                     >
                       -
                     </button>
                   </span>
                 ))
               ) : (
-                <span className="chapter-side-empty">Brak powiązanych beatów</span>
+                <span className="chapter-side-empty">{t("book.chapterNoLinkedBeats")}</span>
               )}
             </div>
           </section>
@@ -472,6 +478,7 @@ function PlanAiActions({
   targetEntity?: ChapterPromptEntity;
   onGenerate: () => void;
 }) {
+  const { t } = useTranslation();
   const activeTargetId = useAiPromptContextStore((state) => state.activeTargetId);
   const activeTarget = useAiPromptContextStore((state) =>
     activeTargetId ? state.targets[activeTargetId] : null
@@ -502,11 +509,11 @@ function PlanAiActions({
         className="icon-button ai-field-button"
         onClick={onGenerate}
         disabled={queued || running || (targetEntity === undefined && isEntityField(field))}
-        title={`Generuj ${planFieldConfigs[field].label} z AI`}
-        aria-label={`Generuj ${planFieldConfigs[field].label} z AI`}
+        title={t("book.planAiGenerateTitle", { label: planFieldConfigs[field].label })}
+        aria-label={t("book.planAiGenerateTitle", { label: planFieldConfigs[field].label })}
       >
         {running ? <Loader2 size={15} className="spin-icon" /> : queued ? <Clock3 size={15} /> : <Sparkles size={15} />}
-        <span>{running ? "Generuje" : queued ? "W kolejce" : "AI"}</span>
+        <span>{running ? t("book.aiFieldGenerating") : queued ? t("book.aiFieldQueued") : t("book.aiFieldIdle")}</span>
       </button>
       <button
         type="button"
@@ -517,8 +524,8 @@ function PlanAiActions({
           addContextSourceToActiveTarget(promptContextSource);
         }}
         disabled={!activeTarget || fieldAlreadyInContext}
-        title="Dodaj pole planu do aktywnego kontekstu promptu."
-        aria-label={`Dodaj ${planFieldConfigs[field].label} do kontekstu promptu`}
+        title={t("book.planAiContextAddTitle")}
+        aria-label={t("book.planAiContextAddAria", { label: planFieldConfigs[field].label })}
       >
         <Plus size={14} />
       </button>
@@ -537,6 +544,7 @@ function ChapterRelationActions({
   onGenerate: () => void;
   onOpenPicker: () => void;
 }) {
+  const { t } = useTranslation();
   const proposals = useProposalStore((state) => state.proposals);
   const loading = pendingProposalStatus(proposals, {
     field,
@@ -545,7 +553,7 @@ function ChapterRelationActions({
   });
   const running = loading === "running";
   const queued = loading === "queued";
-  const label = planFieldConfigs[field].label;
+  const label = planFieldConfigs[field].label.toLowerCase();
 
   return (
     <span className="chapter-relation-actions">
@@ -554,18 +562,18 @@ function ChapterRelationActions({
         className="icon-button ai-field-button chapter-relation-ai-button"
         onClick={onGenerate}
         disabled={running || queued || !chapter}
-        title={`Zaproponuj ${label.toLowerCase()} z AI`}
-        aria-label={`Zaproponuj ${label.toLowerCase()} z AI`}
+        title={t("book.planRelationGenerateTitle", { label })}
+        aria-label={t("book.planRelationGenerateTitle", { label })}
       >
         {running ? <Loader2 size={15} className="spin-icon" /> : queued ? <Clock3 size={15} /> : <Sparkles size={15} />}
-        <span>{running ? "Generuje" : queued ? "W kolejce" : "AI"}</span>
+        <span>{running ? t("book.aiFieldGenerating") : queued ? t("book.aiFieldQueued") : t("book.aiFieldIdle")}</span>
       </button>
       <button
         type="button"
         className="icon-button chapter-relation-add-button"
         onClick={onOpenPicker}
-        title={`Dodaj ${label.toLowerCase()}`}
-        aria-label={`Dodaj ${label.toLowerCase()}`}
+        title={t("book.planRelationAddTitle", { label })}
+        aria-label={t("book.planRelationAddTitle", { label })}
       >
         <Plus size={15} />
       </button>
@@ -586,17 +594,18 @@ function ChapterRelationPickerModal({
   onClose: () => void;
   onAdd: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const selectedSet = new Set(selectedIds);
   const items =
     kind === "threads"
       ? plan.threads.filter((thread) => !selectedSet.has(thread.id))
       : plan.beats.filter((beat) => !selectedSet.has(beat.id));
-  const title = kind === "threads" ? "Dodaj wątki" : "Dodaj beaty";
+  const title = kind === "threads" ? t("book.relationModalAddThreads") : t("book.relationModalAddBeats");
   const emptyText =
     kind === "threads"
-      ? "Wszystkie wątki są już przypisane do tego rozdziału."
-      : "Wszystkie beaty są już przypisane do tego rozdziału.";
+      ? t("book.relationModalThreadsAllPinned")
+      : t("book.relationModalBeatsAllPinned");
 
   function toggle(id: string) {
     setCheckedIds((currentIds) =>
@@ -608,14 +617,14 @@ function ChapterRelationPickerModal({
 
   return (
     <div className="chapter-relation-modal" role="dialog" aria-modal="true">
-      <button type="button" className="chapter-relation-backdrop" onClick={onClose} aria-label="Zamknij wybór powiązań" />
+      <button type="button" className="chapter-relation-backdrop" onClick={onClose} aria-label={t("book.relationModalCloseAria")} />
       <section className="chapter-relation-shell" aria-label={title}>
         <header className="chapter-relation-header">
           <div>
-            <p className="eyebrow">Powiązania rozdziału</p>
+            <p className="eyebrow">{t("book.relationModalHeading")}</p>
             <h4>{title}</h4>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Zamknij wybór powiązań" title="Zamknij">
+          <button type="button" className="icon-button" onClick={onClose} aria-label={t("book.relationModalCloseAria")} title={t("book.relationModalClose")}>
             <X size={16} />
           </button>
         </header>
@@ -639,7 +648,7 @@ function ChapterRelationPickerModal({
                   <span className={kind === "threads" ? "relation-dot thread" : "relation-dot beat"} />
                   <span>
                     <strong>{item.name}</strong>
-                    <em>{description || "Brak opisu."}</em>
+                    <em>{description || t("book.relationModalNoDescription")}</em>
                   </span>
                 </button>
               );
@@ -649,11 +658,11 @@ function ChapterRelationPickerModal({
 
         <footer className="chapter-relation-footer">
           <Button variant="ghost" onClick={onClose}>
-            Anuluj
+            {t("book.cancel")}
           </Button>
           <Button variant="primary" disabled={checkedIds.length === 0} onClick={() => onAdd(checkedIds)}>
             <Plus size={15} aria-hidden />
-            Dodaj wybrane
+            {t("book.relationModalAddSelected")}
           </Button>
         </footer>
       </section>
@@ -689,6 +698,7 @@ function defaultChapterActId(initialActId: string | null | undefined, plan: Book
   return plan.acts[0]?.id ?? "";
 }
 
+// ponytail: module-level tooltip helper; "Rola:"/"Brak opisu beatu." left untranslated (tooltip-only, no React context here). Thread `t` through if these tooltips need i18n.
 function beatPreviewText(beat: Beat): string {
   return [beat.description, beat.role ? `Rola: ${beat.role}` : ""]
     .filter(Boolean)

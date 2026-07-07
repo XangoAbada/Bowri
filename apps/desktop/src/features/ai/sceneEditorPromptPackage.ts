@@ -1,3 +1,4 @@
+import i18n from "../../shared/i18n";
 import type {
   AIAction,
   Book,
@@ -73,15 +74,8 @@ const actionByField: Record<SceneEditorFieldKey, AIAction> = {
   expandSelection: "expand_selection"
 };
 
-const labelByField: Record<SceneEditorFieldKey, string> = {
-  draftScene: "Szkic sceny",
-  continueScene: "Kontynuacja sceny",
-  rewriteSelection: "Przepisanie zaznaczenia",
-  expandSelection: "Rozwinięcie zaznaczenia"
-};
-
 export function sceneEditorFieldLabel(field: SceneEditorFieldKey): string {
-  return labelByField[field];
+  return i18n.t(`ai.sceneEditorField.${field}`);
 }
 
 export function buildSceneEditorPromptPackage({

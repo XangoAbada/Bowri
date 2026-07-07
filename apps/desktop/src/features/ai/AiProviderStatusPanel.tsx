@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { getAiSettings } from "../../shared/api/commands";
 import { describeTextProvider } from "./textProviderInfo";
 import { CodexStatusPanel } from "./CodexStatusPanel";
@@ -11,6 +12,7 @@ import { CodexStatusPanel } from "./CodexStatusPanel";
  * wejściem w ustawienia, zamiast zawsze sugerować Codeksa.
  */
 export function AiProviderStatusPanel() {
+  const { t } = useTranslation();
   const aiSettingsQuery = useQuery({
     queryKey: ["ai-settings"],
     queryFn: getAiSettings,
@@ -26,16 +28,16 @@ export function AiProviderStatusPanel() {
     <section className="context-section compact">
       <div className="section-title-row">
         <div>
-          <p className="eyebrow">Dostawca AI</p>
+          <p className="eyebrow">{t("ai.providerStatus.eyebrow")}</p>
           <h2>{info.providerLabel}</h2>
         </div>
         <Bot size={18} aria-hidden="true" />
       </div>
       {info.modelLabel ? (
-        <p className="muted-text">Model tekstu: {info.modelLabel}</p>
+        <p className="muted-text">{t("ai.providerStatus.textModel", { model: info.modelLabel })}</p>
       ) : null}
       <Link to="/settings" className="model-menu-settings-link">
-        Otwórz ustawienia AI
+        {t("ai.providerStatus.openSettings")}
       </Link>
     </section>
   );

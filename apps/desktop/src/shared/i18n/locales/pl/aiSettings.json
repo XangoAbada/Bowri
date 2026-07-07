@@ -1,0 +1,92 @@
+{
+  "aiSettings": {
+    "eyebrow": "Ustawienia",
+    "heading": "Dostawcy AI",
+    "uiLanguage": "Język interfejsu",
+    "subscriptionsEyebrow": "Subskrypcje",
+    "activeAccounts": "Aktywne konta",
+    "checkingStatus": "Sprawdzam status...",
+    "openaiCodex": "OpenAI (Codex CLI)",
+    "anthropicClaude": "Anthropic (Claude Code CLI)",
+    "loginViaCodex": "Zaloguj przez Codex CLI",
+    "loginViaCodexTitle": "Uruchamia `codex login` — logowanie otworzy się w przeglądarce.",
+    "refreshOpenaiStatus": "Odśwież status subskrypcji OpenAI",
+    "claudePathLabel": "Ścieżka do Claude Code CLI",
+    "checkClaudeCli": "Sprawdź Claude Code CLI",
+    "openLoginTerminal": "Otwórz terminal logowania",
+    "openLoginTerminalTitle": "Otwiera terminal z Claude Code CLI — wpisz /login, aby zalogować się subskrypcją.",
+    "anthropicStatusHelp": "Status logowania Anthropic to heurystyka (na podstawie plików logowania Claude Code CLI). Po zalogowaniu w terminalu odśwież status.",
+    "textEyebrow": "Generowanie tekstu",
+    "textProviderHeading": "Dostawca treści",
+    "aiResponseLanguage": "Język odpowiedzi AI",
+    "aiResponseLanguagePlaceholder": "np. angielski, français… (puste = polski)",
+    "aiResponseLanguageHelp": "Puste pole = AI odpowiada po polsku. Wpisz dowolny język, w którym mają być generowane treści.",
+    "claudeModel": "Model Claude",
+    "openaiModel": "Model OpenAI",
+    "anthropicModel": "Model Anthropic",
+    "reasoningLevel": "Poziom reasoning",
+    "reasoningHelp": "Wspólny dla Codeksa, OpenAI API i Claude Code CLI (dla Claude mapuje się na <effort>--effort</effort>). Ta sama wartość steruje suwakiem w panelu modelu na górnym pasku.",
+    "imageEyebrow": "Generowanie obrazów",
+    "imageProviderHeading": "Dostawca grafik",
+    "openaiImageModel": "Model obrazów OpenAI",
+    "sdwebuiUrl": "Adres SD WebUI",
+    "comfyuiUrl": "Adres ComfyUI",
+    "comfyuiWorkflow": "Workflow ComfyUI (format API)",
+    "comfyuiWorkflowPlaceholder": "Wklej JSON wyeksportowany przez \"Save (API Format)\"",
+    "comfyuiHelp": "W workflow użyj placeholderów {{prompt}}, {{negative}} i {{seed}} w polach tekstu pozytywnego, negatywnego i seeda. Eksport: ComfyUI → Save (API Format).",
+    "keysEyebrow": "Klucze API",
+    "keysHeading": "Uwierzytelnianie API",
+    "openaiApiKey": "Klucz OpenAI API",
+    "anthropicApiKey": "Klucz Anthropic API",
+    "keysHelp": "Klucze są zapisywane lokalnie w pliku ustawień aplikacji i wysyłane wyłącznie do wybranego dostawcy.",
+    "timeoutLabel": "Timeout generowania (sekundy)",
+    "plnRateLabel": "Kurs USD→PLN (szacunek kosztów)",
+    "plnRateTitle": "Używany tylko do orientacyjnego przeliczenia kosztów generacji na PLN.",
+    "missingOpenaiKey": "Wybrano dostawcę OpenAI API, ale nie podano klucza OpenAI.",
+    "missingAnthropicKey": "Wybrano dostawcę Anthropic API, ale nie podano klucza Anthropic.",
+    "saveError": "Nie udało się zapisać ustawień: {{error}}",
+    "save": "Zapisz ustawienia",
+    "saving": "Zapisywanie...",
+    "saved": "Zapisano",
+    "pillChecking": "Sprawdzam",
+    "pillNoCli": "Brak CLI",
+    "pillLoggedIn": "Zalogowano",
+    "pillNeedsLogin": "Wymaga logowania",
+    "textProvider": {
+      "codex-cli": {
+        "label": "Codex CLI (subskrypcja OpenAI)",
+        "hint": "Obecne domyślne. Wymaga zalogowanego Codex CLI."
+      },
+      "claude-cli": {
+        "label": "Claude Code CLI (subskrypcja Anthropic)",
+        "hint": "Wymaga zainstalowanego i zalogowanego Claude Code CLI."
+      },
+      "openai-api": {
+        "label": "OpenAI API (klucz)",
+        "hint": "Bezpośrednie wywołania API — rozliczane za tokeny."
+      },
+      "anthropic-api": {
+        "label": "Anthropic API (klucz)",
+        "hint": "Bezpośrednie wywołania API — rozliczane za tokeny."
+      }
+    },
+    "imageProvider": {
+      "codex-cli": {
+        "label": "Codex CLI (subskrypcja OpenAI)",
+        "hint": "Obecne domyślne — generowanie przez narzędzie image_generation."
+      },
+      "openai-api": {
+        "label": "OpenAI Images API (klucz)",
+        "hint": "gpt-image-1 przez klucz API."
+      },
+      "local-sdwebui": {
+        "label": "Lokalny SD WebUI / A1111",
+        "hint": "Wymaga uruchomionego WebUI z flagą --api."
+      },
+      "local-comfyui": {
+        "label": "Lokalny ComfyUI",
+        "hint": "Wymaga wklejenia workflow w formacie API."
+      }
+    }
+  }
+}

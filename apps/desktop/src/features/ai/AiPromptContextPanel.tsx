@@ -5,6 +5,7 @@ import {
   SlidersHorizontal,
   X
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   isSourceSelected,
   useAiPromptContextStore
@@ -12,6 +13,7 @@ import {
 import { Button } from "../../shared/ui";
 
 export function AiPromptContextPanel() {
+  const { t } = useTranslation();
   const activeTargetId = useAiPromptContextStore((state) => state.activeTargetId);
   const target = useAiPromptContextStore((state) =>
     activeTargetId ? state.targets[activeTargetId] : null
@@ -53,11 +55,11 @@ export function AiPromptContextPanel() {
   return (
     <section
       className="context-section compact prompt-context-panel"
-      aria-label="Kontekst promptu AI"
+      aria-label={t("ai.promptContext.sectionLabel")}
     >
       <div className="section-title-row">
         <div>
-          <p className="eyebrow">Kontekst promptu</p>
+          <p className="eyebrow">{t("ai.promptContext.eyebrow")}</p>
           <h2>{target.title}</h2>
           <p className="muted-text provider-subtitle">{target.subtitle}</p>
         </div>
@@ -69,19 +71,20 @@ export function AiPromptContextPanel() {
           {promptChars !== null ? (
             <span
               className="status-pill"
-              title="Rozmiar promptu z aktualnie wybranym kontekstem"
+              title={t("ai.promptContext.promptSizeTitle")}
             >
               {"~"}
               {Intl.NumberFormat("pl-PL").format(promptChars)}
-              {" znaków"}
+              {" "}
+              {t("ai.promptContext.chars")}
             </span>
           ) : null}
           <Button
             variant="icon"
             className="prompt-context-reset"
             onClick={() => resetDraft(activeTargetId)}
-            title={"Przywr\u00f3\u0107 domy\u015blny kontekst promptu"}
-            aria-label={"Przywr\u00f3\u0107 domy\u015blny kontekst promptu"}
+            title={t("ai.promptContext.reset")}
+            aria-label={t("ai.promptContext.reset")}
           >
             <RotateCcw size={15} />
           </Button>
@@ -89,8 +92,8 @@ export function AiPromptContextPanel() {
             variant="icon"
             className="prompt-context-close"
             onClick={closeActiveTarget}
-            title="Zamknij kontekst promptu"
-            aria-label="Zamknij kontekst promptu"
+            title={t("ai.promptContext.close")}
+            aria-label={t("ai.promptContext.close")}
           >
             <X size={15} />
           </Button>
@@ -111,7 +114,7 @@ export function AiPromptContextPanel() {
             >
               <input
                 type="checkbox"
-                aria-label={`Kontekst: ${source.label}`}
+                aria-label={t("ai.promptContext.sourceAria", { label: source.label })}
                 checked={selected}
                 disabled={source.required}
                 onChange={() => toggleContextKey(activeTargetId, source.key)}
@@ -120,7 +123,7 @@ export function AiPromptContextPanel() {
               {source.required ? (
                 <em>
                   <CheckCircle2 size={13} aria-hidden="true" />
-                  wymagane
+                  {t("ai.promptContext.required")}
                 </em>
               ) : null}
             </div>
@@ -129,14 +132,14 @@ export function AiPromptContextPanel() {
       </div>
 
       <label className="field-label">
-        Komentarz autora
+        {t("ai.promptContext.authorComment")}
         <textarea
           className="prompt-context-comment"
           value={draft?.authorPriorityComment ?? ""}
           onChange={(event) =>
             setAuthorPriorityComment(activeTargetId, event.target.value)
           }
-          placeholder={"Najwa\u017cniejsza intencja dla najbli\u017cszego promptu"}
+          placeholder={t("ai.promptContext.authorCommentPlaceholder")}
           rows={3}
         />
       </label>
@@ -150,12 +153,12 @@ export function AiPromptContextPanel() {
           disabled={target.submitDisabled || !target.onSubmit}
           title={
             target.submitDisabled
-              ? target.submitDisabledReason ?? "Request AI jest teraz niedost\u0119pny."
-              : "Wy\u015blij najbli\u017cszy request AI z wybranym kontekstem."
+              ? target.submitDisabledReason ?? t("ai.promptContext.submitDisabled")
+              : t("ai.promptContext.submitTitle")
           }
         >
           <Send size={15} aria-hidden="true" />
-          {target.submitLabel ?? "Wy\u015blij do AI"}
+          {target.submitLabel ?? t("ai.promptContext.submit")}
         </Button>
       </div>
     </section>

@@ -1,5 +1,6 @@
 import { createRootRoute, createRoute, createRouter, Link, Outlet, redirect, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { DashboardPage } from "../features/projects/DashboardPage";
 import { ProjectShell } from "./ProjectShell";
 import { BookConceptPage } from "../features/book/BookConceptPage";
@@ -197,12 +198,13 @@ function ProjectExportRoute() {
 }
 
 function SettingsRoute() {
+  const { t } = useTranslation();
   return (
     <main className="settings-route">
       <div className="settings-route-inner">
         <Link to="/" className="settings-route-back">
           <ArrowLeft size={16} aria-hidden="true" />
-          Wróć do projektów
+          {t("shell.back")}
         </Link>
         <AiSettingsPage />
       </div>

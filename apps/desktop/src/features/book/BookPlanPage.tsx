@@ -41,6 +41,7 @@ import {
   useState
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   deleteAct,
   deleteBeat,
@@ -351,7 +352,29 @@ const structureOptions: StructureOption[] = [
   }
 ];
 
+// Treść idzie za językiem UI: tłumaczy etykiety struktury ORAZ nazwy/cele aktów,
+// więc ten sam obiekt zasila podgląd i tworzenie aktów (akty powstają w języku UI).
+function translateStructureOption(
+  option: StructureOption,
+  t: (key: string, options?: Record<string, unknown>) => string
+): StructureOption {
+  const base = `book.structure.${option.value}`;
+  return {
+    ...option,
+    label: t(`${base}.label`),
+    bestFor: t(`${base}.bestFor`),
+    organizes: t(`${base}.organizes`),
+    result: t(`${base}.result`),
+    actTemplates: option.actTemplates.map((act, index) => ({
+      ...act,
+      name: t(`${base}.act.${index}.name`),
+      purpose: t(`${base}.act.${index}.purpose`)
+    }))
+  };
+}
+
 export function BookPlanPage({ projectId }: BookPlanPageProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const activeStep = normalizePlanStep(
     useProjectNavigationStore((state) => state.viewState[projectId]?.planStep)
@@ -437,8 +460,8 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onSuccess: async (_structure, variables) => {
       setMessage(
         variables.actTemplates?.length
-          ? "Zapisano strukturę planu i przygotowano akty."
-          : "Zapisano strukturę planu."
+          ? t("book.msgStructureAndActsSaved")
+          : t("book.msgStructureSaved")
       );
       await invalidatePlan();
     },
@@ -448,7 +471,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     mutationFn: (input: UpsertActInput) => upsertAct(input),
     onSuccess: async (act) => {
       setSelectedItem({ type: "act", id: act.id });
-      setMessage("Zapisano akt.");
+      setMessage(t("book.msgActSaved"));
       await invalidatePlan();
     },
     onError: showError
@@ -471,7 +494,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     },
     onSuccess: async (beat) => {
       setSelectedItem({ type: "beat", id: beat.id });
-      setMessage("Zapisano beat.");
+      setMessage(t("book.msgBeatSaved"));
       await invalidatePlan();
     },
     onError: showError
@@ -479,7 +502,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   const beatMoveMutation = useMutation({
     mutationFn: (input: MoveBeatToChapterInput) => moveBeatToChapter(input),
     onSuccess: async () => {
-      setMessage("Przeniesiono beat.");
+      setMessage(t("book.msgBeatMoved"));
       await invalidatePlan();
     },
     onError: showError
@@ -488,7 +511,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     mutationFn: (input: UpsertPlotThreadInput) => upsertPlotThread(input),
     onSuccess: async (thread) => {
       setSelectedItem({ type: "thread", id: thread.id });
-      setMessage("Zapisano wątek.");
+      setMessage(t("book.msgThreadSaved"));
       await invalidatePlan();
     },
     onError: showError
@@ -497,7 +520,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     mutationFn: (input: UpsertChapterInput) => upsertChapter(input),
     onSuccess: async (chapter) => {
       setSelectedItem({ type: "chapter", id: chapter.id });
-      setMessage("Zapisano rozdział.");
+      setMessage(t("book.msgChapterSaved"));
       await invalidatePlan();
     },
     onError: showError
@@ -505,7 +528,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   const chapterThreadMutation = useMutation({
     mutationFn: (input: UpsertChapterThreadInput) => upsertChapterThreadRelation(input),
     onSuccess: async () => {
-      setMessage("Zapisano przebieg wątku w rozdziale.");
+      setMessage(t("book.msgThreadFlowSaved"));
       await invalidatePlan();
     },
     onError: showError
@@ -517,7 +540,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
       }
     },
     onSuccess: async () => {
-      setMessage("Zapisano kolejność rozdziałów.");
+      setMessage(t("book.msgChapterOrderSaved"));
       await invalidatePlan();
     },
     onError: showError
@@ -540,7 +563,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onSuccess: async () => {
       setSelectedItem(null);
       setDeleteTarget(null);
-      setMessage("Usunięto element planu.");
+      setMessage(t("book.msgPlanItemDeleted"));
       await invalidatePlan();
     },
     onError: showError
@@ -548,7 +571,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   const sceneMutation = useMutation({
     mutationFn: (input: UpsertSceneInput) => upsertScene(input),
     onSuccess: async (scene) => {
-      setMessage("Zapisano scenę.");
+      setMessage(t("book.msgSceneSaved"));
       await invalidatePlan();
       return scene;
     },
@@ -559,7 +582,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onSuccess: async () => {
       setSceneModal(null);
       setDeleteTarget(null);
-      setMessage("Usunięto scenę.");
+      setMessage(t("book.msgSceneDeleted"));
       await invalidatePlan();
     },
     onError: showError
@@ -610,8 +633,8 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     onSuccess: async (scene) => {
       setMessage(
         scene.isStyleReference
-          ? "Oznaczono scenę jako wzorzec stylu dla AI."
-          : "Usunięto oznaczenie wzorca stylu."
+          ? t("book.msgStyleReferenceSet")
+          : t("book.msgStyleReferenceRemoved")
       );
       await invalidatePlan();
     },
@@ -625,7 +648,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
         description: "Duplikat aktywnego planu."
       }),
     onSuccess: async () => {
-      setMessage("Utworzono wariant planu.");
+      setMessage(t("book.msgPlanVariantCreated"));
       await invalidatePlan();
     },
     onError: showError
@@ -634,7 +657,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     mutationFn: (planVersionId: string) =>
       setActivePlanVersion({ bookId: bookId ?? "", planVersionId }),
     onSuccess: async () => {
-      setMessage("Zmieniono aktywny wariant planu.");
+      setMessage(t("book.msgActivePlanVariantChanged"));
       await invalidatePlan();
     },
     onError: showError
@@ -643,7 +666,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     mutationFn: (planVersionId: string) =>
       deletePlanVersion({ bookId: bookId ?? "", planVersionId }),
     onSuccess: async () => {
-      setMessage("Usunięto wariant planu.");
+      setMessage(t("book.msgPlanVariantDeleted"));
       await invalidatePlan();
     },
     onError: showError
@@ -669,7 +692,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   ) {
     setErrorMessage("");
     if (!projectQuery.data || !bookId) {
-      setErrorMessage("Brak danych projektu.");
+      setErrorMessage(t("book.errNoProjectData"));
       return;
     }
 
@@ -714,18 +737,18 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     setErrorMessage("");
 
     if (!projectQuery.data || !bookId) {
-      setErrorMessage("Brak danych projektu.");
+      setErrorMessage(t("book.errNoProjectData"));
       return;
     }
 
     const chapters = orderedChaptersForPlan(plan);
     if (chapters.length === 0) {
-      setErrorMessage("Najpierw dodaj rozdziały.");
+      setErrorMessage(t("book.errAddChaptersFirst"));
       return;
     }
 
     if (field === "allChapterThreadSuggestions" && plan.threads.length === 0) {
-      setErrorMessage("Najpierw dodaj wątki.");
+      setErrorMessage(t("book.errAddThreadsFirst"));
       return;
     }
 
@@ -739,8 +762,8 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     if (pendingBulkStatus) {
       setErrorMessage(
         field === "allChapterSceneDrafts"
-          ? "Generowanie scen dla rozdziałów jest już w kolejce."
-          : "Przypisywanie wątków do rozdziałów jest już w kolejce."
+          ? t("book.errSceneGenerationQueued")
+          : t("book.errThreadAssignmentQueued")
       );
       return;
     }
@@ -749,8 +772,8 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
 
     setMessage(
       field === "allChapterSceneDrafts"
-        ? "Dodano do kolejki jedno zbiorcze generowanie scen dla rozdziałów."
-        : "Dodano do kolejki jedno zbiorcze przypisywanie wątków do rozdziałów."
+        ? t("book.msgBulkSceneGenerationQueued")
+        : t("book.msgBulkThreadAssignmentQueued")
     );
   }
 
@@ -772,10 +795,10 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
 
     activatePromptContextTarget(
       createPlanPromptContextTarget(projectId, field, targetEntity ? planPromptEntityId(targetEntity) : undefined, {
-        submitLabel: "Wyślij do AI",
+        submitLabel: t("book.sendToAi"),
         submitDisabled: Boolean(loading),
         submitDisabledReason: loading
-          ? `Pole "${planFieldConfigs[field].label}" jest już w kolejce AI.`
+          ? t("book.fieldAlreadyQueued", { field: planFieldConfigs[field].label })
           : undefined,
         onSubmit: () => queuePlanGeneration(field, targetEntity)
       })
@@ -805,7 +828,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   if (projectQuery.isLoading || planQuery.isLoading) {
     return (
       <section className="plan-page">
-        <p className="muted-text">Ładuję plan...</p>
+        <p className="muted-text">{t("book.loadingPlan")}</p>
       </section>
     );
   }
@@ -813,7 +836,7 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
   if (projectQuery.isError || planQuery.isError || !projectQuery.data || !bookId) {
     return (
       <section className="plan-page">
-        <p className="warning-text">Nie można wczytać danych planu.</p>
+        <p className="warning-text">{t("book.planLoadError")}</p>
       </section>
     );
   }
@@ -920,25 +943,24 @@ export function BookPlanPage({ projectId }: BookPlanPageProps) {
     <section className="plan-page">
       <header className="plan-page-header">
         <div>
-          <p className="eyebrow">Plan powieści</p>
-          <h2>Od struktury do scen</h2>
+          <p className="eyebrow">{t("book.novelPlan")}</p>
+          <h2>{t("book.fromStructureToScenes")}</h2>
           <p>
-            Najpierw ułóż akty i roboczy szkielet rozdziałów, potem rozpisz przez
-            niego wątki, beaty i sceny.
+            {t("book.planIntro")}
           </p>
         </div>
         <span
           title={
             isPlanReady(plan)
-              ? "Przełącz tryb planu."
-              : "Dodaj akty i rozdziały, aby odblokować podgląd."
+              ? t("book.togglePlanMode")
+              : t("book.addActsChaptersToUnlockPreview")
           }
         >
           <Segmented
-            ariaLabel="Tryb planu"
+            ariaLabel={t("book.planMode")}
             items={[
-              { id: "wizard", label: "Kreator" },
-              { id: "preview", label: "Podgląd" }
+              { id: "wizard", label: t("book.wizard") },
+              { id: "preview", label: t("book.preview") }
             ]}
             value={mode}
             onChange={(nextMode) => selectMode(nextMode as PlanMode)}
@@ -1072,11 +1094,12 @@ function ConfirmDeleteModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   if (!target) {
     return null;
   }
 
-  const copy = deleteTargetCopy(target);
+  const copy = deleteTargetCopy(target, t);
 
   return (
     <Modal
@@ -1087,10 +1110,10 @@ function ConfirmDeleteModal({
         <>
           <Button variant="danger" onClick={onConfirm} busy={deleting}>
             {deleting ? null : <Trash2 size={15} aria-hidden />}
-            Usuń
+            {t("book.delete")}
           </Button>
           <Button variant="ghost" onClick={onClose} disabled={deleting}>
-            Anuluj
+            {t("book.cancel")}
           </Button>
         </>
       }
@@ -1098,37 +1121,43 @@ function ConfirmDeleteModal({
       <div className="confirm-delete-body">
         <strong>{target.title}</strong>
         <p>{copy.description}</p>
-        <p className="warning-text">Tej operacji nie można cofnąć.</p>
+        <p className="warning-text">{t("book.actionCannotBeUndone")}</p>
       </div>
     </Modal>
   );
 }
 
-function deleteTargetCopy(target: DeleteTarget): { title: string; description: string } {
+function deleteTargetCopy(
+  target: DeleteTarget,
+  t: (key: string, options?: Record<string, unknown>) => string
+): { title: string; description: string } {
   if (target.kind === "beat") {
     return {
-      title: "Usunąć beat?",
-      description: `Usuniesz beat i jego przypięcia do rozdziałów. Liczba przypięć: ${target.chapterCount}.`
+      title: t("book.deleteBeatTitle"),
+      description: t("book.deleteBeatDesc", { pins: target.chapterCount })
     };
   }
 
   if (target.kind === "thread") {
     return {
-      title: "Usunąć wątek?",
-      description: `Usuniesz wątek oraz jego powiązania z rozdziałami i scenami. Rozdziały: ${target.chapterCount}. Sceny: ${target.sceneCount}.`
+      title: t("book.deleteThreadTitle"),
+      description: t("book.deleteThreadDesc", {
+        chapters: target.chapterCount,
+        scenes: target.sceneCount
+      })
     };
   }
 
   if (target.kind === "chapter") {
     return {
-      title: "Usunąć rozdział?",
-      description: `Usuniesz rozdział i jego relacje. Sceny z tego rozdziału przejdą do sekcji „Bez rozdziału”. Sceny: ${target.sceneCount}.`
+      title: t("book.deleteChapterTitle"),
+      description: t("book.deleteChapterDesc", { scenes: target.sceneCount })
     };
   }
 
   return {
-    title: "Usunąć scenę?",
-    description: "Usuniesz scenę wraz z treścią i relacjami planu."
+    title: t("book.deleteSceneTitle"),
+    description: t("book.deleteSceneDesc")
   };
 }
 
@@ -1217,6 +1246,7 @@ function ScenesStep({
   onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onGenerateForAllChapters: () => void;
 }) {
+  const { t } = useTranslation();
   const chapters = orderedChaptersForPlan(plan);
   const proposals = useProposalStore((state) => state.proposals);
   const lanes = [...chapters, null].map((chapter) => ({
@@ -1241,7 +1271,7 @@ function ScenesStep({
   return (
     <div className="scenes-step plan-grid-list">
       <PlanCard
-        title="Warianty planu"
+        title={t("book.planVariants")}
         icon={<GitBranch size={18} />}
         action={
           <span className="scene-add-actions">
@@ -1252,18 +1282,18 @@ function ScenesStep({
               disabled={saving || chapters.length === 0 || bulkSceneGenerationPending}
               title={
                 chapters.length === 0
-                  ? "Dodaj rozdziały, aby wygenerować sceny."
+                  ? t("book.addChaptersToGenerateScenes")
                   : bulkSceneGenerationPending
-                    ? "Generowanie scen dla rozdziałów jest już w kolejce."
-                    : "Wygeneruj propozycje scen dla wszystkich rozdziałów."
+                    ? t("book.errSceneGenerationQueued")
+                    : t("book.generateScenesForAllChaptersHint")
               }
             >
               <Sparkles size={15} />
-              Generuj sceny dla rozdziałów
+              {t("book.generateScenesForChapters")}
             </button>
             <button type="button" className="secondary-button" onClick={onDuplicatePlan} disabled={saving}>
               <Plus size={15} />
-              Duplikuj aktywny plan
+              {t("book.duplicateActivePlan")}
             </button>
           </span>
         }
@@ -1280,7 +1310,7 @@ function ScenesStep({
                   type="button"
                   onClick={() => !version.isActive && onSetActivePlan(version.id)}
                   disabled={version.isActive || saving}
-                  title={version.isActive ? "Aktywny wariant planu" : "Ustaw jako aktywny wariant"}
+                  title={version.isActive ? t("book.activePlanVariant") : t("book.setAsActiveVariant")}
                 >
                   {version.name}
                 </button>
@@ -1289,13 +1319,13 @@ function ScenesStep({
                     type="button"
                     className="scene-version-delete"
                     onClick={() => {
-                      if (confirm(`Usunąć wariant planu "${version.name}"?`)) {
+                      if (confirm(t("book.confirmDeletePlanVariant", { name: version.name }))) {
                         onDeletePlanVersion(version.id);
                       }
                     }}
                     disabled={saving}
-                    title={`Usuń wariant planu: ${version.name}`}
-                    aria-label={`Usuń wariant planu: ${version.name}`}
+                    title={t("book.deletePlanVariant", { name: version.name })}
+                    aria-label={t("book.deletePlanVariant", { name: version.name })}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -1309,7 +1339,7 @@ function ScenesStep({
       {lanes.map(({ chapter, scenes }) => (
         <PlanCard
           key={chapter?.id ?? "no-chapter"}
-          title={chapter ? `Rozdział ${chapter.number}: ${chapter.workingTitle || "Bez tytułu"}` : "Sceny bez rozdziału"}
+          title={chapter ? t("book.chapterNumberTitle", { number: chapter.number, title: chapter.workingTitle || t("book.untitled") }) : t("book.scenesWithoutChapter")}
           icon={<ClipboardList size={18} />}
           action={
             <AddSceneActions
@@ -1348,10 +1378,10 @@ function ScenesStep({
                     disabled={saving}
                     title={
                       scene.isStyleReference
-                        ? "Scena wzorcowa stylu — AI naśladuje jej prozę (kliknij, by odznaczyć)"
-                        : "Oznacz jako scenę wzorcową stylu dla AI"
+                        ? t("book.styleReferenceActiveHint")
+                        : t("book.styleReferenceSetHint")
                     }
-                    aria-label={`Wzorzec stylu: ${scene.title || "Scena bez tytułu"}`}
+                    aria-label={t("book.styleReferenceLabel", { title: scene.title || t("book.untitledScene") })}
                     aria-pressed={Boolean(scene.isStyleReference)}
                   >
                     <Star size={14} fill={scene.isStyleReference ? "currentColor" : "none"} />
@@ -1365,26 +1395,26 @@ function ScenesStep({
                       onRequestDelete(sceneDeleteTarget(plan, scene));
                     }}
                     disabled={saving}
-                    title={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
-                    aria-label={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
+                    title={t("book.deleteScene", { title: scene.title || t("book.untitledScene") })}
+                    aria-label={t("book.deleteScene", { title: scene.title || t("book.untitledScene") })}
                   >
                     <Trash2 size={14} />
                   </button>
-                  <span>{scene.targetWordCount ? `${scene.targetWordCount.toLocaleString("pl-PL")} słów` : "Brak celu"}</span>
+                  <span>{scene.targetWordCount ? t("book.wordsCount", { words: scene.targetWordCount.toLocaleString("pl-PL") }) : t("book.noTarget")}</span>
                 </span>
-                <strong>{scene.title || "Scena bez tytułu"}</strong>
-                <p>{scene.summary || "Brak streszczenia sceny."}</p>
+                <strong>{scene.title || t("book.untitledScene")}</strong>
+                <p>{scene.summary || t("book.noSceneSummary")}</p>
                 <span className="chapter-card-field">
-                  <b>Cel</b>
-                  <span>{scene.goal || "Nie opisano"}</span>
-                </span>
-                <span className="chapter-card-field">
-                  <b>Konflikt</b>
-                  <span>{scene.conflict || "Nie opisano"}</span>
+                  <b>{t("book.goal")}</b>
+                  <span>{scene.goal || t("book.notDescribed")}</span>
                 </span>
                 <span className="chapter-card-field">
-                  <b>Wynik</b>
-                  <span>{scene.outcome || "Nie opisano"}</span>
+                  <b>{t("book.conflict")}</b>
+                  <span>{scene.conflict || t("book.notDescribed")}</span>
+                </span>
+                <span className="chapter-card-field">
+                  <b>{t("book.outcome")}</b>
+                  <span>{scene.outcome || t("book.notDescribed")}</span>
                 </span>
                 <SceneRelationChips
                   bookId={bookId}
@@ -1397,7 +1427,7 @@ function ScenesStep({
                 />
               </div>
             ))}
-            {scenes.length === 0 ? <p className="muted-text">Brak scen w tej sekcji.</p> : null}
+            {scenes.length === 0 ? <p className="muted-text">{t("book.noScenesInSection")}</p> : null}
           </div>
         </PlanCard>
       ))}
@@ -1439,6 +1469,7 @@ function AddSceneActions({
   onCreateScene: (chapterId?: string | null) => void;
   onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <span className="scene-add-actions">
       <PlanAiActions
@@ -1449,7 +1480,7 @@ function AddSceneActions({
       />
       <button type="button" className="secondary-button" onClick={() => onCreateScene(chapter?.id ?? null)}>
         <Plus size={15} />
-        Dodaj scenę
+        {t("book.addScene")}
       </button>
     </span>
   );
@@ -1464,6 +1495,7 @@ function SceneRelationChips({ bookId, scene, plan, characters, world, onSetRelat
   onSetRelations: (input: SetSceneRelationsInput) => void;
   onOpenPicker: (kind: SceneRelationKind) => void;
 }) {
+  const { t } = useTranslation();
   const characterIds = sceneCharacterIds(plan, scene.id);
   const threadIds = sceneThreadIds(plan, scene.id);
   const elementIds = sceneElementIds(plan, scene.id);
@@ -1483,7 +1515,7 @@ function SceneRelationChips({ bookId, scene, plan, characters, world, onSetRelat
       {threadIds.map((id) => (
         <RelationMiniChip
           key={id}
-          label={plan.threads.find((item) => item.id === id)?.name ?? "Wątek"}
+          label={plan.threads.find((item) => item.id === id)?.name ?? t("book.thread")}
           onRemove={() => update({ threadIds: threadIds.filter((item) => item !== id) })}
         />
       ))}
@@ -1497,7 +1529,7 @@ function SceneRelationChips({ bookId, scene, plan, characters, world, onSetRelat
       {ruleIds.map((id) => (
         <RelationMiniChip
           key={id}
-          label={world.rules.find((item) => item.id === id)?.name ?? "Reguła"}
+          label={world.rules.find((item) => item.id === id)?.name ?? t("book.rule")}
           onRemove={() => update({ ruleIds: ruleIds.filter((item) => item !== id) })}
         />
       ))}
@@ -1523,6 +1555,7 @@ function SceneRelationChips({ bookId, scene, plan, characters, world, onSetRelat
 }
 
 function RelationMiniChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  const { t } = useTranslation();
   return (
     <span className="chapter-chip scene-relation-chip">
       {label}
@@ -1533,8 +1566,8 @@ function RelationMiniChip({ label, onRemove }: { label: string; onRemove: () => 
           event.stopPropagation();
           onRemove();
         }}
-        title={`Odłącz relację: ${label}`}
-        aria-label={`Odłącz relację: ${label}`}
+        title={t("book.detachRelation", { label })}
+        aria-label={t("book.detachRelation", { label })}
       >
         <X size={11} />
       </button>
@@ -1585,10 +1618,11 @@ function PlanStageNavigation({
   activeStep: PlanStep;
   onSelectStep: (step: PlanStep) => void;
 }) {
+  const { t } = useTranslation();
   const activeIndex = planSteps.findIndex((step) => step.key === activeStep);
 
   return (
-    <nav className="plan-steps" aria-label="Kroki planu powieści">
+    <nav className="plan-steps" aria-label={t("book.planStepsNav")}>
       {planSteps.map((step, index) => {
         const active = activeStep === step.key;
         const done = index < activeIndex;
@@ -1608,7 +1642,7 @@ function PlanStageNavigation({
               <span className="plan-step-n" aria-hidden="true">
                 {done ? "✓" : index + 1}
               </span>
-              {step.label}
+              {t(`book.planStep.${step.key}`)}
             </button>
           </Fragment>
         );
@@ -1627,14 +1661,17 @@ function StructureStep({
 }: StepProps & {
   onSave: (input: SaveStoryStructureWithSkeletonInput) => void;
 }) {
+  const { t } = useTranslation();
   const [structureType, setStructureType] = useState(
     plan.structure?.structureType ?? "three_act"
   );
   const [description, setDescription] = useState(plan.structure?.description ?? "");
   const [notes, setNotes] = useState(plan.structure?.notes ?? "");
-  const selectedOption =
+  const selectedOption = translateStructureOption(
     structureOptions.find((option) => option.value === structureType) ??
-    structureOptions[0];
+      structureOptions[0],
+    t
+  );
   const shouldCreateActSkeleton =
     plan.acts.length === 0 && selectedOption.actTemplates.length > 0;
 
@@ -1665,7 +1702,7 @@ function StructureStep({
 
   return (
     <PlanCard
-      title="Struktura fabuły"
+      title={t("book.storyStructure")}
       icon={<Map size={18} />}
       action={
         <PlanAiActions
@@ -1677,8 +1714,9 @@ function StructureStep({
     >
       <form className="plan-form structure-builder-form" onSubmit={submit}>
         <fieldset className="structure-choice-grid">
-          <legend>Typ struktury</legend>
-          {structureOptions.map((option) => {
+          <legend>{t("book.structureType")}</legend>
+          {structureOptions.map((rawOption) => {
+            const option = translateStructureOption(rawOption, t);
             const selected = option.value === structureType;
             const createsActs = plan.acts.length === 0 && option.actTemplates.length > 0;
             const Icon = option.icon;
@@ -1700,19 +1738,19 @@ function StructureStep({
                     <Icon size={24} />
                     <strong>{option.label}</strong>
                   </span>
-                  <em>{option.actTemplates.length ? `${option.actTemplates.length} akty` : "Dowolna"}</em>
+                  <em>{option.actTemplates.length ? t("book.actsCount", { count: option.actTemplates.length }) : t("book.anyStructure")}</em>
                 </span>
                 <span className="structure-choice-copy">
-                  <b>Najlepsze dla</b>
+                  <b>{t("book.bestFor")}</b>
                   {option.bestFor}
                 </span>
                 <span className="structure-choice-copy">
-                  <b>Porządkuje</b>
+                  <b>{t("book.organizes")}</b>
                   {option.organizes}
                 </span>
                 <span className={createsActs ? "structure-choice-result ready" : "structure-choice-result"}>
                   {plan.acts.length > 0 && option.actTemplates.length > 0
-                    ? "Akty już istnieją, więc wybór nie nadpisze szkieletu."
+                    ? t("book.actsAlreadyExist")
                     : option.result}
                 </span>
               </label>
@@ -1721,7 +1759,7 @@ function StructureStep({
         </fieldset>
         <div className="structure-act-preview">
           <div>
-            <p className="eyebrow">Szkielet aktów</p>
+            <p className="eyebrow">{t("book.actSkeleton")}</p>
             <h4>{selectedOption.label}</h4>
           </div>
           {selectedOption.actTemplates.length > 0 ? (
@@ -1748,20 +1786,20 @@ function StructureStep({
             </ol>
           ) : (
             <p className="muted-text">
-              Struktura własna nie tworzy aktów automatycznie.
+              {t("book.customStructureNoActs")}
             </p>
           )}
           <p className={shouldCreateActSkeleton ? "success-text" : "muted-text"}>
             {shouldCreateActSkeleton
-              ? "Po zapisie aplikacja przygotuje te akty."
+              ? t("book.actsWillBePrepared")
               : plan.acts.length > 0
-                ? "Istniejące akty pozostaną bez zmian."
-                : "Ten wybór nie doda aktów automatycznie."}
+                ? t("book.existingActsStay")
+                : t("book.choiceAddsNoActs")}
           </p>
         </div>
         <div className="structure-notes-grid">
           <PlanInlineField
-            label="Opis struktury"
+            label={t("book.structureDescription")}
             value={description}
             rows={5}
             field="storyStructureDescription"
@@ -1770,7 +1808,7 @@ function StructureStep({
             onActivatePrompt={onActivatePrompt}
           />
           <PlanInlineField
-            label="Notatki do planu"
+            label={t("book.planNotes")}
             value={notes}
             rows={5}
             field="storyStructureNotes"
@@ -1782,7 +1820,7 @@ function StructureStep({
         <div className="structure-form-actions">
           <button type="submit" className="primary-button" disabled={saving}>
             <Save size={16} />
-            {saving ? "Zapisuję" : "Zapisz strukturę"}
+            {saving ? t("book.saving") : t("book.saveStructure")}
           </button>
         </div>
       </form>
@@ -1804,9 +1842,10 @@ function ActsStep({
   onDelete: (item: SelectedPlanItem) => void;
   onSelect: (item: SelectedPlanItem) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <PlanCard
-      title="Akty"
+      title={t("book.acts")}
       icon={<Flag size={18} />}
       action={
         <PlanAiActions
@@ -1817,8 +1856,7 @@ function ActsStep({
       }
     >
       <p className="muted-text">
-        Po ustawieniu aktów utwórz szkielet rozdziałów: robocze kontenery, do których
-        później przypniesz wątki i beaty.
+        {t("book.actsHint")}
       </p>
       <div className="plan-grid-list">
         {plan.acts.map((act) => (
@@ -1873,7 +1911,8 @@ function ActForm({
     targetEntity?: PlanPromptEntity
   ) => void;
 }) {
-  const [name, setName] = useState(act?.name ?? `Akt ${orderIndex + 1}`);
+  const { t } = useTranslation();
+  const [name, setName] = useState(act?.name ?? t("book.actDefaultName", { number: orderIndex + 1 }));
   const [purpose, setPurpose] = useState(act?.purpose ?? "");
   const [summary, setSummary] = useState(act?.summary ?? "");
   const [startPercent, setStartPercent] = useState(act?.startPercent ?? orderIndex * 25);
@@ -1881,7 +1920,7 @@ function ActForm({
   const [color, setColor] = useState(act?.color ?? actColors[orderIndex % actColors.length]);
 
   useEffect(() => {
-    setName(act?.name ?? `Akt ${orderIndex + 1}`);
+    setName(act?.name ?? t("book.actDefaultName", { number: orderIndex + 1 }));
     setPurpose(act?.purpose ?? "");
     setSummary(act?.summary ?? "");
     setStartPercent(act?.startPercent ?? orderIndex * 25);
@@ -1919,17 +1958,17 @@ function ActForm({
         className="plan-link-title"
         onClick={onSelect}
         disabled={!act}
-        aria-label={act ? `Otwórz akt ${act.name}` : "Nowy akt"}
+        aria-label={act ? t("book.openAct", { name: act.name }) : t("book.newAct")}
       >
         <span style={{ background: color }} />
-        {act ? act.name : "Nowy akt"}
+        {act ? act.name : t("book.newAct")}
       </button>
       <label className="field-label">
-        Nazwa
+        {t("book.name")}
         <input value={name} onChange={(event) => setName(event.target.value)} />
       </label>
       <PlanInlineField
-        label="Cel aktu"
+        label={t("book.actPurpose")}
         value={purpose}
         rows={3}
         field="actPurpose"
@@ -1939,7 +1978,7 @@ function ActForm({
         onActivatePrompt={onActivatePrompt}
       />
       <PlanInlineField
-        label="Streszczenie aktu"
+        label={t("book.actSummary")}
         value={summary}
         rows={4}
         field="actSummary"
@@ -1950,7 +1989,7 @@ function ActForm({
       />
       <div className="plan-form-row">
         <label className="field-label">
-          Start %
+          {t("book.startPercent")}
           <input
             type="number"
             min={0}
@@ -1960,7 +1999,7 @@ function ActForm({
           />
         </label>
         <label className="field-label">
-          Koniec %
+          {t("book.endPercent")}
           <input
             type="number"
             min={0}
@@ -1970,12 +2009,12 @@ function ActForm({
           />
         </label>
         <label className="field-label">
-          Kolor
+          {t("book.color")}
           <input
             type="color"
             value={color}
             onChange={(event) => setColor(event.target.value)}
-            aria-label="Kolor aktu"
+            aria-label={t("book.actColor")}
           />
         </label>
       </div>
@@ -2002,6 +2041,7 @@ function BeatsStep({
   onOpenBeat: (beat: Beat) => void;
   onCreateBeat: (chapterId?: string | null) => void;
 }) {
+  const { t } = useTranslation();
   const beatChapterRailRef = useRef<HTMLDivElement>(null);
   const beatBoardRef = useRef<HTMLDivElement>(null);
   const beatDragRef = useRef<BeatPointerDrag | null>(null);
@@ -2167,11 +2207,10 @@ function BeatsStep({
               <Target size={18} />
             </span>
             <div>
-              <p className="eyebrow">Beaty</p>
-              <h3>Dopnij beaty do rozdziałów</h3>
+              <p className="eyebrow">{t("book.beats")}</p>
+              <h3>{t("book.pinBeatsToChapters")}</h3>
               <p>
-                Mapa beatów porządkuje obowiązki strukturalne. Główna decyzja o
-                kontrakcie nadal dzieje się w kokpicie rozdziału.
+                {t("book.beatsIntro")}
               </p>
             </div>
           </div>
@@ -2181,27 +2220,27 @@ function BeatsStep({
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Szukaj beatu..."
-                aria-label="Szukaj beatu"
+                placeholder={t("book.searchBeatPlaceholder")}
+                aria-label={t("book.searchBeat")}
               />
             </label>
             <select
               value={sortMode}
               onChange={(event) => setSortMode(event.target.value as BeatSortMode)}
-              aria-label="Sortuj beaty"
+              aria-label={t("book.sortBeats")}
             >
-              <option value="order">Sortuj: Kolejność</option>
-              <option value="name">Sortuj: Nazwa</option>
-              <option value="role">Sortuj: Rola</option>
+              <option value="order">{t("book.sortByOrder")}</option>
+              <option value="name">{t("book.sortByName")}</option>
+              <option value="role">{t("book.sortByRole")}</option>
             </select>
             <button type="button" className="primary-button" onClick={() => onCreateBeat(null)}>
               <Plus size={16} />
-              Dodaj beat
+              {t("book.addBeat")}
             </button>
             <PlanAiActions
               field="beatSheet"
-              generateLabel="Dopnij beaty"
-              generateTitle="Wygeneruj beat sheet przypisany do roboczych rozdziałów"
+              generateLabel={t("book.pinBeats")}
+              generateTitle={t("book.generateBeatSheetHint")}
               onGenerate={() => onGenerate("beatSheet")}
               onActivatePrompt={() => onActivatePrompt("beatSheet")}
             />
@@ -2221,9 +2260,9 @@ function BeatsStep({
           <div className="beat-unassigned-header">
             <div>
               <span className="chapter-act-dot" />
-              <h4>Nieprzypisane beaty</h4>
+              <h4>{t("book.unassignedBeats")}</h4>
             </div>
-            <span>{unassignedBeats.length} beatów</span>
+            <span>{t("book.beatsCount", { count: unassignedBeats.length })}</span>
           </div>
           <div className="beat-card-stack">
             {unassignedBeats.length > 0 ? (
@@ -2258,7 +2297,7 @@ function BeatsStep({
               ))
             ) : (
               <p className="muted-text chapter-empty-note">
-                Wszystkie widoczne beaty są przypisane do rozdziałów.
+                {t("book.allVisibleBeatsAssigned")}
               </p>
             )}
           </div>
@@ -2268,8 +2307,8 @@ function BeatsStep({
             type="button"
             className="chapter-rail-scroll-button previous"
             onClick={() => scrollChapterRail(-1)}
-            aria-label="Pokaż wcześniejsze rozdziały"
-            title="Pokaż wcześniejsze rozdziały"
+            aria-label={t("book.showPreviousChapters")}
+            title={t("book.showPreviousChapters")}
           >
             <ChevronLeft size={18} />
           </button>
@@ -2277,7 +2316,7 @@ function BeatsStep({
             ref={beatChapterRailRef}
             className="chapter-act-rail"
             role="tablist"
-            aria-label="Rozdziały w planie beatów"
+            aria-label={t("book.chaptersInBeatPlan")}
           >
             {lanes.map((lane, index) => (
               <button
@@ -2293,7 +2332,7 @@ function BeatsStep({
                   <strong>
                     {lane.number}. {lane.name}
                   </strong>
-                  <span>{lane.beats.length} beatów</span>
+                  <span>{t("book.beatsCount", { count: lane.beats.length })}</span>
                 </span>
               </button>
             ))}
@@ -2302,8 +2341,8 @@ function BeatsStep({
             type="button"
             className="chapter-rail-scroll-button next"
             onClick={() => scrollChapterRail(1)}
-            aria-label="Pokaż kolejne rozdziały"
-            title="Pokaż kolejne rozdziały"
+            aria-label={t("book.showNextChapters")}
+            title={t("book.showNextChapters")}
           >
             <ChevronRight size={18} />
           </button>
@@ -2333,10 +2372,10 @@ function BeatsStep({
                       {lane.number}. {lane.name}
                     </h4>
                   </div>
-                  <span>{lane.beats.length} beatów</span>
+                  <span>{t("book.beatsCount", { count: lane.beats.length })}</span>
                 </div>
                 <p className="chapter-act-purpose">
-                  {lane.summary || "Rozdział bez streszczenia."}
+                  {lane.summary || t("book.chapterNoSummary")}
                 </p>
                 <div className="beat-card-stack">
                   {lane.beats.length > 0 ? (
@@ -2377,7 +2416,7 @@ function BeatsStep({
                           : "muted-text chapter-empty-note"
                       }
                     >
-                      Ten rozdział nie ma jeszcze beatów.
+                      {t("book.chapterHasNoBeats")}
                     </p>
                   )}
                 </div>
@@ -2387,7 +2426,7 @@ function BeatsStep({
                   onClick={() => onCreateBeat(chapterId)}
                 >
                   <Plus size={16} />
-                  Dodaj beat
+                  {t("book.addBeat")}
                 </button>
               </section>
             );
@@ -2429,6 +2468,7 @@ function BeatBoardCard({
   onOpen: () => void;
   onRequestDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const className = [
     "chapter-board-card",
     "beat-board-card",
@@ -2458,7 +2498,7 @@ function BeatBoardCard({
           onOpen();
         }
       }}
-      aria-label={`Otwórz beat ${beat.name}`}
+      aria-label={t("book.openBeat", { name: beat.name })}
     >
       <span className="chapter-card-topline">
         <span className="chapter-number-badge beat-number-badge">
@@ -2477,7 +2517,7 @@ function BeatBoardCard({
         >
           <GripVertical size={15} />
         </span>
-        <span>{chapter ? `Rozdz. ${chapter.number}` : "Nieprzypisany"}</span>
+        <span>{chapter ? t("book.chapterShort", { number: chapter.number }) : t("book.unassigned")}</span>
         <button
           type="button"
           className="plan-card-delete-icon"
@@ -2487,17 +2527,17 @@ function BeatBoardCard({
             onRequestDelete();
           }}
           disabled={dragDisabled}
-          title={`Usuń beat: ${beat.name}`}
-          aria-label={`Usuń beat: ${beat.name}`}
+          title={t("book.deleteBeat", { name: beat.name })}
+          aria-label={t("book.deleteBeat", { name: beat.name })}
         >
           <Trash2 size={14} />
         </button>
       </span>
       <strong>{beat.name}</strong>
-      <p>{beat.description || "Brak opisu beatu."}</p>
+      <p>{beat.description || t("book.noBeatDescription")}</p>
       <span className="chapter-card-field">
-        <b>Rola</b>
-        {beat.role || "Brak"}
+        <b>{t("book.role")}</b>
+        {beat.role || t("book.none")}
       </span>
     </article>
   );
@@ -2526,15 +2566,16 @@ function BeatForm({
     targetEntity?: PlanPromptEntity
   ) => void;
 }) {
+  const { t } = useTranslation();
   const assignedChapterId = beat ? chapterIdForBeat(plan, beat.id) : initialChapterId ?? null;
-  const [name, setName] = useState(beat?.name ?? `Beat ${orderIndex + 1}`);
+  const [name, setName] = useState(beat?.name ?? t("book.beatDefaultName", { number: orderIndex + 1 }));
   const [description, setDescription] = useState(beat?.description ?? "");
   const [role, setRole] = useState(beat?.role ?? "");
   const [chapterId, setChapterId] = useState(assignedChapterId ?? "");
   const targetId = beat?.id ?? `draft-beat:${bookId}:${initialChapterId ?? "unassigned"}`;
 
   useEffect(() => {
-    setName(beat?.name ?? `Beat ${orderIndex + 1}`);
+    setName(beat?.name ?? t("book.beatDefaultName", { number: orderIndex + 1 }));
     setDescription(beat?.description ?? "");
     setRole(beat?.role ?? "");
     setChapterId(assignedChapterId ?? "");
@@ -2599,34 +2640,34 @@ function BeatForm({
 
   const selectedChapter = plan.chapters.find((chapter) => chapter.id === chapterId);
   const completionItems = [
-    { label: "Nazwa", complete: Boolean(name.trim()) },
-    { label: "Rola", complete: Boolean(role.trim()) },
-    { label: "Opis", complete: Boolean(description.trim()) },
-    { label: "Rozdział", complete: Boolean(chapterId) }
+    { label: t("book.name"), complete: Boolean(name.trim()) },
+    { label: t("book.role"), complete: Boolean(role.trim()) },
+    { label: t("book.description"), complete: Boolean(description.trim()) },
+    { label: t("book.chapter"), complete: Boolean(chapterId) }
   ];
   const completedItems = completionItems.filter((item) => item.complete).length;
   const completionPercent = Math.round((completedItems / completionItems.length) * 100);
 
   return (
     <form id="beat-edit-form" className="chapter-edit-form beat-edit-form" onSubmit={submit}>
-      <div className="chapter-edit-metrics" aria-label="Najważniejsze informacje o beacie">
+      <div className="chapter-edit-metrics" aria-label={t("book.beatKeyInfo")}>
         <span className="chapter-edit-metric">
           <Target size={16} />
-          <span>Rola:</span>
-          <strong>{role || "Bez roli"}</strong>
+          <span>{t("book.roleColon")}</span>
+          <strong>{role || t("book.noRole")}</strong>
         </span>
         <span className="chapter-edit-metric">
           <FileText size={16} />
-          <span>Rozdział</span>
+          <span>{t("book.chapter")}</span>
           <strong>
             {selectedChapter
               ? `${dynamicChapterNumber(plan, selectedChapter.id)}. ${selectedChapter.workingTitle}`
-              : "Nieprzypisany"}
+              : t("book.unassigned")}
           </strong>
         </span>
         <span className="chapter-edit-metric">
           <CheckCircle2 size={16} />
-          <span>Uzupełnione:</span>
+          <span>{t("book.completedColon")}</span>
           <strong>
             {completedItems} / {completionItems.length}
           </strong>
@@ -2634,7 +2675,7 @@ function BeatForm({
         <StatusPill
           tone={completionPercent >= 100 ? "success" : completionPercent >= 50 ? "accent" : "muted"}
         >
-          {completionPercent >= 100 ? "Gotowy" : completionPercent >= 50 ? "W trakcie" : "Szkic"}
+          {completionPercent >= 100 ? t("book.ready") : completionPercent >= 50 ? t("book.inProgress") : t("book.draft")}
         </StatusPill>
       </div>
 
@@ -2643,11 +2684,11 @@ function BeatForm({
           <section className="chapter-edit-section">
             <div className="chapter-section-heading">
               <LayoutList size={17} />
-              <h4>Treść beatu</h4>
+              <h4>{t("book.beatContent")}</h4>
             </div>
             <div className="chapter-field-stack">
               <BeatInlineField
-                label="Nazwa"
+                label={t("book.name")}
                 value={name}
                 field="beatName"
                 onChange={setName}
@@ -2655,7 +2696,7 @@ function BeatForm({
                 onActivatePrompt={activateBeatPrompt}
               />
               <BeatInlineField
-                label="Rola"
+                label={t("book.role")}
                 value={role}
                 field="beatRole"
                 onChange={setRole}
@@ -2663,7 +2704,7 @@ function BeatForm({
                 onActivatePrompt={activateBeatPrompt}
               />
               <BeatInlineField
-                label="Opis"
+                label={t("book.description")}
                 value={description}
                 field="beatDescription"
                 rows={6}
@@ -2675,18 +2716,18 @@ function BeatForm({
           </section>
         </main>
 
-        <aside className="chapter-edit-sidebar" aria-label="Przypisanie beatu">
+        <aside className="chapter-edit-sidebar" aria-label={t("book.beatAssignment")}>
           <section className="chapter-side-section beat-chapter-picker-section">
             <div className="chapter-side-heading">
               <Route size={16} />
-              <h4>Rozdział</h4>
+              <h4>{t("book.chapter")}</h4>
             </div>
             <Field
-              label="Przypisz do"
-              hint="Beat może być przypisany tylko do jednego rozdziału. Zmiana tutaj przeniesie go z poprzedniego miejsca."
+              label={t("book.assignTo")}
+              hint={t("book.beatAssignHint")}
             >
               <select value={chapterId} onChange={(event) => setChapterId(event.target.value)}>
-                <option value="">Nieprzypisany</option>
+                <option value="">{t("book.unassigned")}</option>
                 {orderedChaptersForPlan(plan).map((chapter) => (
                   <option value={chapter.id} key={chapter.id}>
                     {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
@@ -2776,6 +2817,7 @@ function BeatEditModal({
     targetEntity?: PlanPromptEntity
   ) => void;
 }) {
+  const { t } = useTranslation();
   const beat =
     state?.mode === "edit"
       ? plan.beats.find((candidate) => candidate.id === state.beatId)
@@ -2785,7 +2827,7 @@ function BeatEditModal({
     return null;
   }
 
-  const modalTitle = state.mode === "edit" && beat ? beat.name : "Nowy beat";
+  const modalTitle = state.mode === "edit" && beat ? beat.name : t("book.newBeat");
 
   return (
     <Modal
@@ -2801,14 +2843,14 @@ function BeatEditModal({
               disabled={saving}
             >
               <Trash2 size={15} aria-hidden />
-              Usuń
+              {t("book.delete")}
             </Button>
           ) : null}
           <Button variant="ghost" onClick={onClose}>
-            Anuluj
+            {t("book.cancel")}
           </Button>
           <Button variant="primary" type="submit" form="beat-edit-form" busy={saving}>
-            {saving ? "Zapisuję" : "Zapisz zmiany"}
+            {saving ? t("book.saving") : t("book.saveChanges")}
           </Button>
         </>
       }
@@ -2848,6 +2890,7 @@ function ThreadsStep({
   onSelect: (item: SelectedPlanItem) => void;
   onSuggestThreadsForAllChapters: () => void;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortMode, setSortMode] = useState<ThreadSortMode>("order");
@@ -2952,12 +2995,11 @@ function ThreadsStep({
             <span className="thread-title-icon">
               <GitBranch size={18} />
             </span>
-            <h3>Wątki</h3>
+            <h3>{t("book.threads")}</h3>
             <span className="thread-count-badge">{plan.threads.length}</span>
           </div>
           <p>
-            Rozpisz łuki i napięcia przez roboczy szkielet rozdziałów. Ten ekran jest
-            mapą przebiegu, a szczegóły kontraktu wracają do kokpitu rozdziału.
+            {t("book.threadsIntro")}
           </p>
         </div>
         <div className="thread-header-actions">
@@ -2978,20 +3020,20 @@ function ThreadsStep({
             }
             title={
               chapters.length === 0
-                ? "Dodaj rozdziały, aby przypisać wątki."
+                ? t("book.addChaptersToAssignThreads")
                 : plan.threads.length === 0
-                  ? "Dodaj wątki, aby przypisać je do rozdziałów."
+                  ? t("book.addThreadsToAssignToChapters")
                   : bulkThreadSuggestionsPending
-                    ? "Przypisywanie wątków do rozdziałów jest już w kolejce."
-                    : "Wygeneruj propozycje przebiegu wątków przez wszystkie rozdziały."
+                    ? t("book.errThreadAssignmentQueued")
+                    : t("book.generateThreadFlowHint")
             }
           >
             <Sparkles size={16} />
-            Rozpisz wątki przez rozdziały
+            {t("book.writeThreadsThroughChapters")}
           </button>
           <button type="button" className="primary-button" onClick={startNewThread}>
             <Plus size={16} />
-            Dodaj wątek
+            {t("book.addThread")}
           </button>
         </div>
       </header>
@@ -3002,37 +3044,37 @@ function ThreadsStep({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Szukaj wątku..."
+            placeholder={t("book.searchThreadPlaceholder")}
           />
         </label>
         <label className="thread-select-control">
-          <span>Status</span>
+          <span>{t("book.status")}</span>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="all">Wszystkie</option>
-            <option value="planned">Planowany</option>
-            <option value="active">Aktywny</option>
-            <option value="resolved">Domknięty</option>
+            <option value="all">{t("book.all")}</option>
+            <option value="planned">{t("book.statusPlanned")}</option>
+            <option value="active">{t("book.statusActive")}</option>
+            <option value="resolved">{t("book.statusResolved")}</option>
           </select>
         </label>
         <label className="thread-select-control">
-          <span>Sortuj</span>
+          <span>{t("book.sort")}</span>
           <select
             value={sortMode}
             onChange={(event) => setSortMode(event.target.value as ThreadSortMode)}
           >
-            <option value="order">Kolejność</option>
-            <option value="name">Nazwa</option>
-            <option value="status">Status</option>
+            <option value="order">{t("book.order")}</option>
+            <option value="name">{t("book.name")}</option>
+            <option value="status">{t("book.status")}</option>
           </select>
         </label>
-        <div className="thread-view-toggle" role="group" aria-label="Widok wątków">
+        <div className="thread-view-toggle" role="group" aria-label={t("book.threadsView")}>
           <button
             type="button"
             className={viewMode === "map" ? "active" : ""}
             onClick={() => setViewMode("map")}
           >
             <Map size={15} />
-            Mapa
+            {t("book.map")}
           </button>
           <button
             type="button"
@@ -3040,7 +3082,7 @@ function ThreadsStep({
             onClick={() => setViewMode("list")}
           >
             <LayoutList size={15} />
-            Lista
+            {t("book.list")}
           </button>
           <button
             type="button"
@@ -3048,7 +3090,7 @@ function ThreadsStep({
             onClick={() => setViewMode("table")}
           >
             <ClipboardList size={15} />
-            Tabela
+            {t("book.table")}
           </button>
         </div>
       </div>
@@ -3065,8 +3107,8 @@ function ThreadsStep({
 
           <div className="thread-view-panel">
             <div className="thread-view-summary">
-              <span>{visibleThreads.length} widocznych</span>
-              <span>{linkedChapterCount} powiązań z rozdziałami</span>
+              <span>{t("book.visibleCount", { count: visibleThreads.length })}</span>
+              <span>{t("book.chapterLinksCount", { count: linkedChapterCount })}</span>
             </div>
 
             {viewMode === "table" ? (
@@ -3098,8 +3140,8 @@ function ThreadsStep({
                 {visibleThreads.length === 0 ? (
                   <div className="thread-empty-state">
                     <GitBranch size={20} />
-                    <strong>Brak wątków dla tych filtrów</strong>
-                    <p>Zmień kryteria albo dodaj nowy wątek fabularny.</p>
+                    <strong>{t("book.noThreadsForFilters")}</strong>
+                    <p>{t("book.changeCriteriaOrAddThread")}</p>
                   </div>
                 ) : null}
               </div>
@@ -3150,6 +3192,7 @@ function ThreadEditModal({
   onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   if (!state) {
     return null;
   }
@@ -3159,22 +3202,22 @@ function ThreadEditModal({
     return null;
   }
 
-  const modalTitle = thread ? thread.name : "Nowy wątek";
+  const modalTitle = thread ? thread.name : t("book.newThread");
   const modal = (
     <div className="chapter-edit-modal" role="dialog" aria-modal="true" aria-labelledby="thread-edit-title">
       <button
         type="button"
         className="chapter-edit-backdrop"
         onClick={onClose}
-        aria-label="Zamknij edycję wątku"
+        aria-label={t("book.closeThreadEdit")}
       />
       <div className="chapter-edit-shell">
         <header className="chapter-edit-header">
           <div>
-            <p className="eyebrow">Edycja wątku</p>
+            <p className="eyebrow">{t("book.threadEdit")}</p>
             <h3 id="thread-edit-title">{modalTitle}</h3>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Zamknij edycję wątku" title="Zamknij">
+          <button type="button" className="icon-button" onClick={onClose} aria-label={t("book.closeThreadEdit")} title={t("book.close")}>
             <X size={18} />
           </button>
         </header>
@@ -3232,7 +3275,8 @@ function ThreadEditor({
   onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
 }) {
-  const [name, setName] = useState(thread?.name ?? `Wątek ${orderIndex + 1}`);
+  const { t } = useTranslation();
+  const [name, setName] = useState(thread?.name ?? t("book.threadDefaultName", { number: orderIndex + 1 }));
   const [description, setDescription] = useState(thread?.description ?? "");
   const [resolution, setResolution] = useState(thread?.resolution ?? "");
   const [color, setColor] = useState(thread?.color ?? actColors[orderIndex % actColors.length]);
@@ -3248,7 +3292,7 @@ function ThreadEditor({
     : [];
 
   useEffect(() => {
-    setName(thread?.name ?? `Wątek ${orderIndex + 1}`);
+    setName(thread?.name ?? t("book.threadDefaultName", { number: orderIndex + 1 }));
     setDescription(thread?.description ?? "");
     setResolution(thread?.resolution ?? "");
     setColor(thread?.color ?? actColors[orderIndex % actColors.length]);
@@ -3290,15 +3334,15 @@ function ThreadEditor({
           <section className="chapter-edit-section">
             <div className="chapter-section-heading">
               <GitBranch size={17} />
-              <h4>Dane wątku</h4>
+              <h4>{t("book.threadData")}</h4>
             </div>
             <div className="chapter-field-stack">
               <label className="field-label">
-                Nazwa
+                {t("book.name")}
                 <input value={name} onChange={(event) => setName(event.target.value)} />
               </label>
               <PlanInlineField
-                label="Opis"
+                label={t("book.description")}
                 value={description}
                 rows={4}
                 field="threadDescription"
@@ -3308,25 +3352,25 @@ function ThreadEditor({
                 onActivatePrompt={onActivatePrompt}
               />
               <label className="field-label">
-                Planowane rozwiązanie
+                {t("book.plannedResolution")}
                 <textarea
                   value={resolution}
                   rows={3}
-                  placeholder="Jak wątek ma się domknąć w finale — AI sieje zapowiedzi w scenach"
+                  placeholder={t("book.plannedResolutionPlaceholder")}
                   onChange={(event) => setResolution(event.target.value)}
                 />
               </label>
               <div className="plan-form-row">
                 <label className="field-label">
-                  Status
+                  {t("book.status")}
                   <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                    <option value="planned">Planowany</option>
-                    <option value="active">Aktywny</option>
-                    <option value="resolved">Domknięty</option>
+                    <option value="planned">{t("book.statusPlanned")}</option>
+                    <option value="active">{t("book.statusActive")}</option>
+                    <option value="resolved">{t("book.statusResolved")}</option>
                   </select>
                 </label>
                 <label className="field-label">
-                  Kolor
+                  {t("book.color")}
                   <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
                 </label>
               </div>
@@ -3336,9 +3380,9 @@ function ThreadEditor({
           <section className="chapter-edit-section thread-chapter-flow-section">
             <div className="chapter-side-heading">
               <FileText size={16} />
-              <h4>Przebieg w rozdziałach</h4>
+              <h4>{t("book.chapterFlow")}</h4>
               {thread && availableChapters.length > 0 ? (
-                <button type="button" className="icon-button chapter-relation-add-button" onClick={() => setChapterPickerOpen(true)} title="Dodaj rozdział" aria-label="Dodaj rozdział">
+                <button type="button" className="icon-button chapter-relation-add-button" onClick={() => setChapterPickerOpen(true)} title={t("book.addChapter")} aria-label={t("book.addChapter")}>
                   <Plus size={15} />
                 </button>
               ) : null}
@@ -3368,14 +3412,14 @@ function ThreadEditor({
                               )
                             )
                           }
-                          aria-label={`Odepnij rozdział ${chapter.workingTitle}`}
-                          title={`Odepnij rozdział ${chapter.workingTitle}`}
+                          aria-label={t("book.unpinChapter", { title: chapter.workingTitle })}
+                          title={t("book.unpinChapter", { title: chapter.workingTitle })}
                         >
                           -
                         </button>
                       </div>
                       <PlanInlineField
-                        label="Co dzieje się z wątkiem"
+                        label={t("book.whatHappensToThread")}
                         value={relationDescriptions[chapter.id] ?? relation.description ?? ""}
                         rows={3}
                         field="threadChapterDescription"
@@ -3391,7 +3435,7 @@ function ThreadEditor({
                 })
               ) : (
                 <span className="chapter-side-empty">
-                  {thread ? "Brak przypiętych rozdziałów" : "Zapisz wątek, aby przypiąć rozdziały."}
+                  {thread ? t("book.noPinnedChapters") : t("book.saveThreadToPinChapters")}
                 </span>
               )}
             </div>
@@ -3420,23 +3464,23 @@ function ThreadEditor({
       <footer className="chapter-edit-footer">
         <div className="chapter-footer-status">
           <CheckCircle2 size={16} />
-          <span>{thread ? `${relations.length} przypięć do rozdziałów` : "Nowy wątek"}</span>
+          <span>{thread ? t("book.chapterPinsCount", { count: relations.length }) : t("book.newThread")}</span>
         </div>
         <div className="chapter-footer-actions">
           {onDelete ? (
             <button type="button" className="ghost-button chapter-delete-button" onClick={onDelete} disabled={saving}>
               <Trash2 size={16} />
-              Usuń
+              {t("book.delete")}
             </button>
           ) : null}
           {onCancel ? (
             <button type="button" className="ghost-button" onClick={onCancel}>
-              Anuluj
+              {t("book.cancel")}
             </button>
           ) : null}
           <button type="submit" className="primary-button" disabled={saving}>
             <Save size={16} />
-            {saving ? "Zapisuję" : "Zapisz zmiany"}
+            {saving ? t("book.saving") : t("book.saveChanges")}
           </button>
         </div>
       </footer>
@@ -3456,17 +3500,18 @@ function ThreadFlowMap({
   onSelect: (thread: PlotThread) => void;
   onAddRelation: (thread: PlotThread, chapter: Chapter) => void;
 }) {
+  const { t } = useTranslation();
   if (plan.chapters.length === 0) {
     return (
       <section className="thread-map-card">
         <div className="thread-section-heading">
           <div>
-            <p className="eyebrow">Mapa powiązań</p>
-            <h4>Dodaj rozdziały, aby zobaczyć przebieg wątków</h4>
+            <p className="eyebrow">{t("book.relationsMap")}</p>
+            <h4>{t("book.addChaptersToSeeThreadFlow")}</h4>
           </div>
         </div>
         <p className="muted-text">
-          Mapa powstanie automatycznie z relacji między wątkami i rozdziałami.
+          {t("book.mapAutoFromRelations")}
         </p>
       </section>
     );
@@ -3478,10 +3523,10 @@ function ThreadFlowMap({
     <section className="thread-map-card">
       <div className="thread-section-heading">
         <div>
-          <p className="eyebrow">Mapa powiązań wątków w całej historii</p>
-          <h4>Przebieg przez rozdziały</h4>
+          <p className="eyebrow">{t("book.threadRelationsMapWholeStory")}</p>
+          <h4>{t("book.flowThroughChapters")}</h4>
         </div>
-        <span>{plan.chapters.length} rozdz.</span>
+        <span>{t("book.chaptersShortCount", { count: plan.chapters.length })}</span>
       </div>
       <div className="thread-map-board">
         <div
@@ -3496,10 +3541,10 @@ function ThreadFlowMap({
               type="button"
               key={chapter.id}
               title={chapter.workingTitle}
-              aria-label={`Rozdział ${dynamicChapterNumber(plan, chapter.id)}: ${chapter.workingTitle}`}
+              aria-label={t("book.chapterNumberTitle", { number: dynamicChapterNumber(plan, chapter.id), title: chapter.workingTitle })}
             >
               <strong>{dynamicChapterNumber(plan, chapter.id)}</strong>
-              <small>{plan.acts.find((act) => act.id === chapter.actId)?.name ?? "Bez aktu"}</small>
+              <small>{plan.acts.find((act) => act.id === chapter.actId)?.name ?? t("book.noAct")}</small>
             </button>
           ))}
         </div>
@@ -3540,8 +3585,8 @@ function ThreadFlowMap({
                           onAddRelation(thread, chapter);
                         }
                       }}
-                      title={`${thread.name}: rozdział ${dynamicChapterNumber(plan, chapter.id)}`}
-                      aria-label={`${thread.name} w rozdziale ${dynamicChapterNumber(plan, chapter.id)}`}
+                      title={t("book.threadChapterTitle", { name: thread.name, number: dynamicChapterNumber(plan, chapter.id) })}
+                      aria-label={t("book.threadInChapter", { name: thread.name, number: dynamicChapterNumber(plan, chapter.id) })}
                     />
                   );
                 })}
@@ -3573,6 +3618,7 @@ function ThreadSummaryCard({
   onRemoveChapter: (chapter: Chapter) => void;
   onRequestDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const chapters = chaptersForThread(plan, thread);
   const acts = actsForThread(plan, thread);
   const coverage = threadCoveragePercent(plan, thread);
@@ -3606,7 +3652,7 @@ function ThreadSummaryCard({
       tabIndex={0}
       onClick={openFromCard}
       onKeyDown={openFromKeyboard}
-      aria-label={`Edytuj wątek ${thread.name}`}
+      aria-label={t("book.editThread", { name: thread.name })}
     >
       <div className="thread-summary-hitarea">
         <span className="thread-color-dot" style={{ background: thread.color }} />
@@ -3626,19 +3672,19 @@ function ThreadSummaryCard({
           onRequestDelete();
         }}
         disabled={saving}
-        title={`Usuń wątek: ${thread.name}`}
-        aria-label={`Usuń wątek: ${thread.name}`}
+        title={t("book.deleteThread", { name: thread.name })}
+        aria-label={t("book.deleteThread", { name: thread.name })}
       >
         <Trash2 size={14} />
       </button>
-      <p>{thread.description || "Ten wątek nie ma jeszcze opisu."}</p>
+      <p>{thread.description || t("book.threadNoDescription")}</p>
       <div className="thread-card-metrics">
         <span>
-          <b>Akty</b>
-          {acts.length > 0 ? acts.map((act) => act.name).join(", ") : "Brak"}
+          <b>{t("book.acts")}</b>
+          {acts.length > 0 ? acts.map((act) => act.name).join(", ") : t("book.none")}
         </span>
         <span>
-          <b>Rozdziały</b>
+          <b>{t("book.chapters")}</b>
           {chapterRangeLabel(plan, chapters)}
         </span>
       </div>
@@ -3660,8 +3706,8 @@ function ThreadSummaryCard({
                 event.stopPropagation();
                 onRemoveChapter(chapter);
               }}
-              aria-label={`Odepnij rozdział ${chapter.workingTitle}`}
-              title={`Odepnij rozdział ${chapter.workingTitle}`}
+              aria-label={t("book.unpinChapter", { title: chapter.workingTitle })}
+              title={t("book.unpinChapter", { title: chapter.workingTitle })}
             >
               -
             </button>
@@ -3676,11 +3722,11 @@ function ThreadSummaryCard({
               event.stopPropagation();
               setChapterPickerOpen(true);
             }}
-            aria-label={`Dodaj wątek ${thread.name} do rozdziału`}
-            title="Dodaj do rozdziału"
+            aria-label={t("book.addThreadToChapter", { name: thread.name })}
+            title={t("book.addToChapter")}
           >
             <Plus size={13} />
-            <span>Rozdział</span>
+            <span>{t("book.chapter")}</span>
           </button>
         ) : null}
       </div>
@@ -3711,15 +3757,16 @@ function ThreadTable({
   selectedThreadId: string | null;
   onSelect: (thread: PlotThread) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="thread-table-wrap">
       <table className="thread-table">
         <thead>
           <tr>
-            <th>Wątek</th>
-            <th>Status</th>
-            <th>Rozdziały</th>
-            <th>Pokrycie</th>
+            <th>{t("book.thread")}</th>
+            <th>{t("book.status")}</th>
+            <th>{t("book.chapters")}</th>
+            <th>{t("book.coverage")}</th>
           </tr>
         </thead>
         <tbody>
@@ -3747,7 +3794,7 @@ function ThreadTable({
       {threads.length === 0 ? (
         <div className="thread-empty-state table-empty">
           <GitBranch size={20} />
-          <strong>Brak wątków do pokazania</strong>
+          <strong>{t("book.noThreadsToShow")}</strong>
         </div>
       ) : null}
     </div>
@@ -3767,21 +3814,22 @@ function ThreadChapterPickerModal({
   onClose: () => void;
   onAdd: (chapter: Chapter) => void;
 }) {
+  const { t } = useTranslation();
   const modal = (
     <div className="chapter-relation-modal" role="dialog" aria-modal="true">
       <button
         type="button"
         className="chapter-relation-backdrop"
         onClick={onClose}
-        aria-label="Zamknij wybór rozdziału"
+        aria-label={t("book.closeChapterSelection")}
       />
-      <section className="chapter-relation-shell" aria-label="Dodaj rozdział do wątku">
+      <section className="chapter-relation-shell" aria-label={t("book.addChapterToThread")}>
         <header className="chapter-relation-header">
           <div>
-            <p className="eyebrow">Przypięcie wątku</p>
-            <h4>Dodaj rozdział do wątku {thread.name}</h4>
+            <p className="eyebrow">{t("book.threadPin")}</p>
+            <h4>{t("book.addChapterToThreadName", { name: thread.name })}</h4>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Zamknij" title="Zamknij">
+          <button type="button" className="icon-button" onClick={onClose} aria-label={t("book.close")} title={t("book.close")}>
             <X size={16} />
           </button>
         </header>
@@ -3799,12 +3847,12 @@ function ThreadChapterPickerModal({
                   <strong>
                     {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
                   </strong>
-                  <em>{chapter.summary || "Brak streszczenia rozdziału."}</em>
+                  <em>{chapter.summary || t("book.noChapterSummary")}</em>
                 </span>
               </button>
             ))
           ) : (
-            <p className="chapter-relation-empty">Wątek jest już przypięty do wszystkich rozdziałów.</p>
+            <p className="chapter-relation-empty">{t("book.threadPinnedToAllChapters")}</p>
           )}
         </div>
       </section>
@@ -3829,13 +3877,14 @@ function ThreadDetailsPanel({
   onDelete: (thread: PlotThread) => void;
   onEdit: (target: ThreadEditTarget) => void;
 }) {
+  const { t } = useTranslation();
   if (!thread) {
     return (
       <aside className="thread-details-panel">
         <div className="thread-detail-empty">
           <GitBranch size={22} />
-          <strong>Wybierz wątek</strong>
-          <p>Panel pokaże status, rozdziały i przebieg wybranego wątku.</p>
+          <strong>{t("book.selectThread")}</strong>
+          <p>{t("book.threadPanelHint")}</p>
         </div>
       </aside>
     );
@@ -3844,16 +3893,16 @@ function ThreadDetailsPanel({
   const chapters = chaptersForThread(plan, thread);
   const acts = actsForThread(plan, thread);
   const checklist = [
-    { label: "Zdefiniowana rola w historii", complete: Boolean(thread.description.trim()) },
-    { label: "Powiązane akty", complete: acts.length > 0 },
-    { label: "Powiązane rozdziały", complete: chapters.length > 0 }
+    { label: t("book.checklistRoleDefined"), complete: Boolean(thread.description.trim()) },
+    { label: t("book.checklistLinkedActs"), complete: acts.length > 0 },
+    { label: t("book.checklistLinkedChapters"), complete: chapters.length > 0 }
   ];
 
   return (
     <aside className="thread-details-panel">
       <div className="thread-detail-heading">
         <div>
-          <p className="eyebrow">Szczegóły wątku</p>
+          <p className="eyebrow">{t("book.threadDetails")}</p>
           <h4>
             <span style={{ background: thread.color }} />
             {thread.name}
@@ -3864,33 +3913,33 @@ function ThreadDetailsPanel({
         </em>
       </div>
       <p className="thread-detail-description">
-        {thread.description || "Ten wątek nie ma jeszcze opisu."}
+        {thread.description || t("book.threadNoDescription")}
       </p>
       <div className="thread-detail-section">
-        <strong>Powiązane akty</strong>
+        <strong>{t("book.linkedActs")}</strong>
         <div className="thread-chip-row">
-          {acts.length > 0 ? acts.map((act) => <span key={act.id}>{act.name}</span>) : <em>Brak</em>}
+          {acts.length > 0 ? acts.map((act) => <span key={act.id}>{act.name}</span>) : <em>{t("book.none")}</em>}
         </div>
       </div>
       <div className="thread-detail-section">
-        <strong>Przebieg w rozdziałach</strong>
+        <strong>{t("book.chapterFlow")}</strong>
         <div className="thread-chip-row">
           {chapters.length > 0 ? (
             chapters.map((chapter) => {
               const relation = chapterThreadRelation(plan, thread.id, chapter.id);
               return (
-                <span key={chapter.id} title={relation?.description || "Brak opisu przebiegu."}>
+                <span key={chapter.id} title={relation?.description || t("book.noFlowDescription")}>
                   {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle}
                 </span>
               );
             })
           ) : (
-            <em>Brak</em>
+            <em>{t("book.none")}</em>
           )}
         </div>
       </div>
       <div className="thread-detail-checklist">
-        <strong>Lista kontrolna</strong>
+        <strong>{t("book.checklist")}</strong>
         {checklist.map((item) => (
           <label key={item.label}>
             <input type="checkbox" checked={item.complete} readOnly />
@@ -3902,21 +3951,21 @@ function ThreadDetailsPanel({
       <div className="thread-plot-meaning">
         <span>
           <b>{threadCoveragePercent(plan, thread)}%</b>
-          Pokrycie
+          {t("book.coverage")}
         </span>
         <span>
           <b>{chapters.length}</b>
-          Rozdziały
+          {t("book.chapters")}
         </span>
       </div>
       <div className="button-row">
         <button type="button" className="primary-button" onClick={() => onEdit(thread.id)}>
           <Pencil size={16} />
-          Edytuj
+          {t("book.edit")}
         </button>
         <button type="button" className="ghost-button" onClick={() => onDelete(thread)}>
           <Trash2 size={16} />
-          Usuń
+          {t("book.delete")}
         </button>
       </div>
     </aside>
@@ -3950,6 +3999,7 @@ function ChaptersStep({
   onSetSceneRelations: (input: SetSceneRelationsInput) => void;
   onReorderChapters: (inputs: UpsertChapterInput[]) => void;
 }) {
+  const { t } = useTranslation();
   const chapterActRailRef = useRef<HTMLDivElement>(null);
   const chapterBoardRef = useRef<HTMLDivElement>(null);
   const chapterDragRef = useRef<ChapterPointerDrag | null>(null);
@@ -3967,7 +4017,7 @@ function ChaptersStep({
   const [activeChapterId, setActiveChapterId] = useState<string | null>(
     orderedChaptersForPlan(plan)[0]?.id ?? null
   );
-  const lanes = chapterLanesForPlan(plan);
+  const lanes = chapterLanesForPlan(plan, t);
   const totalWords = plannedWordsForChapters(plan.chapters);
   const draggedChapterId = chapterDrag?.chapterId ?? null;
   const dropTarget = chapterDrag?.dropTarget ?? null;
@@ -4132,21 +4182,19 @@ function ChaptersStep({
               <FileText size={18} />
             </span>
             <div>
-              <p className="eyebrow">Szkielet rozdziałów</p>
-              <h3>Robocze rozdziały i kokpit kontraktu</h3>
+              <p className="eyebrow">{t("book.chapterSkeleton")}</p>
+              <h3>{t("book.workingChaptersAndCockpit")}</h3>
               <p>
-                {plan.chapters.length} rozdz. / {totalWords.toLocaleString("pl-PL")} słów
-                planowanych. Zacznij od roboczych kontenerów, a pełny kontrakt dopnij
-                później wątkami i beatami.
+                {t("book.chaptersSummaryLine", { chapters: plan.chapters.length, words: totalWords.toLocaleString("pl-PL") })}
               </p>
             </div>
           </div>
           <div className="chapter-board-actions">
             <Segmented
-              ariaLabel="Widok rozdziałów"
+              ariaLabel={t("book.chaptersView")}
               items={[
-                { id: "cockpit", label: "Kokpit" },
-                { id: "map", label: "Mapa aktów" }
+                { id: "cockpit", label: t("book.cockpit") },
+                { id: "map", label: t("book.actsMap") }
               ]}
               value={viewMode}
               onChange={setViewMode}
@@ -4157,12 +4205,12 @@ function ChaptersStep({
               onClick={() => onCreateChapter(plan.acts[0]?.id ?? null)}
             >
               <Plus size={16} />
-              Dodaj rozdział
+              {t("book.addChapter")}
             </button>
             <PlanAiActions
               field="chapterPlan"
-              generateLabel="Utwórz szkielet"
-              generateTitle="Utwórz roboczy szkielet rozdziałów po aktach"
+              generateLabel={t("book.createSkeleton")}
+              generateTitle={t("book.createSkeletonHint")}
               onGenerate={() => onGenerate("chapterPlan")}
               onActivatePrompt={() => onActivatePrompt("chapterPlan")}
             />
@@ -4176,8 +4224,8 @@ function ChaptersStep({
             type="button"
             className="chapter-rail-scroll-button previous"
             onClick={() => scrollActRail(-1)}
-            aria-label="Pokaż wcześniejsze akty"
-            title="Pokaż wcześniejsze akty"
+            aria-label={t("book.showPreviousActs")}
+            title={t("book.showPreviousActs")}
           >
             <ChevronLeft size={18} />
           </button>
@@ -4185,7 +4233,7 @@ function ChaptersStep({
             ref={chapterActRailRef}
             className="chapter-act-rail"
             role="tablist"
-            aria-label="Akty w planie rozdziałów"
+            aria-label={t("book.actsInChapterPlan")}
           >
             {lanes.map((lane, index) => (
               <button
@@ -4200,8 +4248,7 @@ function ChaptersStep({
                 <span className="stage-copy">
                   <strong>{lane.name}</strong>
                   <span>
-                    {lane.chapters.length} rozdz. /{" "}
-                    {plannedWordsForChapters(lane.chapters).toLocaleString("pl-PL")} słów
+                    {t("book.chaptersWordsShort", { chapters: lane.chapters.length, words: plannedWordsForChapters(lane.chapters).toLocaleString("pl-PL") })}
                   </span>
                 </span>
               </button>
@@ -4211,8 +4258,8 @@ function ChaptersStep({
             type="button"
             className="chapter-rail-scroll-button next"
             onClick={() => scrollActRail(1)}
-            aria-label="Pokaż kolejne akty"
-            title="Pokaż kolejne akty"
+            aria-label={t("book.showNextActs")}
+            title={t("book.showNextActs")}
           >
             <ChevronRight size={18} />
           </button>
@@ -4239,12 +4286,12 @@ function ChaptersStep({
                 <span>{lane.rangeLabel}</span>
               </div>
               <div className="chapter-act-column-stats">
-                <span>{lane.chapters.length} rozdziały</span>
+                <span>{t("book.chaptersCountLabel", { count: lane.chapters.length })}</span>
                 <span>
-                  {plannedWordsForChapters(lane.chapters).toLocaleString("pl-PL")} słów
+                  {t("book.wordsCount", { words: plannedWordsForChapters(lane.chapters).toLocaleString("pl-PL") })}
                 </span>
               </div>
-              <p className="chapter-act-purpose">{lane.purpose || "Bez celu aktu."}</p>
+              <p className="chapter-act-purpose">{lane.purpose || t("book.noActPurpose")}</p>
               <div className="chapter-card-stack">
                 {lane.chapters.length > 0 ? (
                   lane.chapters.map((chapter) => (
@@ -4295,7 +4342,7 @@ function ChaptersStep({
                         : "muted-text chapter-empty-note"
                     }
                   >
-                    Ten akt nie ma jeszcze rozdziałów.
+                    {t("book.actHasNoChapters")}
                   </p>
                 )}
               </div>
@@ -4305,7 +4352,7 @@ function ChaptersStep({
                 onClick={() => onCreateChapter(lane.actId)}
               >
                 <Plus size={16} />
-                Dodaj rozdział
+                {t("book.addChapter")}
               </button>
             </section>
           ))}
@@ -4439,6 +4486,7 @@ function ChapterBoardCard({
   onOpenRelationPicker: (kind: ChapterRelationKind) => void;
   onUpdateRelations: (threadIds: string[], beatIds: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const beats = beatsForChapter(plan, chapter);
   const threads = threadsForChapter(plan, chapter);
   const beatIds = beats.map((beat) => beat.id);
@@ -4473,13 +4521,13 @@ function ChapterBoardCard({
           onOpen();
         }
       }}
-      aria-label={`Otwórz rozdział ${chapter.workingTitle}`}
+      aria-label={t("book.openChapter", { title: chapter.workingTitle })}
     >
       <span className="chapter-card-head">
         <span className="chapter-card-roman" aria-hidden="true">
           {romanNumeral(number)}
         </span>
-        <strong className="chapter-card-title">{chapter.workingTitle || "Bez tytułu"}</strong>
+        <strong className="chapter-card-title">{chapter.workingTitle || t("book.untitled")}</strong>
         <span
           className="chapter-drag-handle"
           aria-hidden="true"
@@ -4502,13 +4550,13 @@ function ChapterBoardCard({
             onRequestDelete();
           }}
           disabled={dragDisabled}
-          title={`Usuń rozdział: ${chapter.workingTitle || "Bez tytułu"}`}
-          aria-label={`Usuń rozdział: ${chapter.workingTitle || "Bez tytułu"}`}
+          title={t("book.deleteChapter", { title: chapter.workingTitle || t("book.untitled") })}
+          aria-label={t("book.deleteChapter", { title: chapter.workingTitle || t("book.untitled") })}
         >
           <Trash2 size={14} />
         </button>
       </span>
-      <p>{chapter.summary || "Brak streszczenia rozdziału."}</p>
+      <p>{chapter.summary || t("book.noChapterSummary")}</p>
       <span
         className="chapter-card-chips"
         onClick={(event) => event.stopPropagation()}
@@ -4518,14 +4566,14 @@ function ChapterBoardCard({
           <Chip
             key={thread.id}
             tone="accent"
-            title={thread.description || "Brak opisu wątku."}
+            title={thread.description || t("book.noThreadDescription")}
             onRemove={() =>
               onUpdateRelations(
                 threadIds.filter((threadId) => threadId !== thread.id),
                 beatIds
               )
             }
-            removeLabel={`Odepnij wątek ${thread.name}`}
+            removeLabel={t("book.unpinThread", { name: thread.name })}
           >
             {thread.name}
           </Chip>
@@ -4541,7 +4589,7 @@ function ChapterBoardCard({
                 beatIds.filter((beatId) => beatId !== beat.id)
               )
             }
-            removeLabel={`Odepnij beat ${beat.name}`}
+            removeLabel={t("book.unpinBeat", { name: beat.name })}
           >
             {beat.name}
           </Chip>
@@ -4549,21 +4597,21 @@ function ChapterBoardCard({
         <Chip>{sceneCountLabel(sceneCount)}</Chip>
         <Chip
           onClick={() => onOpenRelationPicker("threads")}
-          title={`Dodaj wątek do rozdziału ${chapter.workingTitle}`}
+          title={t("book.addThreadToChapterTitle", { title: chapter.workingTitle })}
         >
-          + Wątek
+          {t("book.plusThread")}
         </Chip>
         <Chip
           onClick={() => onOpenRelationPicker("beats")}
-          title={`Dodaj beat do rozdziału ${chapter.workingTitle}`}
+          title={t("book.addBeatToChapterTitle", { title: chapter.workingTitle })}
         >
-          + Beat
+          {t("book.plusBeat")}
         </Chip>
       </span>
       <span className="chapter-card-foot">
         <span>
           {chapter.targetWordCount
-            ? `~${chapter.targetWordCount.toLocaleString("pl-PL")} słów`
+            ? t("book.approxWords", { words: chapter.targetWordCount.toLocaleString("pl-PL") })
             : "—"}
         </span>
         <StatusPill
@@ -4650,21 +4698,22 @@ function ChapterCockpit({
   onGenerate: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
   onActivatePrompt: (field: PlanFieldKey, targetEntity?: PlanPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const chapters = orderedChaptersForPlan(plan);
 
   if (!activeChapter) {
     return (
       <div className="chapter-cockpit-empty">
         <FileText size={22} />
-        <strong>Brak rozdziałów w aktywnym planie</strong>
-        <p>Dodaj pierwszy roboczy rozdział, żeby mieć kontener dla wątków i beatów.</p>
+        <strong>{t("book.noChaptersInActivePlan")}</strong>
+        <p>{t("book.addFirstChapterHint")}</p>
         <button
           type="button"
           className="primary-button"
           onClick={() => onCreateChapter(plan.acts[0]?.id ?? null)}
         >
           <Plus size={16} />
-          Dodaj rozdział
+          {t("book.addChapter")}
         </button>
       </div>
     );
@@ -4680,14 +4729,14 @@ function ChapterCockpit({
 
   return (
     <div className="chapter-cockpit">
-      <aside className="chapter-cockpit-rail" aria-label="Mapa rozdziałów">
+      <aside className="chapter-cockpit-rail" aria-label={t("book.chaptersMap")}>
         <div className="chapter-cockpit-rail-header">
           <span className="stage-heading-icon">
             <FileText size={16} />
           </span>
           <div>
-            <p className="eyebrow">Mapa rozdziałów</p>
-            <h4>Aktywny rozdział</h4>
+            <p className="eyebrow">{t("book.chaptersMap")}</p>
+            <h4>{t("book.activeChapter")}</h4>
           </div>
         </div>
         <div className="chapter-cockpit-chapter-list">
@@ -4710,10 +4759,10 @@ function ChapterCockpit({
               >
                 <span className="chapter-rail-number">{dynamicChapterNumber(plan, chapter.id)}</span>
                 <span className="chapter-rail-copy">
-                  <strong>{chapter.workingTitle || "Bez tytułu"}</strong>
-                  <small>{act?.name ?? "Bez aktu"} · {status.label}</small>
+                  <strong>{chapter.workingTitle || t("book.untitled")}</strong>
+                  <small>{act?.name ?? t("book.noAct")} · {status.label}</small>
                   <em>
-                    {chapterScenes.length} scen · {chapterBeats.length} beatów · {chapterThreads.length} wątków
+                    {t("book.chapterCounts", { scenes: chapterScenes.length, beats: chapterBeats.length, threads: chapterThreads.length })}
                   </em>
                 </span>
               </button>
@@ -4725,10 +4774,9 @@ function ChapterCockpit({
       <main className="chapter-cockpit-main">
         <section className="chapter-cockpit-hero">
           <div>
-            <p className="eyebrow">Kokpit rozdziału</p>
+            <p className="eyebrow">{t("book.chapterCockpit")}</p>
             <h3>
-              Rozdział {dynamicChapterNumber(plan, activeChapter.id)}:{" "}
-              {activeChapter.workingTitle || "Bez tytułu"}
+              {t("book.chapterNumberTitle", { number: dynamicChapterNumber(plan, activeChapter.id), title: activeChapter.workingTitle || t("book.untitled") })}
             </h3>
             <span
               className={
@@ -4747,8 +4795,8 @@ function ChapterCockpit({
             <PlanAiActions
               field="prepareChapterForScenes"
               targetEntity={activeChapter}
-              generateLabel="Sprawdź gotowość"
-              generateTitle="Sprawdź, czy szkielet rozdziału ma już kontrakt gotowy do scen"
+              generateLabel={t("book.checkReadiness")}
+              generateTitle={t("book.checkReadinessHint")}
               hideContextButton
               onGenerate={() => onGenerate("prepareChapterForScenes", activeChapter)}
               onActivatePrompt={() => onActivatePrompt("prepareChapterForScenes", activeChapter)}
@@ -4756,15 +4804,15 @@ function ChapterCockpit({
             <PlanAiActions
               field="chapterSceneBreakdown"
               targetEntity={activeChapter}
-              generateLabel="Rozbij rozdział na sceny"
-              generateTitle="Wygeneruj 2-5 scen wykonujących kontrakt rozdziału"
+              generateLabel={t("book.breakChapterIntoScenes")}
+              generateTitle={t("book.breakChapterIntoScenesHint")}
               hideContextButton
               onGenerate={() => onGenerate("chapterSceneBreakdown", activeChapter)}
               onActivatePrompt={() => onActivatePrompt("chapterSceneBreakdown", activeChapter)}
             />
             <button type="button" className="secondary-button" onClick={() => onOpenChapter(activeChapter)}>
               <Pencil size={15} />
-              Edytuj rozdział
+              {t("book.editChapter")}
             </button>
             <button
               type="button"
@@ -4773,24 +4821,24 @@ function ChapterCockpit({
               disabled={saving}
             >
               <Trash2 size={15} />
-              Usuń rozdział
+              {t("book.deleteChapterAction")}
             </button>
           </div>
         </section>
 
         <section className="chapter-cockpit-contract">
-          <ChapterCockpitField label="Cel" value={activeChapter.purpose} />
-          <ChapterCockpitField label="Konflikt" value={activeChapter.conflict} />
-          <ChapterCockpitField label="Punkt zwrotny" value={activeChapter.turningPoint} />
-          <ChapterCockpitField label="Target słów" value={formatWordCount(activeChapter.targetWordCount)} />
+          <ChapterCockpitField label={t("book.goal")} value={activeChapter.purpose} />
+          <ChapterCockpitField label={t("book.conflict")} value={activeChapter.conflict} />
+          <ChapterCockpitField label={t("book.turningPoint")} value={activeChapter.turningPoint} />
+          <ChapterCockpitField label={t("book.wordTarget")} value={formatWordCount(activeChapter.targetWordCount)} />
         </section>
 
         <section className="chapter-cockpit-relations">
           <ChapterCockpitRelationGroup
-            title="Beaty rozdziału"
+            title={t("book.chapterBeats")}
             kind="beats"
             items={beats.map((beat) => ({ id: beat.id, label: beat.name, title: beatPreviewText(beat) }))}
-            emptyText="Brak beatów przypiętych do rozdziału."
+            emptyText={t("book.noBeatsPinnedToChapter")}
             onAdd={() => onOpenRelationPicker("beats", activeChapter.id)}
             onRemove={(id) =>
               onUpdateChapterRelations(
@@ -4801,14 +4849,14 @@ function ChapterCockpit({
             }
           />
           <ChapterCockpitRelationGroup
-            title="Wątki rozdziału"
+            title={t("book.chapterThreads")}
             kind="threads"
             items={threads.map((thread) => ({
               id: thread.id,
               label: thread.name,
               title: chapterThreadRelation(plan, thread.id, activeChapter.id)?.description || thread.description
             }))}
-            emptyText="Brak wątków przypiętych do rozdziału."
+            emptyText={t("book.noThreadsPinnedToChapter")}
             onAdd={() => onOpenRelationPicker("threads", activeChapter.id)}
             onRemove={(id) =>
               onUpdateChapterRelations(
@@ -4823,8 +4871,8 @@ function ChapterCockpit({
         <section className="chapter-cockpit-scenes">
           <div className="chapter-cockpit-section-heading">
             <div>
-              <p className="eyebrow">Wykonanie rozdziału</p>
-              <h4>Sceny</h4>
+              <p className="eyebrow">{t("book.chapterExecution")}</p>
+              <h4>{t("book.scenes")}</h4>
             </div>
             <button
               type="button"
@@ -4833,7 +4881,7 @@ function ChapterCockpit({
               disabled={saving}
             >
               <Plus size={16} />
-              Dodaj scenę
+              {t("book.addScene")}
             </button>
           </div>
           <div className="chapter-cockpit-scene-list">
@@ -4864,19 +4912,19 @@ function ChapterCockpit({
                         onRequestDelete(sceneDeleteTarget(plan, scene));
                       }}
                       disabled={saving}
-                      title={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
-                      aria-label={`Usuń scenę: ${scene.title || "Scena bez tytułu"}`}
+                      title={t("book.deleteScene", { title: scene.title || t("book.untitledScene") })}
+                      aria-label={t("book.deleteScene", { title: scene.title || t("book.untitledScene") })}
                     >
                       <Trash2 size={14} />
                     </button>
-                    <span>{scene.targetWordCount ? `${scene.targetWordCount.toLocaleString("pl-PL")} słów` : "Brak celu"}</span>
+                    <span>{scene.targetWordCount ? t("book.wordsCount", { words: scene.targetWordCount.toLocaleString("pl-PL") }) : t("book.noTarget")}</span>
                   </span>
-                  <strong>{scene.title || "Scena bez tytułu"}</strong>
-                  <p>{scene.summary || "Brak streszczenia sceny."}</p>
+                  <strong>{scene.title || t("book.untitledScene")}</strong>
+                  <p>{scene.summary || t("book.noSceneSummary")}</p>
                   <div className="chapter-cockpit-scene-meta">
-                    <span><b>POV</b>{characterLabel(characters, scene.povCharacterId)}</span>
-                    <span><b>Lokacja</b>{worldElementLabel(world, scene.locationId)}</span>
-                    <span><b>Wynik</b>{scene.outcome || "Nie opisano"}</span>
+                    <span><b>{t("book.pov")}</b>{characterLabel(characters, scene.povCharacterId)}</span>
+                    <span><b>{t("book.location")}</b>{worldElementLabel(world, scene.locationId)}</span>
+                    <span><b>{t("book.outcome")}</b>{scene.outcome || t("book.notDescribed")}</span>
                   </div>
                   <SceneRelationChips
                     bookId={bookId}
@@ -4890,16 +4938,16 @@ function ChapterCockpit({
                 </article>
               ))
             ) : (
-              <p className="muted-text">Rozdział nie ma jeszcze scen. Rozbij go na sceny albo dodaj pierwszą ręcznie.</p>
+              <p className="muted-text">{t("book.chapterHasNoScenes")}</p>
             )}
           </div>
         </section>
       </main>
 
-      <aside className="chapter-cockpit-sidebar" aria-label="Pokrycie rozdziału">
+      <aside className="chapter-cockpit-sidebar" aria-label={t("book.chapterCoverage")}>
         <section className="chapter-cockpit-side-panel">
           <div className="chapter-cockpit-section-heading compact">
-            <h4>Pokrycie beatów</h4>
+            <h4>{t("book.beatCoverage")}</h4>
             <span>{beats.length}</span>
           </div>
           <div className="chapter-coverage-list">
@@ -4910,19 +4958,19 @@ function ChapterCockpit({
                   <span className={covered ? "chapter-coverage-item covered" : "chapter-coverage-item"} key={beat.id}>
                     <CheckCircle2 size={14} />
                     <b>{beat.name}</b>
-                    <em>{covered ? "Widać w scenach" : "Do sprawdzenia w scenach"}</em>
+                    <em>{covered ? t("book.visibleInScenes") : t("book.toCheckInScenes")}</em>
                   </span>
                 );
               })
             ) : (
-              <p className="muted-text">Brak beatów do pokrycia.</p>
+              <p className="muted-text">{t("book.noBeatsToCover")}</p>
             )}
           </div>
         </section>
 
         <section className="chapter-cockpit-side-panel">
           <div className="chapter-cockpit-section-heading compact">
-            <h4>Przebieg wątków</h4>
+            <h4>{t("book.threadFlow")}</h4>
             <span>{threads.length}</span>
           </div>
           <div className="chapter-thread-flow-list">
@@ -4932,7 +4980,7 @@ function ChapterCockpit({
                 return (
                   <div className="chapter-thread-flow-item" key={thread.id}>
                     <strong>{thread.name}</strong>
-                    <p>{relation?.description || "Brak opisu przebiegu w tym rozdziale."}</p>
+                    <p>{relation?.description || t("book.noFlowDescriptionInChapter")}</p>
                     {relation ? (
                       <PlanAiActions
                         field="threadChapterDescription"
@@ -4945,14 +4993,14 @@ function ChapterCockpit({
                 );
               })
             ) : (
-              <p className="muted-text">Brak wątków w kontrakcie rozdziału.</p>
+              <p className="muted-text">{t("book.noThreadsInChapterContract")}</p>
             )}
           </div>
         </section>
 
         <section className="chapter-cockpit-side-panel">
           <div className="chapter-cockpit-section-heading compact">
-            <h4>Braki przed pisaniem</h4>
+            <h4>{t("book.gapsBeforeWriting")}</h4>
             <span>{storyBibleNeeds.length + readiness.missing.length}</span>
           </div>
           <ul className="chapter-readiness-list">
@@ -4960,7 +5008,7 @@ function ChapterCockpit({
               <li key={item}>{item}</li>
             ))}
             {readiness.missing.length === 0 && storyBibleNeeds.length === 0 ? (
-              <li>Rozdział wygląda gotowo do pisania.</li>
+              <li>{t("book.chapterLooksReady")}</li>
             ) : null}
           </ul>
         </section>
@@ -4970,10 +5018,11 @@ function ChapterCockpit({
 }
 
 function ChapterCockpitField({ label, value }: { label: string; value: string | number | null }) {
+  const { t } = useTranslation();
   return (
     <div className="chapter-cockpit-field">
       <b>{label}</b>
-      <span>{value || "Brak"}</span>
+      <span>{value || t("book.none")}</span>
     </div>
   );
 }
@@ -4993,6 +5042,7 @@ function ChapterCockpitRelationGroup({
   onAdd: () => void;
   onRemove: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="chapter-cockpit-relation-group">
       <div className="chapter-cockpit-section-heading compact">
@@ -5001,11 +5051,11 @@ function ChapterCockpitRelationGroup({
           type="button"
           className="chapter-card-relation-add-button"
           onClick={onAdd}
-          aria-label={`Dodaj ${kind === "beats" ? "beat" : "wątek"} do rozdziału`}
-          title={`Dodaj ${kind === "beats" ? "beat" : "wątek"}`}
+          aria-label={kind === "beats" ? t("book.addBeatToChapter") : t("book.addThreadToChapterShort")}
+          title={kind === "beats" ? t("book.addBeat") : t("book.addThread")}
         >
           <Plus size={13} />
-          <span>{kind === "beats" ? "Beat" : "Wątek"}</span>
+          <span>{kind === "beats" ? t("book.beat") : t("book.thread")}</span>
         </button>
       </div>
       <div className="chapter-chip-row">
@@ -5020,8 +5070,8 @@ function ChapterCockpitRelationGroup({
                   event.stopPropagation();
                   onRemove(item.id);
                 }}
-                aria-label={`Odepnij ${item.label}`}
-                title={`Odepnij ${item.label}`}
+                aria-label={t("book.unpinLabel", { label: item.label })}
+                title={t("book.unpinLabel", { label: item.label })}
               >
                 -
               </button>
@@ -5048,17 +5098,18 @@ function ChapterRelationPickerModal({
   onClose: () => void;
   onAdd: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const selectedSet = new Set(selectedIds);
   const items =
     kind === "threads"
       ? plan.threads.filter((thread) => !selectedSet.has(thread.id))
       : plan.beats.filter((beat) => !selectedSet.has(beat.id));
-  const title = kind === "threads" ? "Dodaj wątki" : "Dodaj beaty";
+  const title = kind === "threads" ? t("book.addThreads") : t("book.addBeats");
   const emptyText =
     kind === "threads"
-      ? "Wszystkie wątki są już przypisane do tego rozdziału."
-      : "Wszystkie beaty są już przypisane do tego rozdziału.";
+      ? t("book.allThreadsAssignedToChapter")
+      : t("book.allBeatsAssignedToChapter");
 
   function toggle(id: string) {
     setCheckedIds((currentIds) =>
@@ -5074,20 +5125,20 @@ function ChapterRelationPickerModal({
         type="button"
         className="chapter-relation-backdrop"
         onClick={onClose}
-        aria-label="Zamknij wybór powiązań"
+        aria-label={t("book.closeRelationSelection")}
       />
       <section className="chapter-relation-shell" aria-label={title}>
         <header className="chapter-relation-header">
           <div>
-            <p className="eyebrow">Powiązania rozdziału</p>
+            <p className="eyebrow">{t("book.chapterRelations")}</p>
             <h4>{title}</h4>
           </div>
           <button
             type="button"
             className="icon-button"
             onClick={onClose}
-            aria-label="Zamknij wybór powiązań"
-            title="Zamknij"
+            aria-label={t("book.closeRelationSelection")}
+            title={t("book.close")}
           >
             <X size={16} />
           </button>
@@ -5113,7 +5164,7 @@ function ChapterRelationPickerModal({
                   <span className={kind === "threads" ? "relation-dot thread" : "relation-dot beat"} />
                   <span>
                     <strong>{item.name}</strong>
-                    <em>{description || "Brak opisu."}</em>
+                    <em>{description || t("book.noDescription")}</em>
                   </span>
                 </button>
               );
@@ -5123,7 +5174,7 @@ function ChapterRelationPickerModal({
 
         <footer className="chapter-relation-footer">
           <button type="button" className="ghost-button" onClick={onClose}>
-            Anuluj
+            {t("book.cancel")}
           </button>
           <button
             type="button"
@@ -5132,7 +5183,7 @@ function ChapterRelationPickerModal({
             onClick={() => onAdd(checkedIds)}
           >
             <Plus size={16} />
-            Dodaj wybrane
+            {t("book.addSelected")}
           </button>
         </footer>
       </section>
@@ -5157,6 +5208,7 @@ function SceneRelationPickerModal({
   onClose: () => void;
   onAdd: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const selectedSet = new Set(selectedIds);
   const items = sceneRelationOptions(kind, plan, characters, world).filter(
@@ -5179,20 +5231,20 @@ function SceneRelationPickerModal({
         type="button"
         className="chapter-relation-backdrop"
         onClick={onClose}
-        aria-label="Zamknij wybór powiązań"
+        aria-label={t("book.closeRelationSelection")}
       />
       <section className="chapter-relation-shell" aria-label={title}>
         <header className="chapter-relation-header">
           <div>
-            <p className="eyebrow">Powiązania sceny</p>
+            <p className="eyebrow">{t("book.sceneRelations")}</p>
             <h4>{title}</h4>
           </div>
           <button
             type="button"
             className="icon-button"
             onClick={onClose}
-            aria-label="Zamknij wybór powiązań"
-            title="Zamknij"
+            aria-label={t("book.closeRelationSelection")}
+            title={t("book.close")}
           >
             <X size={16} />
           </button>
@@ -5216,7 +5268,7 @@ function SceneRelationPickerModal({
                   <span className={`relation-dot ${sceneRelationDotClass(kind)}`} />
                   <span>
                     <strong>{item.label}</strong>
-                    <em>{item.description || "Brak opisu."}</em>
+                    <em>{item.description || t("book.noDescription")}</em>
                   </span>
                 </button>
               );
@@ -5226,7 +5278,7 @@ function SceneRelationPickerModal({
 
         <footer className="chapter-relation-footer">
           <button type="button" className="ghost-button" onClick={onClose}>
-            Anuluj
+            {t("book.cancel")}
           </button>
           <button
             type="button"
@@ -5235,7 +5287,7 @@ function SceneRelationPickerModal({
             onClick={() => onAdd(checkedIds)}
           >
             <Plus size={16} />
-            Dodaj wybrane
+            {t("book.addSelected")}
           </button>
         </footer>
       </section>
@@ -5303,6 +5355,7 @@ function PlanAiActions({
   onGenerate: () => void;
   onActivatePrompt: () => void;
 }) {
+  const { t } = useTranslation();
   const activeTargetId = useAiPromptContextStore((state) => state.activeTargetId);
   const activeTarget = useAiPromptContextStore((state) =>
     activeTargetId ? state.targets[activeTargetId] : null
@@ -5325,7 +5378,7 @@ function PlanAiActions({
       (source) => source.key === field || source.key === promptContextSource.key
     )
   );
-  const visibleGenerateLabel = running ? "Generuje" : queued ? "W kolejce" : generateLabel ?? "AI";
+  const visibleGenerateLabel = running ? t("book.generating") : queued ? t("book.queued") : generateLabel ?? t("book.ai");
   const aiButtonClassName = generateLabel ? "icon-button ai-field-button labeled" : "icon-button ai-field-button";
   const contextButtonClassName = contextLabel
     ? "icon-button ai-context-add-button labeled"
@@ -5338,8 +5391,8 @@ function PlanAiActions({
         className={aiButtonClassName}
         onClick={onGenerate}
         disabled={queued || running || (targetEntity === undefined && isEntityField(field))}
-        title={generateTitle ?? `Generuj ${planFieldConfigs[field].label} z AI`}
-        aria-label={generateTitle ?? `Generuj ${planFieldConfigs[field].label} z AI`}
+        title={generateTitle ?? t("book.generateWithAi", { label: planFieldConfigs[field].label })}
+        aria-label={generateTitle ?? t("book.generateWithAi", { label: planFieldConfigs[field].label })}
       >
         {running ? (
           <Loader2 size={15} className="spin-icon" />
@@ -5362,8 +5415,8 @@ function PlanAiActions({
             addContextSourceToActiveTarget(promptContextSource);
           }}
           disabled={!activeTarget || fieldAlreadyInContext}
-          title={`Dodaj ${planFieldConfigs[field].label} do aktywnego kontekstu promptu`}
-          aria-label={`Dodaj ${planFieldConfigs[field].label} do kontekstu promptu`}
+          title={t("book.addToActivePromptContext", { label: planFieldConfigs[field].label })}
+          aria-label={t("book.addToPromptContext", { label: planFieldConfigs[field].label })}
         >
           <Plus size={14} />
           {contextLabel ? <span>{contextLabel}</span> : null}
@@ -5382,6 +5435,7 @@ function PlanPreview({
   selectedItem: SelectedPlanItem | null;
   onSelect: (item: SelectedPlanItem) => void;
 }) {
+  const { t } = useTranslation();
   const totalWords = plan.chapters.reduce(
     (sum, chapter) => sum + (chapter.targetWordCount ?? 0),
     0
@@ -5405,8 +5459,8 @@ function PlanPreview({
         <section className="plan-preview-section">
           <div className="section-title-row">
             <div>
-              <p className="eyebrow">Akty i rozdziały</p>
-              <h3>Mapa fabuły</h3>
+              <p className="eyebrow">{t("book.actsAndChapters")}</p>
+              <h3>{t("book.storyMap")}</h3>
             </div>
             <MoreHorizontal size={18} />
           </div>
@@ -5421,12 +5475,12 @@ function PlanPreview({
                     : "act-timeline-card"
                 }
                 onClick={() => onSelect({ type: "act", id: act.id })}
-                aria-label={`Otwórz akt ${act.name}`}
+                aria-label={t("book.openAct", { name: act.name })}
               >
                 <span style={{ background: act.color }} />
                 <strong>{act.name}</strong>
-                <small>{act.startPercent} - {act.endPercent}% fabuły</small>
-                <em>{chaptersForAct(plan, act.id).length} rozdz.</em>
+                <small>{t("book.actPercentRange", { start: act.startPercent, end: act.endPercent })}</small>
+                <em>{t("book.chaptersShortCount", { count: chaptersForAct(plan, act.id).length })}</em>
               </button>
             ))}
           </div>
@@ -5439,11 +5493,11 @@ function PlanPreview({
                 type="button"
                 className="act-band-heading"
                 onClick={() => onSelect({ type: "act", id: act.id })}
-                aria-label={`Otwórz akt ${act.name}`}
+                aria-label={t("book.openAct", { name: act.name })}
               >
                 <span style={{ background: act.color }} />
                 <strong>{act.name}</strong>
-                <small>{act.purpose || "Bez celu aktu"}</small>
+                <small>{act.purpose || t("book.noActPurposeShort")}</small>
               </button>
               <div className="chapter-card-row">
                 {chaptersForAct(plan, act.id).map((chapter) => (
@@ -5452,14 +5506,12 @@ function PlanPreview({
                     key={chapter.id}
                     className="chapter-preview-card"
                     onClick={() => onSelect({ type: "chapter", id: chapter.id })}
-                    aria-label={`Otwórz rozdział ${chapter.workingTitle}`}
+                    aria-label={t("book.openChapter", { title: chapter.workingTitle })}
                   >
-                    <span>Rozdział</span>
+                    <span>{t("book.chapter")}</span>
                     <strong>{chapter.workingTitle}</strong>
                     <small>
-                      {(writtenWordsByChapter[chapter.id] ?? 0).toLocaleString("pl-PL")}
-                      {" / "}
-                      {(chapter.targetWordCount ?? 0).toLocaleString("pl-PL")} słów
+                      {t("book.wordsProgress", { written: (writtenWordsByChapter[chapter.id] ?? 0).toLocaleString("pl-PL"), target: (chapter.targetWordCount ?? 0).toLocaleString("pl-PL") })}
                     </small>
                   </button>
                 ))}
@@ -5471,8 +5523,8 @@ function PlanPreview({
         <section className="plan-preview-section thread-map">
           <div className="section-title-row">
             <div>
-              <p className="eyebrow">Wątki fabularne</p>
-              <h3>Przebieg przez rozdziały</h3>
+              <p className="eyebrow">{t("book.plotThreads")}</p>
+              <h3>{t("book.flowThroughChapters")}</h3>
             </div>
           </div>
           {plan.threads.map((thread) => (
@@ -5481,7 +5533,7 @@ function PlanPreview({
                 type="button"
                 className="thread-map-label"
                 onClick={() => onSelect({ type: "thread", id: thread.id })}
-                aria-label={`Otwórz wątek ${thread.name}`}
+                aria-label={t("book.openThread", { name: thread.name })}
               >
                 <span style={{ background: thread.color }} />
                 {thread.name}
@@ -5497,7 +5549,7 @@ function PlanPreview({
                       key={chapter.id}
                       className={linked ? "thread-node linked" : "thread-node"}
                       onClick={() => onSelect({ type: "chapter", id: chapter.id })}
-                      aria-label={`${thread.name} w rozdziale ${dynamicChapterNumber(plan, chapter.id)}`}
+                      aria-label={t("book.threadInChapter", { name: thread.name, number: dynamicChapterNumber(plan, chapter.id) })}
                       title={chapter.workingTitle}
                     />
                   );
@@ -5509,14 +5561,14 @@ function PlanPreview({
       </div>
 
       <aside className="plan-preview-sidebar">
-        <PlanStat icon={<Flag size={18} />} value={plan.acts.length} label="Akty" />
-        <PlanStat icon={<FileText size={18} />} value={plan.chapters.length} label="Rozdziały" />
-        <PlanStat icon={<GitBranch size={18} />} value={plan.threads.length} label="Wątki" />
-        <PlanStat icon={<Target size={18} />} value={totalWords} label="Słów planowanych" />
+        <PlanStat icon={<Flag size={18} />} value={plan.acts.length} label={t("book.acts")} />
+        <PlanStat icon={<FileText size={18} />} value={plan.chapters.length} label={t("book.chapters")} />
+        <PlanStat icon={<GitBranch size={18} />} value={plan.threads.length} label={t("book.threads")} />
+        <PlanStat icon={<Target size={18} />} value={totalWords} label={t("book.plannedWords")} />
         <PlanStat
           icon={<PenLine size={18} />}
           value={writtenWords}
-          label={totalWords > 0 ? `Słów napisanych (${Math.round((writtenWords / totalWords) * 100)}%)` : "Słów napisanych"}
+          label={totalWords > 0 ? t("book.writtenWordsPercent", { percent: Math.round((writtenWords / totalWords) * 100) }) : t("book.writtenWords")}
         />
         <PlanDetailsPanel details={selectedItemDetails(selectedItem, plan)} plan={plan} compact />
       </aside>
@@ -5533,17 +5585,18 @@ function PlanDetailsPanel({
   plan: BookPlan;
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <aside className={compact ? "plan-details-panel compact" : "plan-details-panel"}>
       <div className="section-title-row">
         <div>
-          <p className="eyebrow">Szczegóły</p>
-          <h3>{details?.title ?? "Wybierz element"}</h3>
+          <p className="eyebrow">{t("book.details")}</p>
+          <h3>{details?.title ?? t("book.selectItem")}</h3>
         </div>
       </div>
       {details ? (
         <>
-          <p>{details.description || "Ten element nie ma jeszcze opisu."}</p>
+          <p>{details.description || t("book.itemNoDescription")}</p>
           {details.meta.length > 0 ? (
             <dl>
               {details.meta.map((item) => (
@@ -5557,16 +5610,15 @@ function PlanDetailsPanel({
         </>
       ) : (
         <p className="muted-text">
-          Kliknij akt, beat, wątek albo rozdział, aby zobaczyć przypisania i
-          kontekst.
+          {t("book.clickItemHint")}
         </p>
       )}
       {!compact ? (
         <div className="plan-mini-summary">
-          <span>{plan.acts.length} aktów</span>
-          <span>{plan.beats.length} beatów</span>
-          <span>{plan.threads.length} wątków</span>
-          <span>{plan.chapters.length} rozdziałów</span>
+          <span>{t("book.actsCountGen", { count: plan.acts.length })}</span>
+          <span>{t("book.beatsCountGen", { count: plan.beats.length })}</span>
+          <span>{t("book.threadsCountGen", { count: plan.threads.length })}</span>
+          <span>{t("book.chaptersCountGen", { count: plan.chapters.length })}</span>
         </div>
       ) : null}
     </aside>
@@ -5584,10 +5636,11 @@ function RelationPicker<T extends { id: string; name?: string; workingTitle?: st
   selectedIds: string[];
   onChange: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <fieldset className="relation-picker">
       <legend>{label}</legend>
-      {items.length === 0 ? <p className="muted-text">Brak elementów.</p> : null}
+      {items.length === 0 ? <p className="muted-text">{t("book.noItems")}</p> : null}
       {items.map((item) => {
         const selected = selectedIds.includes(item.id);
         return (
@@ -5618,16 +5671,17 @@ function EntityActions({
   saving: boolean;
   onDelete?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="button-row">
       <button type="submit" className="primary-button" disabled={saving}>
         <Save size={16} />
-        {saving ? "Zapisuję" : "Zapisz"}
+        {saving ? t("book.saving") : t("book.save")}
       </button>
       {onDelete ? (
         <button type="button" className="ghost-button" onClick={onDelete} disabled={saving}>
           <Trash2 size={16} />
-          Usuń
+          {t("book.delete")}
         </button>
       ) : null}
     </div>
@@ -5993,7 +6047,10 @@ function chapterUpsertInputWithRelations(
   };
 }
 
-function chapterLanesForPlan(plan: BookPlan): ChapterLane[] {
+function chapterLanesForPlan(
+  plan: BookPlan,
+  t: (key: string, options?: Record<string, unknown>) => string
+): ChapterLane[] {
   const lanes: ChapterLane[] = plan.acts.map((act) => ({
     id: act.id,
     actId: act.id,
@@ -6008,10 +6065,10 @@ function chapterLanesForPlan(plan: BookPlan): ChapterLane[] {
   lanes.push({
     id: withoutActLaneId,
     actId: null,
-    name: "Bez aktu",
+    name: t("book.laneNoAct"),
     color: "#8a9791",
-    purpose: "Rozdziały czekające na przypisanie do aktu.",
-    rangeLabel: "Poza aktami",
+    purpose: t("book.laneChaptersAwaiting"),
+    rangeLabel: t("book.laneOutsideActs"),
     chapters: unassigned
   });
 

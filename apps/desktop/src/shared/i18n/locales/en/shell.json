@@ -1,0 +1,67 @@
+{
+  "shell": {
+    "defaultProjectTitle": "Project",
+    "phase": {
+      "brainstorm": "Phase 1: Brainstorming",
+      "concept": "Phase 2: Book concept",
+      "plan": "Phase 3: Novel plan",
+      "characters": "Phase 4: Characters and relationships",
+      "world": "Phase 5: World and rules",
+      "editor": "Phase 7: Scene and chapter editor",
+      "editing": "Phase 8: Editing and statistics",
+      "export": "Book export",
+      "aiLog": "AI log",
+      "aiSettings": "AI settings"
+    },
+    "model": {
+      "currentlySelected": "Currently selected model",
+      "catalogFallback": "Fallback when the model catalog is unavailable"
+    },
+    "nav": {
+      "stagesLabel": "Writing stages",
+      "brainstorm": "Brainstorm",
+      "concept": "Concept",
+      "plan": "Plan",
+      "characters": "Characters",
+      "world": "World",
+      "editor": "Editor",
+      "editing": "Editing",
+      "export": "Export",
+      "settings": "Settings"
+    },
+    "panel": {
+      "projectLabel": "Project panel",
+      "resizeTitle": "Drag to change the panel width",
+      "resizeAriaLabel": "Change the project panel width",
+      "statusLabel": "Project status",
+      "autosaved": "Saved automatically • 10:42",
+      "costChipTitle": "Estimated total cost of AI generation in this project based on official price lists (as if via the API). ~ means the result is partially estimated.",
+      "noPricing": "≈ no price list"
+    },
+    "modelMenu": {
+      "modelLabel": "Model",
+      "codexModelTitle": "Model used by codex exec when generating field content.",
+      "providerModelTitle": "Model used by {{provider}}.",
+      "reasoningLevel": "Reasoning level",
+      "openAiSettings": "Open AI settings"
+    },
+    "aiLog": {
+      "close": "Close AI log",
+      "open": "Open AI log",
+      "label": "AI log"
+    },
+    "search": {
+      "kind": {
+        "scene": "Scene",
+        "character": "Character",
+        "world_element": "World"
+      },
+      "placeholder": "Search the project…",
+      "ariaLabel": "Search the project",
+      "resultsLabel": "Search results",
+      "noResults": "No results.",
+      "untitled": "Untitled"
+    },
+    "back": "Back to projects"
+  }
+}

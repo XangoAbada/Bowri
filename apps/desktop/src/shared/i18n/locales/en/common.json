@@ -1,0 +1,17 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "edit": "Edit",
+    "add": "Add",
+    "loading": "Loading…",
+    "error": "Error",
+    "retry": "Retry",
+    "confirm": "Confirm",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "back": "Back"
+  }
+}

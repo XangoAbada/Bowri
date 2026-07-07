@@ -18,6 +18,7 @@ import {
   useState
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   getAiSettings,
   getProject,
@@ -54,6 +55,7 @@ export function ProjectShell({
   activeSection,
   children
 }: ProjectShellProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const location = useLocation({
@@ -119,27 +121,27 @@ export function ProjectShell({
   const title =
     projectQuery.data?.book.workingTitle ||
     projectQuery.data?.project.name ||
-    "Projekt";
+    t("shell.defaultProjectTitle");
   const subtitle =
     activeSection === "brainstorm"
-      ? "Faza 1: Burza mózgów"
+      ? t("shell.phase.brainstorm")
       : activeSection === "concept"
-      ? "Faza 2: Koncepcja książki"
+      ? t("shell.phase.concept")
       : activeSection === "plan"
-        ? "Faza 3: Plan powieści"
+        ? t("shell.phase.plan")
         : activeSection === "characters"
-          ? "Faza 4: Postacie i relacje"
+          ? t("shell.phase.characters")
           : activeSection === "world"
-            ? "Faza 5: Świat i reguły"
+            ? t("shell.phase.world")
             : activeSection === "editor"
-              ? "Faza 7: Edytor scen i rozdziałów"
+              ? t("shell.phase.editor")
               : activeSection === "editing"
-                ? "Faza 8: Redakcja i statystyki"
+                ? t("shell.phase.editing")
               : activeSection === "export"
-                ? "Eksport książki"
+                ? t("shell.phase.export")
           : activeSection === "aiLog"
-          ? "Log AI"
-          : "Ustawienia AI";
+          ? t("shell.phase.aiLog")
+          : t("shell.phase.aiSettings");
 
   const modelOptions = useMemo(() => {
     const catalogModels = modelQuery.data?.models ?? [];
@@ -155,12 +157,12 @@ export function ProjectShell({
       {
         value: model,
         label: model,
-        title: "Aktualnie wybrany model"
+        title: t("shell.model.currentlySelected")
       },
       {
         value: "gpt-5.5",
         label: "GPT-5.5",
-        title: "Fallback, gdy katalog modeli jest niedostępny"
+        title: t("shell.model.catalogFallback")
       }
     ];
     const seen = new Set<string>();
@@ -171,7 +173,7 @@ export function ProjectShell({
       seen.add(option.value);
       return true;
     });
-  }, [model, modelQuery.data?.models]);
+  }, [model, modelQuery.data?.models, t]);
   const reasoningIndex = Math.max(
     0,
     reasoningLevels.findIndex((level) => level.value === reasoningEffort)
@@ -241,17 +243,17 @@ export function ProjectShell({
           <strong>{title}</strong>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Etapy pisania">
+        <nav className="sidebar-nav" aria-label={t("shell.nav.stagesLabel")}>
           {(
             [
-              ["brainstorm", "01", "Brainstorm"],
-              ["concept", "02", "Koncepcja"],
-              ["plan", "03", "Plan"],
-              ["characters", "04", "Postacie"],
-              ["world", "05", "Świat"],
-              ["editor", "06", "Edytor"],
-              ["editing", "07", "Redakcja"],
-              ["export", "08", "Eksport"]
+              ["brainstorm", "01", t("shell.nav.brainstorm")],
+              ["concept", "02", t("shell.nav.concept")],
+              ["plan", "03", t("shell.nav.plan")],
+              ["characters", "04", t("shell.nav.characters")],
+              ["world", "05", t("shell.nav.world")],
+              ["editor", "06", t("shell.nav.editor")],
+              ["editing", "07", t("shell.nav.editing")],
+              ["export", "08", t("shell.nav.export")]
             ] as const
           ).map(([section, num, label]) => (
             <Link
@@ -278,7 +280,7 @@ export function ProjectShell({
           </Link>
           <span className="nav-item disabled">
             <Settings size={18} />
-            Ustawienia
+            {t("shell.nav.settings")}
           </span>
         </div>
       </aside>
@@ -295,22 +297,22 @@ export function ProjectShell({
         <main className="workspace-main">{children}</main>
       </div>
 
-      <aside className="context-panel global-context-panel" aria-label="Panel projektu">
+      <aside className="context-panel global-context-panel" aria-label={t("shell.panel.projectLabel")}>
         <button
           type="button"
           className="context-resize-handle"
           onPointerDown={handleResizeStart}
-          title="Przeciągnij, aby zmienić szerokość panelu"
-          aria-label="Zmień szerokość panelu projektu"
+          title={t("shell.panel.resizeTitle")}
+          aria-label={t("shell.panel.resizeAriaLabel")}
         />
-        <div className="workspace-header-actions context-status-bar" aria-label="Status projektu">
+        <div className="workspace-header-actions context-status-bar" aria-label={t("shell.panel.statusLabel")}>
           <span className="autosave-status">
             <CheckCircle2 size={16} />
-            Zapisano automatycznie • 10:42
+            {t("shell.panel.autosaved")}
           </span>
           <span
             className="ai-cost-chip"
-            title="Szacunkowy łączny koszt generacji AI w tym projekcie wg oficjalnych cenników (jakby przez API). ~ oznacza wynik częściowo szacowany."
+            title={t("shell.panel.costChipTitle")}
           >
             {totalCost.hasPricing ? (
               <>
@@ -318,7 +320,7 @@ export function ProjectShell({
                 {formatUsd(totalCost.usd)} ({formatPln(totalCost.usd, plnPerUsd)})
               </>
             ) : (
-              "≈ brak cennika"
+              t("shell.panel.noPricing")
             )}
           </span>
           <details className="model-menu-panel">
@@ -336,11 +338,11 @@ export function ProjectShell({
             <div className="model-menu-body">
               {providerInfo.isCodex ? (
                 <label className="field-label">
-                  Model
+                  {t("shell.modelMenu.modelLabel")}
                   <select
                     value={model}
                     onChange={(event) => setModel(event.target.value)}
-                    title="Model używany przez codex exec przy generowaniu treści pól."
+                    title={t("shell.modelMenu.codexModelTitle")}
                   >
                     {modelOptions.map((option) => (
                       <option value={option.value} key={option.value} title={option.title}>
@@ -351,7 +353,7 @@ export function ProjectShell({
                 </label>
               ) : modelChoice ? (
                 <label className="field-label">
-                  Model
+                  {t("shell.modelMenu.modelLabel")}
                   <select
                     value={aiSettingsQuery.data?.[modelChoice.field] ?? ""}
                     disabled={saveAiSettingsMutation.isPending}
@@ -364,7 +366,9 @@ export function ProjectShell({
                         [modelChoice.field]: event.target.value
                       });
                     }}
-                    title={`Model używany przez ${providerInfo.providerLabel}.`}
+                    title={t("shell.modelMenu.providerModelTitle", {
+                      provider: providerInfo.providerLabel
+                    })}
                   >
                     {modelChoice.options.map((option) => (
                       <option value={option.value} key={option.value}>
@@ -376,7 +380,7 @@ export function ProjectShell({
               ) : null}
 
               <label className="field-label">
-                Poziom reasoning
+                {t("shell.modelMenu.reasoningLevel")}
                 <div className="reasoning-control">
                   <input
                     type="range"
@@ -411,7 +415,7 @@ export function ProjectShell({
                   to="/projects/$projectId/ai"
                   params={{ projectId }}
                 >
-                  Otwórz ustawienia AI
+                  {t("shell.modelMenu.openAiSettings")}
                 </Link>
               )}
             </div>
@@ -427,11 +431,11 @@ export function ProjectShell({
                 ? "context-footer-action active"
                 : "context-footer-action"
             }
-            title={activeSection === "aiLog" ? "Zamknij log AI" : "Otwórz log AI"}
+            title={activeSection === "aiLog" ? t("shell.aiLog.close") : t("shell.aiLog.open")}
             onClick={toggleAiLog}
           >
             <History size={18} />
-            Log AI
+            {t("shell.aiLog.label")}
           </button>
         </div>
       </aside>
@@ -443,13 +447,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-const searchSectionByEntityType: Record<string, { route: string; viewStateKey: string; label: string }> = {
-  scene: { route: "editor", viewStateKey: "searchSceneId", label: "Scena" },
-  character: { route: "characters", viewStateKey: "searchCharacterId", label: "Postać" },
-  world_element: { route: "world", viewStateKey: "searchElementId", label: "Świat" }
+const searchSectionByEntityType: Record<string, { route: string; viewStateKey: string }> = {
+  scene: { route: "editor", viewStateKey: "searchSceneId" },
+  character: { route: "characters", viewStateKey: "searchCharacterId" },
+  world_element: { route: "world", viewStateKey: "searchElementId" }
 };
 
 function ProjectSearch({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const setProjectViewState = useProjectNavigationStore(
     (state) => state.setProjectViewState
@@ -509,16 +514,16 @@ function ProjectSearch({ projectId }: { projectId: string }) {
         <input
           type="search"
           value={query}
-          placeholder="Szukaj w projekcie…"
-          aria-label="Szukaj w projekcie"
+          placeholder={t("shell.search.placeholder")}
+          aria-label={t("shell.search.ariaLabel")}
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => results.length && setOpen(true)}
         />
       </label>
       {open && query.trim().length >= 2 ? (
-        <div className="project-search-results" role="listbox" aria-label="Wyniki wyszukiwania">
+        <div className="project-search-results" role="listbox" aria-label={t("shell.search.resultsLabel")}>
           {results.length === 0 ? (
-            <p className="muted-text">Brak wyników.</p>
+            <p className="muted-text">{t("shell.search.noResults")}</p>
           ) : (
             results.map((result) => (
               <button
@@ -528,9 +533,11 @@ function ProjectSearch({ projectId }: { projectId: string }) {
                 onClick={() => openResult(result)}
               >
                 <span className="project-search-kind">
-                  {searchSectionByEntityType[result.entityType]?.label ?? result.entityType}
+                  {searchSectionByEntityType[result.entityType]
+                    ? t(`shell.search.kind.${result.entityType}`)
+                    : result.entityType}
                 </span>
-                <strong>{result.title || "Bez tytułu"}</strong>
+                <strong>{result.title || t("shell.search.untitled")}</strong>
                 <span className="project-search-snippet">{result.snippet}</span>
               </button>
             ))

@@ -1,5 +1,7 @@
 import { Check, CircleStop, Clock3, FileJson, GitBranch, Link2, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../../shared/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { coverImageSource } from "../../shared/api/assets";
@@ -186,7 +188,7 @@ export async function applyAiProposal(
   if (proposal.scope === "newProject") {
     const value = proposal.editableValue.trim();
     if (!options.onAcceptValue) {
-      throw new Error("Brak obsługi akceptacji propozycji nowego projektu.");
+      throw new Error(i18n.t("ai.errors.newProjectAcceptUnsupported"));
     }
 
     await options.onAcceptValue(value);
@@ -196,7 +198,7 @@ export async function applyAiProposal(
   if (isBookCoverProposal(proposal)) {
     const imagePath = (proposal.coverImagePath || proposal.editableValue).trim();
     if (!imagePath || !proposal.coverPrompt || !proposal.coverGeneratedAt) {
-      throw new Error("Brak kompletnej propozycji okładki do akceptacji.");
+      throw new Error(i18n.t("ai.errors.coverIncomplete"));
     }
 
     return acceptGeneratedBookCover({
@@ -227,7 +229,7 @@ export async function applyAiProposal(
         ? scopedPackageContext.targetEntityId
         : "";
     if (!imagePath || !characterId || !proposal.coverPrompt || !proposal.characterGeneratedAt) {
-      throw new Error("Brak kompletnej propozycji obrazu postaci do akceptacji.");
+      throw new Error(i18n.t("ai.errors.characterImageIncomplete"));
     }
 
     return acceptGeneratedCharacterImage({
@@ -265,7 +267,7 @@ export async function applyAiProposal(
         ? scopedPackageContext.targetEntityId
         : proposal.bookId;
     if (!imagePath || !proposal.coverPrompt || !proposal.exportArtworkGeneratedAt) {
-      throw new Error("Brak kompletnej propozycji grafiki eksportu do akceptacji.");
+      throw new Error(i18n.t("ai.errors.exportArtworkIncomplete"));
     }
 
     return acceptGeneratedExportArtwork({
@@ -298,8 +300,8 @@ export async function applyAiProposal(
     if (options.asNewPlanVersion && isLargePlanField(planField)) {
       const version = await createPlanVersionFromActive({
         bookId: proposal.bookId,
-        name: `Wariant AI: ${planFieldConfigs[planField]?.label ?? "Plan"}`,
-        description: "Utworzono z akceptowanej propozycji AI."
+        name: i18n.t("ai.planVersion.name", { label: planFieldConfigs[planField]?.label ?? i18n.t("ai.planVersion.planFallback") }),
+        description: i18n.t("ai.planVersion.description")
       });
       await setActivePlanVersion({
         bookId: proposal.bookId,
@@ -319,7 +321,7 @@ export async function applyAiProposal(
       }
 
       if (isSceneDraftField(planField)) {
-        throw new Error("Nie ma już otwartego formularza sceny dla tej propozycji AI.");
+        throw new Error(i18n.t("ai.errors.sceneFormClosed"));
       }
 
       if (
@@ -327,7 +329,7 @@ export async function applyAiProposal(
         targetEntityId.startsWith("draft-beat:") ||
         targetEntityId.startsWith("draft-scene:")
       ) {
-        throw new Error("Nie ma już otwartego formularza beatu dla tej propozycji AI.");
+        throw new Error(i18n.t("ai.errors.beatFormClosed"));
       }
     }
 
@@ -389,7 +391,7 @@ export async function applyAiProposal(
       );
     }
 
-    throw new Error("Nie ma już otwartego formularza dla tej propozycji postaci.");
+    throw new Error(i18n.t("ai.errors.characterFormClosed"));
   }
 
   if (proposal.scope === "world") {
@@ -425,7 +427,7 @@ export async function applyAiProposal(
       return null;
     }
 
-    throw new Error("Nie ma już otwartego formularza dla tej propozycji świata.");
+    throw new Error(i18n.t("ai.errors.worldFormClosed"));
   }
 
   if (proposal.scope === "sceneEditor") {
@@ -449,12 +451,12 @@ export async function applyAiProposal(
         : "";
 
     if (!targetEntityId) {
-      throw new Error("Brak aktywnej sceny dla propozycji edytora.");
+      throw new Error(i18n.t("ai.errors.sceneEditorMissingScene"));
     }
 
     const applied = await applySceneEditorProposal(targetEntityId, value, insertMode, selectedText);
     if (!applied) {
-      throw new Error("Nie ma już otwartego edytora sceny dla tej propozycji AI.");
+      throw new Error(i18n.t("ai.errors.sceneEditorFormClosed"));
     }
 
     return null;
@@ -476,6 +478,7 @@ export function AiProposalPanel({
   projectId,
   onAcceptValue
 }: AiProposalPanelProps) {
+  const { t } = useTranslation();
   useAiQueueRunner();
   useCoverGenerationProgressListener();
 
@@ -579,7 +582,7 @@ export function AiProposalPanel({
       if (proposal.scope === "newProject") {
         const value = proposal.editableValue.trim();
         if (!onAcceptValue) {
-          throw new Error("Brak obsługi akceptacji propozycji nowego projektu.");
+          throw new Error(i18n.t("ai.errors.newProjectAcceptUnsupported"));
         }
 
         await onAcceptValue(value);
@@ -589,7 +592,7 @@ export function AiProposalPanel({
       if (isBookCoverProposal(proposal)) {
         const imagePath = (proposal.coverImagePath || proposal.editableValue).trim();
         if (!imagePath || !proposal.coverPrompt || !proposal.coverGeneratedAt) {
-          throw new Error("Brak kompletnej propozycji okładki do akceptacji.");
+          throw new Error(i18n.t("ai.errors.coverIncomplete"));
         }
 
         return acceptGeneratedBookCover({
@@ -620,7 +623,7 @@ export function AiProposalPanel({
             ? scopedPackageContext.targetEntityId
             : "";
         if (!imagePath || !characterId || !proposal.coverPrompt || !proposal.characterGeneratedAt) {
-          throw new Error("Brak kompletnej propozycji obrazu postaci do akceptacji.");
+          throw new Error(i18n.t("ai.errors.characterImageIncomplete"));
         }
 
         return acceptGeneratedCharacterImage({
@@ -658,7 +661,7 @@ export function AiProposalPanel({
             ? scopedPackageContext.targetEntityId
             : proposal.bookId;
         if (!imagePath || !proposal.coverPrompt || !proposal.exportArtworkGeneratedAt) {
-          throw new Error("Brak kompletnej propozycji grafiki eksportu do akceptacji.");
+          throw new Error(i18n.t("ai.errors.exportArtworkIncomplete"));
         }
 
         return acceptGeneratedExportArtwork({
@@ -691,8 +694,8 @@ export function AiProposalPanel({
         if (asNewPlanVersion && isLargePlanField(planField)) {
           const version = await createPlanVersionFromActive({
             bookId: proposal.bookId,
-            name: `Wariant AI: ${planFieldConfigs[planField]?.label ?? "Plan"}`,
-            description: "Utworzono z akceptowanej propozycji AI."
+            name: i18n.t("ai.planVersion.name", { label: planFieldConfigs[planField]?.label ?? i18n.t("ai.planVersion.planFallback") }),
+            description: i18n.t("ai.planVersion.description")
           });
           await setActivePlanVersion({
             bookId: proposal.bookId,
@@ -712,7 +715,7 @@ export function AiProposalPanel({
           }
 
           if (isSceneDraftField(planField)) {
-            throw new Error("Nie ma już otwartego formularza sceny dla tej propozycji AI.");
+            throw new Error(i18n.t("ai.errors.sceneFormClosed"));
           }
 
           if (
@@ -720,9 +723,7 @@ export function AiProposalPanel({
             targetEntityId.startsWith("draft-beat:") ||
             targetEntityId.startsWith("draft-scene:")
           ) {
-            throw new Error(
-              "Nie ma już otwartego formularza beatu dla tej propozycji AI."
-            );
+            throw new Error(i18n.t("ai.errors.beatFormClosed"));
           }
         }
 
@@ -794,7 +795,7 @@ export function AiProposalPanel({
           );
         }
 
-        throw new Error("Nie ma już otwartego formularza dla tej propozycji postaci.");
+        throw new Error(i18n.t("ai.errors.characterFormClosed"));
       }
 
       if (proposal.scope === "world") {
@@ -830,7 +831,7 @@ export function AiProposalPanel({
           return null;
         }
 
-        throw new Error("Nie ma już otwartego formularza dla tej propozycji świata.");
+        throw new Error(i18n.t("ai.errors.worldFormClosed"));
       }
 
       if (proposal.scope === "sceneEditor") {
@@ -854,12 +855,12 @@ export function AiProposalPanel({
             : "";
 
         if (!targetEntityId) {
-          throw new Error("Brak aktywnej sceny dla propozycji edytora.");
+          throw new Error(i18n.t("ai.errors.sceneEditorMissingScene"));
         }
 
         const applied = await applySceneEditorProposal(targetEntityId, value, insertMode, selectedText);
         if (!applied) {
-          throw new Error("Nie ma już otwartego edytora sceny dla tej propozycji AI.");
+          throw new Error(i18n.t("ai.errors.sceneEditorFormClosed"));
         }
 
         return null;
@@ -932,7 +933,7 @@ export function AiProposalPanel({
       });
       cancelProposal(
         proposalId,
-        `Generowanie ${providerInfo.providerLabel} zostało przerwane.`
+        i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel })
       );
       await queryClient.invalidateQueries({ queryKey: ["active-codex-runs", projectId] });
       return cancelled;
@@ -951,13 +952,13 @@ export function AiProposalPanel({
       <section className="context-section compact">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Propozycje</p>
-            <h2>Panel AI</h2>
+            <p className="eyebrow">{t("ai.proposalPanel.eyebrowProposals")}</p>
+            <h2>{t("ai.proposalPanel.title")}</h2>
           </div>
           <FileJson size={18} aria-hidden="true" />
         </div>
         <p className="muted-text">
-          Wyniki AI pojawią się tutaj po wysłaniu promptu z panelu kontekstu.
+          {t("ai.proposalPanel.emptyHint")}
         </p>
       </section>
     );
@@ -968,7 +969,7 @@ export function AiProposalPanel({
       <div className="section-title-row">
         <div>
           <p className="eyebrow">{providerInfo.providerLabel}</p>
-          <h2>Kolejka AI</h2>
+          <h2>{t("ai.proposalPanel.queueTitle")}</h2>
         </div>
         <span className="status-pill">
           <Clock3 size={14} aria-hidden="true" />
@@ -1018,7 +1019,7 @@ export function AiProposalPanel({
       </div>
 
       {acceptMutation.isError ? (
-        <p className="warning-text">Nie udało się zapisać propozycji.</p>
+        <p className="warning-text">{t("ai.proposalPanel.saveError")}</p>
       ) : null}
 
       <CoverImageLightbox
@@ -1051,6 +1052,7 @@ type ProposalQueueItemProps = {
 };
 
 function SceneAuditPromptPanel({ prompts }: { prompts: PendingSceneAuditPrompt[] }) {
+  const { t } = useTranslation();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const removeAuditPrompt = useSceneDiscoveryStore((state) => state.removeAuditPrompt);
 
@@ -1059,14 +1061,14 @@ function SceneAuditPromptPanel({ prompts }: { prompts: PendingSceneAuditPrompt[]
   }
 
   return (
-    <div className="scene-discovery-list" aria-label="Pytania o analizę sceny">
+    <div className="scene-discovery-list" aria-label={t("ai.sceneAuditPrompt.listLabel")}>
       {prompts.map((prompt) => (
         <article className="scene-discovery-card scene-audit-prompt-card" key={prompt.id}>
           <div>
-            <span className="scene-discovery-kind">Analiza sceny</span>
-            <h3>{prompt.sceneTitle || "Scena"}</h3>
-            <p>Przeanalizować scenę pod kątem nowych postaci i elementów świata?</p>
-            <small>Analiza doda znalezione rzeczy jako osobne karty w tym panelu. Nic nie zapisze się w kanonie bez akceptacji.</small>
+            <span className="scene-discovery-kind">{t("ai.sceneAuditPrompt.kind")}</span>
+            <h3>{prompt.sceneTitle || t("ai.sceneAuditPrompt.sceneFallback")}</h3>
+            <p>{t("ai.sceneAuditPrompt.question")}</p>
+            <small>{t("ai.sceneAuditPrompt.hint")}</small>
           </div>
           <div className="scene-discovery-actions">
             <Button
@@ -1078,10 +1080,10 @@ function SceneAuditPromptPanel({ prompts }: { prompts: PendingSceneAuditPrompt[]
               }}
             >
               <Sparkles size={14} />
-              Analizuj
+              {t("ai.sceneAuditPrompt.analyze")}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => removeAuditPrompt(prompt.id)}>
-              Pomiń
+              {t("ai.sceneAuditPrompt.skip")}
             </Button>
           </div>
         </article>
@@ -1097,6 +1099,7 @@ function SceneAssignmentPanel({
   projectId: string;
   assignments: PendingSceneAssignment[];
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const removeAssignment = useSceneDiscoveryStore((state) => state.removeAssignment);
   const assignmentMutation = useMutation({
@@ -1114,9 +1117,9 @@ function SceneAssignmentPanel({
   }
 
   return (
-    <div className="scene-discovery-list" aria-label="Elementy do przypisania do sceny">
+    <div className="scene-discovery-list" aria-label={t("ai.sceneAssignment.listLabel")}>
       <div className="scene-discovery-heading">
-        <p className="eyebrow">Przypisanie</p>
+        <p className="eyebrow">{t("ai.sceneAssignment.eyebrow")}</p>
         <span className="status-pill">{assignments.length}</span>
       </div>
       {assignments.map((assignment) => (
@@ -1124,8 +1127,8 @@ function SceneAssignmentPanel({
           <div>
             <span className="scene-discovery-kind">{assignmentKindLabel(assignment.kind)}</span>
             <h3>{assignment.entityTitle}</h3>
-            <p>Przypisać do sceny: {assignment.sceneTitle || "Scena"}?</p>
-            <small>Przypisanie zmieni tylko relacje tej sceny albo relacje elementu świata. Kanon encji zostaje bez zmian.</small>
+            <p>{t("ai.sceneAssignment.assignQuestion", { scene: assignment.sceneTitle || t("ai.sceneAssignment.sceneFallback") })}</p>
+            <small>{t("ai.sceneAssignment.hint")}</small>
           </div>
           <div className="scene-discovery-actions">
             <Button
@@ -1133,10 +1136,10 @@ function SceneAssignmentPanel({
               size="sm"
               onClick={() => assignmentMutation.mutate(assignment)}
               disabled={assignmentMutation.isPending}
-              title="Przypisz element do źródłowej sceny"
+              title={t("ai.sceneAssignment.assignTitle")}
             >
               <Link2 size={14} />
-              Przypisz
+              {t("ai.sceneAssignment.assign")}
             </Button>
             <Button
               variant="ghost"
@@ -1144,13 +1147,13 @@ function SceneAssignmentPanel({
               onClick={() => removeAssignment(assignment.id)}
               disabled={assignmentMutation.isPending}
             >
-              Pomiń
+              {t("ai.sceneAssignment.skip")}
             </Button>
           </div>
         </article>
       ))}
       {assignmentMutation.isError ? (
-        <p className="warning-text">Nie udało się przypisać elementu do sceny.</p>
+        <p className="warning-text">{t("ai.sceneAssignment.error")}</p>
       ) : null}
     </div>
   );
@@ -1177,6 +1180,7 @@ async function persistCritiqueReport(
 }
 
 function SceneCritiquePanel({ critiques }: { critiques: SceneCritiqueReport[] }) {
+  const { t } = useTranslation();
   const setFindingStatus = useSceneCritiqueStore((state) => state.setFindingStatus);
   // Rejestr celów "Zastosuj" żyje poza Zustand — subskrybujemy zmiany, żeby
   // przyciski odblokowały się po otwarciu sceny w edytorze.
@@ -1205,15 +1209,15 @@ function SceneCritiquePanel({ critiques }: { critiques: SceneCritiqueReport[] })
   }
 
   return (
-    <div className="scene-discovery-list" aria-label="Uwagi redaktora">
+    <div className="scene-discovery-list" aria-label={t("ai.sceneCritique.listLabel")}>
       {critiques.map((critique) => {
         const openFindings = critique.findings.filter((finding) => finding.status === "open");
         const canApply = hasCritiqueApplyTarget(critique.sceneId);
         return (
           <article className="scene-discovery-card" key={critique.id}>
             <div>
-              <span className="scene-discovery-kind">Redaktor</span>
-              <h3>{critique.sceneTitle || "Scena"}</h3>
+              <span className="scene-discovery-kind">{t("ai.sceneCritique.kind")}</span>
+              <h3>{critique.sceneTitle || t("ai.sceneCritique.sceneFallback")}</h3>
               {critique.summary ? <p>{critique.summary}</p> : null}
             </div>
             {openFindings.map((finding) => (
@@ -1237,8 +1241,8 @@ function SceneCritiquePanel({ critiques }: { critiques: SceneCritiqueReport[] })
                       disabled={!canApply}
                       title={
                         canApply
-                          ? "Zaznacz cytowany fragment i wyślij do przepisania"
-                          : "Otwórz tę scenę w edytorze, aby zastosować uwagę"
+                          ? t("ai.sceneCritique.applyTitleReady")
+                          : t("ai.sceneCritique.applyTitleDisabled")
                       }
                       onClick={() => {
                         void applyCritiqueFinding(critique.sceneId, finding).then((applied) => {
@@ -1249,7 +1253,7 @@ function SceneCritiquePanel({ critiques }: { critiques: SceneCritiqueReport[] })
                       }}
                     >
                       <Sparkles size={14} />
-                      Zastosuj
+                      {t("ai.sceneCritique.apply")}
                     </Button>
                   ) : null}
                   <Button
@@ -1257,7 +1261,7 @@ function SceneCritiquePanel({ critiques }: { critiques: SceneCritiqueReport[] })
                     size="sm"
                     onClick={() => updateFinding(critique, finding.id, "dismissed")}
                   >
-                    Odrzuć
+                    {t("ai.sceneCritique.dismiss")}
                   </Button>
                 </div>
               </div>
@@ -1276,6 +1280,7 @@ function SceneDiscoveryPanel({
   projectId: string;
   discoveries: SceneDiscovery[];
 }) {
+  const { t } = useTranslation();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const removeDiscovery = useSceneDiscoveryStore((state) => state.removeDiscovery);
   const projectQuery = useQuery({
@@ -1459,9 +1464,9 @@ function SceneDiscoveryPanel({
   }
 
   return (
-    <div className="scene-discovery-list" aria-label="Znalezione elementy sceny">
+    <div className="scene-discovery-list" aria-label={t("ai.sceneDiscovery.listLabel")}>
       <div className="scene-discovery-heading">
-        <p className="eyebrow">Analiza sceny</p>
+        <p className="eyebrow">{t("ai.sceneDiscovery.eyebrow")}</p>
         <span className="status-pill">{discoveries.length}</span>
       </div>
       {discoveries.map((discovery) => {
@@ -1487,13 +1492,13 @@ function SceneDiscoveryPanel({
                   characterQuery.isLoading ||
                   worldQuery.isLoading
                 }
-                title={canGenerate ? "Dodaj pełną propozycję do kolejki AI" : discoveryGenerateDisabledReason(discovery)}
+                title={canGenerate ? t("ai.sceneDiscovery.generateTitle") : discoveryGenerateDisabledReason(discovery)}
               >
                 <Sparkles size={14} />
-                Generuj
+                {t("ai.sceneDiscovery.generate")}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => removeDiscovery(discovery.id)}>
-                Odrzuć
+                {t("ai.sceneDiscovery.dismiss")}
               </Button>
             </div>
           </article>
@@ -1705,7 +1710,7 @@ function sceneAssignmentFromAcceptedProposal(
         ...base,
         kind: "character",
         entityId: characterId,
-        entityTitle: stringRecordValue(record.name, "Nowa postać"),
+        entityTitle: stringRecordValue(record.name, i18n.t("ai.entityFallback.newCharacter")),
         characterIds: [characterId]
       };
     }
@@ -1720,7 +1725,7 @@ function sceneAssignmentFromAcceptedProposal(
         ...base,
         kind: "characterMemory",
         entityId: memoryId,
-        entityTitle: stringRecordValue(record.title, "Nowe wspomnienie"),
+        entityTitle: stringRecordValue(record.title, i18n.t("ai.entityFallback.newMemory")),
         characterIds: [characterId]
       };
     }
@@ -1738,7 +1743,7 @@ function sceneAssignmentFromAcceptedProposal(
         ...base,
         kind: "characterRelation",
         entityId: relationId,
-        entityTitle: stringRecordValue(record.relationType, "Relacja postaci"),
+        entityTitle: stringRecordValue(record.relationType, i18n.t("ai.entityFallback.characterRelation")),
         characterIds
       };
     }
@@ -1756,7 +1761,7 @@ function sceneAssignmentFromAcceptedProposal(
         ...base,
         kind: "worldElement",
         entityId,
-        entityTitle: stringRecordValue(record.name, "Nowy element świata")
+        entityTitle: stringRecordValue(record.name, i18n.t("ai.entityFallback.newWorldElement"))
       };
     }
 
@@ -1765,7 +1770,7 @@ function sceneAssignmentFromAcceptedProposal(
         ...base,
         kind: "worldRule",
         entityId,
-        entityTitle: stringRecordValue(record.name, "Nowa reguła świata")
+        entityTitle: stringRecordValue(record.name, i18n.t("ai.entityFallback.newWorldRule"))
       };
     }
   }
@@ -1801,7 +1806,7 @@ async function assignPendingSceneAssignment(
   ]);
   const scene = plan.scenes.find((item) => item.id === assignment.sceneId);
   if (!scene) {
-    throw new Error("Nie znaleziono sceny do przypisania.");
+    throw new Error(i18n.t("ai.errors.sceneNotFound"));
   }
 
   if (
@@ -1948,6 +1953,7 @@ function ProposalQueueItem({
   onEditableFieldChange,
   onToggleField
 }: ProposalQueueItemProps) {
+  const { t } = useTranslation();
   const coverProposal = isBookCoverProposal(proposal);
   const characterImageProposal = isCharacterImageProposal(proposal);
   const exportArtworkProposal = isExportArtworkProposal(proposal);
@@ -1958,24 +1964,24 @@ function ProposalQueueItem({
   const sceneAuditProposal = proposal.field === SCENE_STORY_BIBLE_AUDIT_FIELD;
   const sceneCritiqueProposal = proposal.field === SCENE_CRITIQUE_FIELD;
   const label = sceneAuditProposal
-    ? "Analiza sceny"
+    ? t("ai.proposalLabel.sceneAudit")
     : sceneCritiqueProposal
-    ? "Krytyka sceny"
+    ? t("ai.proposalLabel.sceneCritique")
     : exportArtworkProposal
-    ? "Grafika eksportu"
+    ? t("ai.proposalLabel.exportArtwork")
     : coverProposal
-    ? "Okładka"
+    ? t("ai.proposalLabel.cover")
     : planProposal
-      ? planFieldConfigs[proposal.field as PlanFieldKey]?.label ?? "Plan"
+      ? t(`book.planFieldLabel.${proposal.field}`, { defaultValue: t("ai.proposalLabel.plan") })
         : characterImageProposal
-          ? "Obraz postaci"
+          ? t("ai.proposalLabel.characterImage")
         : characterProposal
-          ? characterFieldConfigs[proposal.field as CharacterFieldKey]?.label ?? "Postać"
+          ? t(`characters.fieldLabel.${proposal.field}`, { defaultValue: t("ai.proposalLabel.character") })
           : worldProposal
-            ? worldFieldConfigs[proposal.field as WorldFieldKey]?.label ?? "Świat"
+            ? t(`world.fieldLabel.${proposal.field}`, { defaultValue: t("ai.proposalLabel.world") })
             : sceneEditorProposal && !sceneCritiqueProposal
               ? sceneEditorFieldLabel(proposal.field as SceneEditorFieldKey)
-              : conceptFieldConfigs[proposal.field as ConceptFieldKey]?.label ?? "Pole";
+              : t(`book.conceptFieldLabel.${proposal.field}`, { defaultValue: t("ai.proposalLabel.field") });
   const running = proposal.status === "running";
   const queued = proposal.status === "queued";
   const success = proposal.status === "success";
@@ -2009,20 +2015,20 @@ function ProposalQueueItem({
         <div>
           <p className="eyebrow">
             {coverProposal
-              ? "Okładka"
+              ? t("ai.proposalScope.cover")
               : proposal.scope === "newProject"
-                ? "Nowy projekt"
+                ? t("ai.proposalScope.newProject")
                 : planProposal
-                  ? "Plan"
+                  ? t("ai.proposalScope.plan")
                   : characterProposal
-                    ? "Postacie"
+                    ? t("ai.proposalScope.characters")
                     : worldProposal
-                      ? "Świat"
+                      ? t("ai.proposalScope.world")
                       : sceneAuditProposal
-                        ? "Analiza"
+                        ? t("ai.proposalScope.audit")
                         : sceneCritiqueProposal
-                          ? "Redaktor"
-                          : "Pole"}
+                          ? t("ai.proposalScope.editor")
+                          : t("ai.proposalScope.field")}
           </p>
           <h3>{label}</h3>
         </div>
@@ -2038,21 +2044,21 @@ function ProposalQueueItem({
 
       {queued ? (
         <p className="muted-text">
-          Zadanie czeka, aż poprzednia generacja w kolejce się zakończy.
+          {t("ai.queueItem.queuedHint")}
         </p>
       ) : null}
 
       {running ? (
         <p className="muted-text">
           {coverProposal
-            ? proposal.progressMessage ?? `${providerLabel} generuje okładkę.`
-            : `${providerLabel} generuje wynik. Propozycja nie zapisze się bez akceptacji.`}
+            ? proposal.progressMessage ?? t("ai.queueItem.generatingCover", { provider: providerLabel })
+            : t("ai.queueItem.generatingResult", { provider: providerLabel })}
         </p>
       ) : null}
 
       {running && activeRun ? (
         <p className="muted-text">
-          Aktywny proces: {activeRun.action} / {activeRun.phase}
+          {t("ai.queueItem.activeProcess", { action: activeRun.action, phase: activeRun.phase })}
         </p>
       ) : null}
 
@@ -2062,16 +2068,17 @@ function ProposalQueueItem({
       !characterImageProposal &&
       !exportArtworkProposal ? (
         <p className="muted-text proposal-cost">
-          Koszt:{" "}
-          {formatCostLabel(
-            costOf(
-              proposal.usage,
-              proposal.usageProviderId ?? providerId,
-              proposal.usageModel ?? model
+          {t("ai.queueItem.cost", {
+            cost: formatCostLabel(
+              costOf(
+                proposal.usage,
+                proposal.usageProviderId ?? providerId,
+                proposal.usageModel ?? model
+              ),
+              plnPerUsd
             ),
-            plnPerUsd
-          )}{" "}
-          · {proposal.usage.inputTokens + proposal.usage.outputTokens} tok.
+            tokens: proposal.usage.inputTokens + proposal.usage.outputTokens
+          })}
         </p>
       ) : null}
 
@@ -2092,10 +2099,10 @@ function ProposalQueueItem({
                   proposal.characterImagePath ||
                   proposal.exportArtworkPath
               ),
-              "Podgląd okładki z AI"
+              t("ai.queueItem.coverPreviewAlt")
             )
           }
-          title="Otwórz okładkę w pełnym podglądzie"
+          title={t("ai.queueItem.coverPreviewTitle")}
         >
           <img
             src={coverImageSource(
@@ -2104,7 +2111,7 @@ function ProposalQueueItem({
                 proposal.characterImagePath ||
                 proposal.exportArtworkPath
             )}
-            alt="Podgląd okładki z AI"
+            alt={t("ai.queueItem.coverPreviewAlt")}
           />
         </button>
       ) : null}
@@ -2119,7 +2126,7 @@ function ProposalQueueItem({
 
       {(coverProposal || characterImageProposal || exportArtworkProposal) && success ? (
         <p className="success-text">
-          Okładka jest gotowa do akceptacji.
+          {t("ai.queueItem.coverReady")}
         </p>
       ) : null}
 
@@ -2139,14 +2146,14 @@ function ProposalQueueItem({
                   <span>{item.label}</span>
                 </label>
                 <textarea
-                  aria-label={`Edytuj ${item.label}`}
+                  aria-label={t("ai.queueItem.editFieldAria", { label: item.label })}
                   value={proposal.editableFields[item.field] ?? item.value}
                   onChange={(event) =>
                     onEditableFieldChange(item.field, event.target.value)
                   }
                   rows={rows}
                   disabled={!selected}
-                  title={`Możesz poprawić propozycję dla pola ${item.label} przed zapisem.`}
+                  title={t("ai.queueItem.editFieldTitle", { label: item.label })}
                 />
               </div>
             );
@@ -2157,39 +2164,37 @@ function ProposalQueueItem({
       {success && !structured && !coverProposal && !characterImageProposal && !sceneAuditProposal && !sceneCritiqueProposal ? (
         <label className="field-label">
           {sceneEditorProposal
-            ? "Tekst do wstawienia po akceptacji"
+            ? t("ai.queueItem.sceneEditorLabel")
             : planProposal
-              ? "Propozycja do zastosowania w widoku Plan"
-              : "Propozycja do akceptacji"}
+              ? t("ai.queueItem.planLabel")
+              : t("ai.queueItem.proposalLabel")}
           <textarea
             value={proposal.editableValue}
             onChange={(event) => onEditableValueChange(event.target.value)}
             rows={sceneEditorProposal ? 10 : planProposal ? 8 : proposalRows}
-            title={`Możesz poprawić propozycję dla pola ${label} przed zapisem.`}
+            title={t("ai.queueItem.editFieldTitle", { label })}
           />
         </label>
       ) : null}
 
       {planProposal && success ? (
         <p className="muted-text">
-          Akceptacja zapisze tylko zakres tego widoku planu. Pozostałe sekcje z
-          odpowiedzi AI zostaną pominięte.
+          {t("ai.queueItem.planNote")}
         </p>
       ) : null}
 
       {sceneEditorProposal && !sceneAuditProposal && !sceneCritiqueProposal && success ? (
         <p className="muted-text">
-          Akceptacja zastosuje tekst w aktywnym edytorze sceny zgodnie z trybem
-          wstawiania zapisanym w prompcie. Do tego momentu manuskrypt się nie zmieni.
+          {t("ai.queueItem.sceneEditorNote")}
         </p>
       ) : null}
 
       {sceneAuditProposal && success ? (
-        <p className="muted-text">Analiza zakończona. Znalezione elementy dodano do kart w prawym panelu.</p>
+        <p className="muted-text">{t("ai.queueItem.auditDone")}</p>
       ) : null}
 
       {sceneCritiqueProposal && success ? (
-        <p className="muted-text">Krytyka zakończona. Uwagi redaktora pojawiły się jako karty w tym panelu.</p>
+        <p className="muted-text">{t("ai.queueItem.critiqueDone")}</p>
       ) : null}
 
       {proposal.parsed && "rationale" in proposal.parsed && proposal.parsed.rationale ? (
@@ -2210,7 +2215,7 @@ function ProposalQueueItem({
 
       {premiseProposal && premiseProposal.questionsForAuthor.length > 0 ? (
         <details className="raw-output">
-          <summary>Pytania dla autora</summary>
+          <summary>{t("ai.queueItem.questionsForAuthor")}</summary>
           <ul>
             {premiseProposal.questionsForAuthor.map((question) => (
               <li key={question}>{question}</li>
@@ -2221,7 +2226,7 @@ function ProposalQueueItem({
 
       {proposal.rawOutput ? (
         <details className="raw-output">
-          <summary>Surowy wynik</summary>
+          <summary>{t("ai.queueItem.rawOutput")}</summary>
           <pre>{proposal.rawOutput}</pre>
         </details>
       ) : null}
@@ -2235,7 +2240,7 @@ function ProposalQueueItem({
             disabled={running || queued || error || !canAccept}
           >
             {accepting ? null : <Check size={16} />}
-            {accepting ? "Zapisuję" : "Akceptuj"}
+            {accepting ? t("ai.queueItem.saving") : t("ai.queueItem.accept")}
           </Button>
         ) : null}
         {canAcceptAsPlanVersion ? (
@@ -2244,7 +2249,7 @@ function ProposalQueueItem({
             disabled={accepting || running || queued || error || !canAccept}
           >
             <GitBranch size={16} />
-            Akceptuj jako wariant
+            {t("ai.queueItem.acceptAsVariant")}
           </Button>
         ) : null}
         <Button
@@ -2253,27 +2258,27 @@ function ProposalQueueItem({
           disabled={accepting || running}
         >
           <X size={16} />
-          {sceneAuditProposal || sceneCritiqueProposal ? "Zamknij" : "Odrzuć"}
+          {sceneAuditProposal || sceneCritiqueProposal ? t("ai.queueItem.close") : t("ai.queueItem.reject")}
         </Button>
         {running ? (
           <Button
             variant="ghost"
             busy={cancelling}
             onClick={onCancel}
-            title={`Przerwij aktualną generację ${providerLabel}.`}
+            title={t("ai.queueItem.cancelTitle", { provider: providerLabel })}
           >
             {cancelling ? null : <CircleStop size={16} />}
-            Przerwij
+            {t("ai.queueItem.cancel")}
           </Button>
         ) : null}
         <Button
           variant="ghost"
           onClick={onRetry}
           disabled={running || queued || accepting || retrying}
-          title="Ponownie uruchom ten sam prompt z zapisanym snapshotem kontekstu."
+          title={t("ai.queueItem.retryTitle")}
         >
           <RotateCcw size={16} />
-          Ponów
+          {t("ai.queueItem.retry")}
         </Button>
       </div>
     </article>
@@ -2321,11 +2326,11 @@ function useAiQueueRunner() {
       try {
         if (isBookCoverProposal(snapshot)) {
           updateProposalProgress(proposalId, {
-            progressMessage: "Przygotowuję prompt okładki..."
+            progressMessage: i18n.t("ai.progress.coverPromptPrep")
           });
 
           if (!snapshot.coverPrompt || !snapshot.coverNegativePrompt) {
-            throw new QueueRunError("Brak promptu okładki w zadaniu kolejki.");
+            throw new QueueRunError(i18n.t("ai.errors.coverPromptMissing"));
           }
 
           const result = await generateBookCover({
@@ -2344,11 +2349,11 @@ function useAiQueueRunner() {
 
           if (result.aiRun.status !== "success") {
             if (result.aiRun.status === "cancelled") {
-              cancelProposal(proposalId, result.aiRun.errorMessage ?? `Generowanie ${providerInfo.providerLabel} zostało przerwane.`);
+              cancelProposal(proposalId, result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
               return;
             }
             throw new QueueRunError(
-              result.aiRun.errorMessage || "Nie udało się utworzyć okładki.",
+              result.aiRun.errorMessage || i18n.t("ai.errors.coverFailed"),
               result.aiRun.rawOutput ?? ""
             );
           }
@@ -2363,7 +2368,7 @@ function useAiQueueRunner() {
             usageModel: result.aiRun.model,
             coverImagePath: result.imagePath,
             coverGeneratedAt: result.generatedAt,
-            progressMessage: "Okładka gotowa do akceptacji.",
+            progressMessage: i18n.t("ai.progress.coverReady"),
             progress: 100,
             partialImageDataUrl: null
           });
@@ -2372,11 +2377,11 @@ function useAiQueueRunner() {
 
         if (isCharacterImageProposal(snapshot)) {
           updateProposalProgress(proposalId, {
-            progressMessage: "Przygotowuję prompt obrazu postaci..."
+            progressMessage: i18n.t("ai.progress.characterImagePromptPrep")
           });
 
           if (!snapshot.coverPrompt || !snapshot.coverNegativePrompt) {
-            throw new QueueRunError("Brak promptu obrazu postaci w zadaniu kolejki.");
+            throw new QueueRunError(i18n.t("ai.errors.characterImagePromptMissing"));
           }
 
           const context =
@@ -2392,7 +2397,7 @@ function useAiQueueRunner() {
               ? scopedContext.targetEntityId
               : "";
           if (!characterId) {
-            throw new QueueRunError("Brak docelowej postaci dla obrazu.");
+            throw new QueueRunError(i18n.t("ai.errors.characterImageTargetMissing"));
           }
 
           const result = await generateCharacterImage({
@@ -2411,11 +2416,11 @@ function useAiQueueRunner() {
 
           if (result.aiRun.status !== "success") {
             if (result.aiRun.status === "cancelled") {
-              cancelProposal(proposalId, result.aiRun.errorMessage ?? `Generowanie ${providerInfo.providerLabel} zostało przerwane.`);
+              cancelProposal(proposalId, result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
               return;
             }
             throw new QueueRunError(
-              result.aiRun.errorMessage || "Nie udało się utworzyć obrazu postaci.",
+              result.aiRun.errorMessage || i18n.t("ai.errors.characterImageFailed"),
               result.aiRun.rawOutput ?? ""
             );
           }
@@ -2431,7 +2436,7 @@ function useAiQueueRunner() {
             coverImagePath: result.imagePath,
             characterImagePath: result.imagePath,
             characterGeneratedAt: result.generatedAt,
-            progressMessage: "Obraz postaci gotowy do akceptacji.",
+            progressMessage: i18n.t("ai.progress.characterImageReady"),
             progress: 100,
             partialImageDataUrl: null
           });
@@ -2440,11 +2445,11 @@ function useAiQueueRunner() {
 
         if (isExportArtworkProposal(snapshot)) {
           updateProposalProgress(proposalId, {
-            progressMessage: "Przygotowuję prompt grafiki eksportu..."
+            progressMessage: i18n.t("ai.progress.exportArtworkPromptPrep")
           });
 
           if (!snapshot.coverPrompt || !snapshot.coverNegativePrompt) {
-            throw new QueueRunError("Brak promptu grafiki eksportu w zadaniu kolejki.");
+            throw new QueueRunError(i18n.t("ai.errors.exportArtworkPromptMissing"));
           }
 
           const context =
@@ -2484,11 +2489,11 @@ function useAiQueueRunner() {
 
           if (result.aiRun.status !== "success") {
             if (result.aiRun.status === "cancelled") {
-              cancelProposal(proposalId, result.aiRun.errorMessage ?? `Generowanie ${providerInfo.providerLabel} zostało przerwane.`);
+              cancelProposal(proposalId, result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
               return;
             }
             throw new QueueRunError(
-              result.aiRun.errorMessage || "Nie udało się utworzyć grafiki eksportu.",
+              result.aiRun.errorMessage || i18n.t("ai.errors.exportArtworkFailed"),
               result.aiRun.rawOutput ?? ""
             );
           }
@@ -2504,7 +2509,7 @@ function useAiQueueRunner() {
             coverImagePath: result.imagePath,
             exportArtworkPath: result.imagePath,
             exportArtworkGeneratedAt: result.generatedAt,
-            progressMessage: "Grafika eksportu gotowa do akceptacji.",
+            progressMessage: i18n.t("ai.progress.exportArtworkReady"),
             progress: 100,
             partialImageDataUrl: null
           });
@@ -2537,11 +2542,11 @@ function useAiQueueRunner() {
 
         if (result.status !== "success" || !result.rawOutput) {
           if (result.status === "cancelled") {
-            cancelProposal(proposalId, result.errorMessage ?? `Generowanie ${providerInfo.providerLabel} zostało przerwane.`);
+            cancelProposal(proposalId, result.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
             return;
           }
           throw new QueueRunError(
-            result.errorMessage || `${providerInfo.providerLabel} nie zwrócił wyniku.`,
+            result.errorMessage || i18n.t("ai.errors.providerNoResult", { provider: providerInfo.providerLabel }),
             result.rawOutput ?? ""
           );
         }
@@ -2723,7 +2728,7 @@ export function parseProposalResult(
   if (isSceneEditorAction(action)) {
     return {
       kind: "book_plan_suggestion",
-      summary: "Propozycja tekstu sceny",
+      summary: i18n.t("ai.parseSummary.sceneText"),
       textValue: parseSceneEditorResult(rawOutput),
       value: rawOutput,
       warnings: []
@@ -2741,7 +2746,7 @@ function parseCharacterSuggestion(
   rawOutput: string,
   expectedField: CharacterFieldKey
 ): ParsedAiProposal {
-  const parsed = parseModelJson(rawOutput, "Propozycja postaci");
+  const parsed = parseModelJson(rawOutput, i18n.t("ai.parseContext.character"));
   const record =
     parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
@@ -2749,7 +2754,7 @@ function parseCharacterSuggestion(
   if (expectedField === "characterProfile" && record.kind === "character_profile") {
     return {
       kind: "book_plan_suggestion",
-      summary: typeof record.summary === "string" ? record.summary : "Nowa postać",
+      summary: typeof record.summary === "string" ? record.summary : i18n.t("ai.parseSummary.characterProfile"),
       textValue: JSON.stringify(parsed, null, 2),
       value: parsed,
       warnings: Array.isArray(record.warnings)
@@ -2761,7 +2766,7 @@ function parseCharacterSuggestion(
   if (expectedField === "characterRelation" && record.kind === "character_relation") {
     return {
       kind: "book_plan_suggestion",
-      summary: typeof record.summary === "string" ? record.summary : "Nowa relacja",
+      summary: typeof record.summary === "string" ? record.summary : i18n.t("ai.parseSummary.characterRelation"),
       textValue: JSON.stringify(parsed, null, 2),
       value: parsed,
       warnings: Array.isArray(record.warnings)
@@ -2773,7 +2778,7 @@ function parseCharacterSuggestion(
   if (expectedField === "characterMemory" && record.kind === "character_memory") {
     return {
       kind: "book_plan_suggestion",
-      summary: typeof record.summary === "string" ? record.summary : "Nowe wspomnienie",
+      summary: typeof record.summary === "string" ? record.summary : i18n.t("ai.parseSummary.characterMemory"),
       textValue: JSON.stringify(parsed, null, 2),
       value: parsed,
       warnings: Array.isArray(record.warnings)
@@ -2784,12 +2789,12 @@ function parseCharacterSuggestion(
 
   if (record.kind !== "character_field_suggestion") {
     throw new Error(
-      `AI zwróciło nieprawidłowy typ propozycji postaci (kind: ${JSON.stringify(record.kind ?? null)}).`
+      i18n.t("ai.errors.invalidCharacterKind", { kind: JSON.stringify(record.kind ?? null) })
     );
   }
   if (record.field !== expectedField) {
     throw new Error(
-      `AI zwróciło propozycję dla pola ${JSON.stringify(record.field ?? null)}, oczekiwano ${expectedField}.`
+      i18n.t("ai.errors.characterFieldMismatch", { field: JSON.stringify(record.field ?? null), expected: expectedField })
     );
   }
   const rawValue = record.value;
@@ -2799,7 +2804,7 @@ function parseCharacterSuggestion(
 
   return {
     kind: "book_plan_suggestion",
-    summary: typeof record.summary === "string" ? record.summary : "Propozycja postaci",
+    summary: typeof record.summary === "string" ? record.summary : i18n.t("ai.parseSummary.characterField"),
     textValue,
     value: parsed,
     warnings: Array.isArray(record.warnings)
@@ -2812,7 +2817,7 @@ function parseWorldSuggestion(
   rawOutput: string,
   expectedField: WorldFieldKey
 ): ParsedAiProposal {
-  const parsed = parseModelJson(rawOutput, "Propozycja świata");
+  const parsed = parseModelJson(rawOutput, i18n.t("ai.parseContext.world"));
   const record =
     parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
@@ -2829,7 +2834,7 @@ function parseWorldSuggestion(
         ? record.summary
         : typeof record.ruleName === "string"
           ? record.ruleName
-          : "Propozycja świata",
+          : i18n.t("ai.parseSummary.world"),
       textValue: JSON.stringify(parsed, null, 2),
       value: parsed,
       warnings: Array.isArray(record.warnings)
@@ -2840,18 +2845,18 @@ function parseWorldSuggestion(
 
   if (record.kind !== "world_field_suggestion") {
     throw new Error(
-      `AI zwróciło nieprawidłowy typ propozycji świata (kind: ${JSON.stringify(record.kind ?? null)}).`
+      i18n.t("ai.errors.invalidWorldKind", { kind: JSON.stringify(record.kind ?? null) })
     );
   }
   if (record.field !== expectedField) {
     throw new Error(
-      `AI zwróciło propozycję dla pola ${JSON.stringify(record.field ?? null)}, oczekiwano ${expectedField}.`
+      i18n.t("ai.errors.worldFieldMismatch", { field: JSON.stringify(record.field ?? null), expected: expectedField })
     );
   }
 
   return {
     kind: "book_plan_suggestion",
-    summary: typeof record.summary === "string" ? record.summary : "Propozycja świata",
+    summary: typeof record.summary === "string" ? record.summary : i18n.t("ai.parseSummary.world"),
     textValue: coerceProposalText(record.value),
     value: parsed,
     warnings: Array.isArray(record.warnings)
@@ -2870,7 +2875,7 @@ export function characterProfileInputFromProposal(
   const projectId = stringRecordValue(snapshot.projectId, proposal.projectId);
 
   if (!projectId) {
-    throw new Error("Brak projektu dla zapisu postaci AI.");
+    throw new Error(i18n.t("ai.errors.noProjectForCharacter"));
   }
 
   return {
@@ -2907,7 +2912,7 @@ async function characterFieldInputFromProposal(
   const workspace = await getCharacterWorkspace(proposal.projectId);
   const character = workspace.characters.find((item) => item.id === characterId);
   if (!character) {
-    throw new Error("Nie znaleziono postaci dla tej propozycji AI.");
+    throw new Error(i18n.t("ai.errors.characterNotFound"));
   }
 
   const input: UpsertCharacterInput = {
@@ -3124,7 +3129,7 @@ export function characterRelationInputFromProposal(
   const toCharacterId = stringRecordValue(snapshot.toCharacterId);
 
   if (!projectId || !fromCharacterId || !toCharacterId) {
-    throw new Error("Brak danych postaci dla zapisu relacji AI.");
+    throw new Error(i18n.t("ai.errors.noCharacterDataForRelation"));
   }
 
   return {
@@ -3155,7 +3160,7 @@ function characterMemoryInputFromProposal(
   const characterId = stringRecordValue(snapshot.characterId);
 
   if (!projectId || !characterId) {
-    throw new Error("Brak danych postaci dla zapisu wspomnienia AI.");
+    throw new Error(i18n.t("ai.errors.noCharacterDataForMemory"));
   }
 
   return {
@@ -3182,7 +3187,7 @@ function worldElementInputFromProposal(
   const projectId = stringRecordValue(snapshot.projectId, proposal.projectId);
 
   if (!projectId) {
-    throw new Error("Brak projektu dla zapisu elementu świata AI.");
+    throw new Error(i18n.t("ai.errors.noProjectForWorldElement"));
   }
 
   return {
@@ -3210,7 +3215,7 @@ function worldRuleInputFromProposal(
   const projectId = stringRecordValue(snapshot.projectId, proposal.projectId);
 
   if (!projectId) {
-    throw new Error("Brak projektu dla zapisu reguły świata AI.");
+    throw new Error(i18n.t("ai.errors.noProjectForWorldRule"));
   }
 
   return {
@@ -3264,7 +3269,7 @@ function parsePlanSuggestion(
   rawOutput: string,
   expectedField: PlanFieldKey
 ): ParsedAiProposal {
-  const parsed = parseModelJson(rawOutput, "Propozycja planu");
+  const parsed = parseModelJson(rawOutput, i18n.t("ai.parseContext.plan"));
   const value =
     parsed && typeof parsed === "object"
       ? parsed
@@ -3283,7 +3288,7 @@ function parsePlanSuggestion(
 
   return {
     kind: "book_plan_suggestion",
-    summary: typeof record.summary === "string" ? record.summary : "Propozycja planu",
+    summary: typeof record.summary === "string" ? record.summary : i18n.t("ai.parseSummary.plan"),
     textValue,
     value,
     warnings: Array.isArray(record.warnings)
@@ -3502,7 +3507,7 @@ export function proposalInputFromFields(
   }
 
   if (Object.keys(input).length === 0) {
-    throw new Error("Wybierz co najmniej jedno pole do zapisania.");
+    throw new Error(i18n.t("ai.errors.selectAtLeastOneField"));
   }
 
   return input;
@@ -3687,19 +3692,19 @@ function parseTargetWordCount(value: string): number | null {
 }
 
 function discoveryKindLabel(kind: SceneDiscovery["kind"]): string {
-  if (kind === "character") return "Postać";
-  if (kind === "characterMemory") return "Wspomnienie";
-  if (kind === "worldElement") return "Element świata";
-  if (kind === "worldRule") return "Reguła świata";
-  return "Relacja";
+  if (kind === "character") return i18n.t("ai.discoveryKind.character");
+  if (kind === "characterMemory") return i18n.t("ai.discoveryKind.characterMemory");
+  if (kind === "worldElement") return i18n.t("ai.discoveryKind.worldElement");
+  if (kind === "worldRule") return i18n.t("ai.discoveryKind.worldRule");
+  return i18n.t("ai.discoveryKind.relation");
 }
 
 function assignmentKindLabel(kind: PendingSceneAssignment["kind"]): string {
-  if (kind === "character") return "Postać";
-  if (kind === "characterMemory") return "Wspomnienie";
-  if (kind === "worldElement") return "Element świata";
-  if (kind === "worldRule") return "Reguła świata";
-  return "Relacja";
+  if (kind === "character") return i18n.t("ai.discoveryKind.character");
+  if (kind === "characterMemory") return i18n.t("ai.discoveryKind.characterMemory");
+  if (kind === "worldElement") return i18n.t("ai.discoveryKind.worldElement");
+  if (kind === "worldRule") return i18n.t("ai.discoveryKind.worldRule");
+  return i18n.t("ai.discoveryKind.relation");
 }
 
 function characterMemoryDraftFromDiscovery(
@@ -3774,10 +3779,10 @@ export function discoveryCanGenerate(
 
 function discoveryGenerateDisabledReason(discovery: SceneDiscovery): string {
   if (discovery.kind === "characterRelation") {
-    return "Relacja wymaga dwóch istniejących postaci wskazanych przez analizę.";
+    return i18n.t("ai.discoveryDisabledReason.relation");
   }
 
-  return "Wspomnienie wymaga wskazania istniejącej postaci.";
+  return i18n.t("ai.discoveryDisabledReason.memory");
 }
 
 function relationCharacterIdsFromDiscovery(
@@ -3804,15 +3809,15 @@ function serializeListValue(value: string): string {
 function statusLabel(status: ActiveAiProposal["status"]): string {
   switch (status) {
     case "queued":
-      return "W kolejce";
+      return i18n.t("ai.status.queued");
     case "running":
-      return "Generuje";
+      return i18n.t("ai.status.running");
     case "success":
-      return "Gotowe";
+      return i18n.t("ai.status.success");
     case "cancelled":
-      return "Przerwane";
+      return i18n.t("ai.status.cancelled");
     case "error":
-      return "Błąd";
+      return i18n.t("ai.status.error");
   }
 }
 

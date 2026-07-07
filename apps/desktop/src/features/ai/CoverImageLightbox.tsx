@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type CoverImageLightboxProps = {
   image: {
@@ -11,6 +12,7 @@ type CoverImageLightboxProps = {
 };
 
 export function CoverImageLightbox({ image, onClose }: CoverImageLightboxProps) {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!image) {
       return;
@@ -36,15 +38,15 @@ export function CoverImageLightbox({ image, onClose }: CoverImageLightboxProps) 
         type="button"
         className="cover-lightbox-backdrop"
         onClick={onClose}
-        aria-label="Zamknij podgląd okładki"
+        aria-label={t("ai.lightbox.close")}
       />
       <div className="cover-lightbox-content">
         <button
           type="button"
           className="icon-button cover-lightbox-close"
           onClick={onClose}
-          aria-label="Zamknij podgląd okładki"
-          title="Zamknij podgląd okładki"
+          aria-label={t("ai.lightbox.close")}
+          title={t("ai.lightbox.close")}
         >
           <X size={18} />
         </button>

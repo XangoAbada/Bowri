@@ -1,0 +1,160 @@
+{
+  "world": {
+    "elementType": {
+      "location": "Location",
+      "faction": "Faction",
+      "object": "Object",
+      "culture": "Culture",
+      "technology": "Technology",
+      "magic": "Magic",
+      "creature": "Creature",
+      "historical_event": "Historical event",
+      "institution": "Institution",
+      "custom": "Custom",
+      "other": "Other"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "rules": "Rules",
+      "links": "Connections",
+      "visuals": "Visuals"
+    },
+    "messages": {
+      "elementSaved": "World element saved.",
+      "ruleSaved": "World rule saved.",
+      "elementDeleted": "World element deleted.",
+      "ruleDeleted": "World rule deleted.",
+      "chooseElementOrRule": "Choose an element or rule to add a connection.",
+      "noProjectData": "No project data."
+    },
+    "loading": "Loading world...",
+    "loadError": "Unable to load the world builder.",
+    "header": {
+      "eyebrow": "Story Bible",
+      "title": "World",
+      "subtitle": "World elements, rules and their links to characters and the plan.",
+      "aiElement": "AI element",
+      "aiRule": "AI rule",
+      "aiLink": "AI connection"
+    },
+    "create": {
+      "newRule": "New rule",
+      "newLink": "New connection",
+      "newElement": "New element"
+    },
+    "editorHeader": {
+      "worldRule": "World rule",
+      "ruleLinks": "Rule connections",
+      "elementLinks": "Element connections",
+      "worldElement": "World element",
+      "newElement": "New element",
+      "unnamed": "Unnamed",
+      "rulePlaceholder": "Define the rule, cost and consequences of violation.",
+      "ruleLinksPlaceholder": "Link the rule with elements, threads and chapters.",
+      "elementLinksPlaceholder": "Link the element with rules, characters, threads and chapters.",
+      "elementPlaceholder": "Define the element's place in the world logic and plot."
+    },
+    "list": {
+      "searchPlaceholder": "Search world",
+      "searchAriaLabel": "Search world",
+      "filterAriaLabel": "Filter world list",
+      "filterTitle": "Filter world list",
+      "segmentAll": "All",
+      "segmentElements": "Elements",
+      "segmentRules": "Rules",
+      "allTypes": "All types",
+      "unnamed": "Unnamed",
+      "ruleMeta": "Rule",
+      "noDescription": "No description.",
+      "noRuleDescription": "No rule description.",
+      "empty": "No items match the filters."
+    },
+    "editor": {
+      "delete": "Delete",
+      "sectionsAriaLabel": "World sections"
+    },
+    "fieldLabel": {
+      "worldElement": "Full world element",
+      "worldRule": "Full world rule",
+      "worldRuleAnalysis": "Rule analysis",
+      "elementType": "Element type",
+      "elementName": "Name",
+      "elementSummary": "Short description",
+      "elementDetails": "Details",
+      "elementStoryPurpose": "Story purpose",
+      "elementConstraints": "Constraints",
+      "elementVisualPrompt": "Visual prompt",
+      "ruleName": "Rule name",
+      "ruleDescription": "Rule description",
+      "ruleScope": "Scope",
+      "ruleCost": "Cost",
+      "ruleLimitation": "Limitation",
+      "ruleExceptions": "Exceptions",
+      "ruleViolationConsequences": "Violation consequences",
+      "ruleSceneExamples": "Scene examples"
+    },
+    "profile": {
+      "elementType": "Element type",
+      "advancedTitle": "Advanced",
+      "advancedDescription": "Details don't go into scene-writing prompts.",
+      "saveElement": "Save element"
+    },
+    "rules": {
+      "newRule": "New rule",
+      "analyze": "Analyze",
+      "advancedTitle": "Advanced",
+      "advancedDescription": "Scene examples don't go into scene-writing prompts.",
+      "saveRule": "Save rule"
+    },
+    "visuals": {
+      "savePrompt": "Save prompt"
+    },
+    "aiField": {
+      "generateTitle": "Generate this field with AI",
+      "generateAriaLabel": "Generate the {{label}} field",
+      "addTitle": "Add the field to the AI context",
+      "addAriaLabel": "Add the {{label}} field to the AI context"
+    },
+    "promptContext": {
+      "submitLabel": "Send to AI",
+      "queuedReason": "The \"{{label}}\" field is already in the AI queue."
+    },
+    "links": {
+      "emptyTitle": "No item selected",
+      "emptyDescription": "Choose an element or rule to link them with the canon.",
+      "characters": "Characters",
+      "threads": "Threads",
+      "chapters": "Chapters",
+      "elementRules": "Element rules",
+      "scenes": "Scenes",
+      "ruleElements": "Rule elements",
+      "ruleThreads": "Rule threads",
+      "ruleChapters": "Rule chapters",
+      "ruleScenes": "Rule scenes",
+      "detach": "Detach relation",
+      "characterFallback": "Character",
+      "threadFallback": "Thread",
+      "ruleFallback": "Rule",
+      "elementFallback": "Element",
+      "addRelation": "Add relation: {{title}}"
+    },
+    "picker": {
+      "characters": "Link characters",
+      "threads": "Link threads",
+      "chapters": "Link chapters",
+      "rules": "Link rules",
+      "elements": "Link world elements",
+      "fallback": "Link entities",
+      "noEntities": "No available entities."
+    },
+    "labels": {
+      "chapter": "Chapter {{number}}: {{title}}",
+      "chapterUntitled": "Untitled",
+      "chapterFallback": "Chapter",
+      "sceneFallback": "Scene",
+      "sceneNoChapter": "No chapter",
+      "scene": "{{prefix}}.{{number}} {{title}}",
+      "sceneUntitled": "Untitled scene"
+    }
+  }
+}

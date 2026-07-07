@@ -13,6 +13,8 @@ import {
   Users
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, Collapsible, EmptyState, Field, Modal, StatusPill, Tabs, TwoPane } from "../../shared/ui";
 import { coverImageSource } from "../../shared/api/assets";
@@ -43,7 +45,6 @@ import type {
 import {
   buildCharacterPromptPackage,
   characterEntityId,
-  characterFieldConfigs,
   CharacterFieldKey,
   characterPromptContextSource,
   CharacterPromptEntity,
@@ -84,14 +85,7 @@ type MemoryLinkModalState =
 
 const newCharacterDraftId = "new-character";
 
-const characterTypeOptions = [
-  { value: "person", label: "Człowiek" },
-  { value: "animal", label: "Zwierzę" },
-  { value: "creature", label: "Istota" },
-  { value: "object", label: "Ożywiony przedmiot" },
-  { value: "spirit", label: "Duch / byt" },
-  { value: "other", label: "Inne" }
-];
+const characterTypeValues = ["person", "animal", "creature", "object", "spirit", "other"] as const;
 
 const relationTypeOptions = [
   "rodzina",
@@ -108,11 +102,11 @@ const relationTypeOptions = [
 
 const memoryTypeOptions = ["wydarzenie", "miejsce", "osoba", "przedmiot", "sekret", "sen", "trauma", "inne"];
 
-const characterTabs: Array<{ key: EditorTab; label: string; icon: typeof UserRound }> = [
-  { key: "profile", label: "Profil", icon: UserRound },
-  { key: "relations", label: "Relacje", icon: Users },
-  { key: "memories", label: "Wspomnienia", icon: Brain },
-  { key: "image", label: "Obraz", icon: Camera }
+const characterTabs: Array<{ key: EditorTab; icon: typeof UserRound }> = [
+  { key: "profile", icon: UserRound },
+  { key: "relations", icon: Users },
+  { key: "memories", icon: Brain },
+  { key: "image", icon: Camera }
 ];
 
 type CharacterFieldItem = {
@@ -123,14 +117,12 @@ type CharacterFieldItem = {
 };
 
 const characterFieldGroups: Array<{
-  title: string;
-  description: string;
+  groupKey: string;
   advanced?: boolean;
   fields: CharacterFieldItem[];
 }> = [
   {
-    title: "Tożsamość",
-    description: "Podstawowe informacje, po których łatwo rozpoznać rolę postaci w powieści.",
+    groupKey: "identity",
     fields: [
       { field: "characterType", key: "characterType" },
       { field: "name", key: "name" },
@@ -141,8 +133,7 @@ const characterFieldGroups: Array<{
     ]
   },
   {
-    title: "Motywacje i konflikt",
-    description: "Cele, potrzeby i wewnętrzne napięcia, które prowadzą postać przez fabułę.",
+    groupKey: "motivation",
     fields: [
       { field: "externalGoal", key: "externalGoal", rows: 2 },
       { field: "internalNeed", key: "internalNeed", rows: 2 },
@@ -152,8 +143,7 @@ const characterFieldGroups: Array<{
     ]
   },
   {
-    title: "Głos, łuk i wiedza",
-    description: "Sposób mówienia, kierunek przemiany i notatki potrzebne podczas pisania.",
+    groupKey: "voice",
     fields: [
       { field: "voiceNotes", key: "voiceNotes", rows: 3 },
       { field: "arcSummary", key: "arcSummary", rows: 3 },
@@ -161,8 +151,7 @@ const characterFieldGroups: Array<{
     ]
   },
   {
-    title: "Zaawansowane",
-    description: "Pola pomocnicze — nie trafiają do promptów pisania scen. Prompt wizualny zasila generowanie obrazu postaci.",
+    groupKey: "advanced",
     advanced: true,
     fields: [
       { field: "strengthsJson", key: "strengthsJson", list: true },
@@ -175,6 +164,7 @@ const characterFieldGroups: Array<{
 const characterFields = characterFieldGroups.flatMap((group) => group.fields);
 
 export function CharactersPage({ projectId }: CharactersPageProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const proposals = useProposalStore((state) => state.proposals);
@@ -275,7 +265,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     mutationFn: (input: UpsertCharacterInput) => upsertCharacter(input),
     onSuccess: async (character) => {
       setSelectedCharacterId(character.id);
-      setMessage("Zapisano postać.");
+      setMessage(t("characters.messages.characterSaved"));
       setErrorMessage("");
       await invalidateCharacters();
     },
@@ -285,7 +275,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     mutationFn: (id: string) => deleteCharacter(id),
     onSuccess: async () => {
       setSelectedCharacterId(null);
-      setMessage("Usunięto postać.");
+      setMessage(t("characters.messages.characterDeleted"));
       await invalidateCharacters();
     },
     onError: showError
@@ -294,7 +284,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     mutationFn: (input: UpsertCharacterRelationInput) => upsertCharacterRelation(input),
     onSuccess: async () => {
       setRelationModal(null);
-      setMessage("Zapisano relację.");
+      setMessage(t("characters.messages.relationSaved"));
       await invalidateCharacters();
     },
     onError: showError
@@ -303,7 +293,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     mutationFn: (input: UpsertCharacterMemoryInput) => upsertCharacterMemory(input),
     onSuccess: async () => {
       setMemoryModal(null);
-      setMessage("Zapisano wspomnienie.");
+      setMessage(t("characters.messages.memorySaved"));
       await invalidateCharacters();
     },
     onError: showError
@@ -312,7 +302,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     mutationFn: (input: UpsertCharacterMemoryLinkInput) => upsertCharacterMemoryLink(input),
     onSuccess: async () => {
       setMemoryLinkModal(null);
-      setMessage("Zapisano połączenie wspomnień.");
+      setMessage(t("characters.messages.memoryLinkSaved"));
       await invalidateCharacters();
     },
     onError: showError
@@ -372,7 +362,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     const state: RelationModalState = { mode: "create", fromCharacterId: character.id };
     const relationDraft = relationToInput(null, state, workspace);
     if (!relationDraft.toCharacterId) {
-      setErrorMessage("Dodaj przynajmniej drugą postać, aby AI mogło utworzyć relację.");
+      setErrorMessage(t("characters.messages.needSecondCharacter"));
       return;
     }
 
@@ -392,7 +382,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
   function queueCharacterGeneration(field: CharacterFieldKey, targetEntity?: CharacterPromptEntity) {
     setErrorMessage("");
     if (!project || !book) {
-      setErrorMessage("Brak danych projektu.");
+      setErrorMessage(t("characters.messages.noProjectData"));
       return;
     }
 
@@ -440,39 +430,39 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
 
     activatePromptContextTarget(
       createCharacterPromptContextTarget(projectId, field, characterEntityId(effectiveTarget), {
-        submitLabel: "Wyślij do AI",
+        submitLabel: t("characters.promptContext.submitLabel"),
         submitDisabled: Boolean(loading),
-        submitDisabledReason: loading ? `Pole "${characterFieldConfigs[field].label}" jest już w kolejce AI.` : undefined,
+        submitDisabledReason: loading ? t("characters.promptContext.queuedReason", { label: t(`characters.fieldLabel.${field}`) }) : undefined,
         onSubmit: () => queueCharacterGeneration(field, effectiveTarget)
       })
     );
   }
 
   if (projectQuery.isLoading || workspaceQuery.isLoading) {
-    return <p className="muted-text">Ładuję postacie...</p>;
+    return <p className="muted-text">{t("characters.loading")}</p>;
   }
 
   if (projectQuery.isError || workspaceQuery.isError || !project || !book) {
-    return <p className="warning-text">Nie można wczytać kreatora postaci.</p>;
+    return <p className="warning-text">{t("characters.loadError")}</p>;
   }
 
   return (
     <section className="bible-page characters-page">
       <header className="bible-header">
         <div>
-          <p className="eyebrow">Story Bible</p>
-          <h2>Postacie</h2>
-          <p className="muted-text">Profile, relacje, wspomnienia i obrazy referencyjne dla powieści.</p>
+          <p className="eyebrow">{t("characters.header.eyebrow")}</p>
+          <h2>{t("characters.header.title")}</h2>
+          <p className="muted-text">{t("characters.header.subtitle")}</p>
         </div>
         <div className="bible-header-actions">
           <Button
             variant="ai"
             onClick={generateFullCharacter}
-            title="Utwórz pełny tekstowy profil postaci z AI bez obrazu"
-            aria-label="Utwórz pełny profil postaci z AI"
+            title={t("characters.header.aiCharacterTitle")}
+            aria-label={t("characters.header.aiCharacterAriaLabel")}
           >
             <Sparkles size={16} aria-hidden />
-            AI postać
+            {t("characters.header.aiCharacter")}
           </Button>
         </div>
       </header>
@@ -486,19 +476,19 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                 className="ui-input"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Szukaj postaci"
-                aria-label="Szukaj postaci"
+                placeholder={t("characters.list.searchPlaceholder")}
+                aria-label={t("characters.list.searchAriaLabel")}
               />
               <select
                 className="ui-input"
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value)}
-                title="Filtruj rodzaj postaci"
-                aria-label="Filtruj rodzaj postaci"
+                title={t("characters.list.filterTitle")}
+                aria-label={t("characters.list.filterAriaLabel")}
               >
-                <option value="all">Wszystkie rodzaje</option>
-                {characterTypeOptions.map((option) => (
-                  <option value={option.value} key={option.value}>{option.label}</option>
+                <option value="all">{t("characters.list.allTypes")}</option>
+                {characterTypeValues.map((value) => (
+                  <option value={value} key={value}>{t(`characters.type.${value}`)}</option>
                 ))}
               </select>
             </div>
@@ -510,20 +500,20 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                   className={character.id === selectedCharacterId ? "bible-item active" : "bible-item"}
                   onClick={() => setSelectedCharacterId(character.id)}
                 >
-                  <span className="t">{character.name || "Bez nazwy"}</span>
+                  <span className="t">{character.name || t("characters.list.unnamed")}</span>
                   <span className="m">
-                    {typeLabel(character.characterType)}
+                    {typeLabel(t, character.characterType)}
                     {character.role ? ` · ${character.role}` : ""}
                   </span>
                 </button>
               ))}
               {filteredCharacters.length === 0 ? (
-                <p className="bible-list-empty">Brak postaci pasujących do filtrów.</p>
+                <p className="bible-list-empty">{t("characters.list.empty")}</p>
               ) : null}
             </div>
             <Button variant="secondary" block onClick={startNewCharacter}>
               <Plus size={15} aria-hidden />
-              Nowa postać
+              {t("characters.list.newCharacter")}
             </Button>
           </>
         }
@@ -534,9 +524,9 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
               {selectedImage ? <img src={coverImageSource(selectedImage.filePath)} alt="" /> : <UserRound size={34} />}
             </div>
             <div className="bible-editor-heading-body">
-              <p className="eyebrow">{selectedCharacter ? "Profil postaci" : "Nowa postać"}</p>
-              <h3>{draft.name || "Bez nazwy"}</h3>
-              <p className="muted-text">{draft.role || "Określ rolę fabularną i najważniejsze napięcie."}</p>
+              <p className="eyebrow">{selectedCharacter ? t("characters.editor.profileEyebrow") : t("characters.editor.newEyebrow")}</p>
+              <h3>{draft.name || t("characters.editor.unnamed")}</h3>
+              <p className="muted-text">{draft.role || t("characters.editor.rolePlaceholder")}</p>
             </div>
             <div className="button-row">
               {selectedCharacter ? (
@@ -545,7 +535,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                   onClick={() => deleteCharacterMutation.mutate(selectedCharacter.id)}
                 >
                   <Trash2 size={15} aria-hidden />
-                  Usuń
+                  {t("characters.editor.delete")}
                 </Button>
               ) : null}
               <Button
@@ -555,19 +545,19 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                 busy={characterMutation.isPending}
               >
                 <Save size={15} aria-hidden />
-                {characterMutation.isPending ? "Zapisuję" : "Zapisz"}
+                {characterMutation.isPending ? t("characters.editor.saving") : t("characters.editor.save")}
               </Button>
             </div>
           </div>
 
           <Tabs
-            ariaLabel="Sekcje postaci"
-            items={characterTabs.map(({ key, label, icon: Icon }) => ({
+            ariaLabel={t("characters.editor.sectionsAriaLabel")}
+            items={characterTabs.map(({ key, icon: Icon }) => ({
               id: key,
               label: (
                 <>
                   <Icon size={15} aria-hidden />
-                  {label}
+                  {t(`characters.tabs.${key}`)}
                 </>
               )
             }))}
@@ -595,15 +585,19 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                     ))}
                   </div>
                 );
+                const groupTitle = t(`characters.groups.${group.groupKey}.title`);
+                const groupDescription = t(
+                  `characters.groups.${group.groupKey}.description`
+                );
                 return group.advanced ? (
-                  <Collapsible key={group.title} title={group.title} description={group.description}>
+                  <Collapsible key={group.groupKey} title={groupTitle} description={groupDescription}>
                     {fieldGrid}
                   </Collapsible>
                 ) : (
-                  <section className="bible-group" key={group.title}>
+                  <section className="bible-group" key={group.groupKey}>
                     <div className="bible-group-heading">
-                      <h4>{group.title}</h4>
-                      <p>{group.description}</p>
+                      <h4>{groupTitle}</h4>
+                      <p>{groupDescription}</p>
                     </div>
                     {fieldGrid}
                   </section>
@@ -719,7 +713,8 @@ function CharacterField({
   onGenerate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
   onActivate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
 }) {
-  const config = characterFieldConfigs[field];
+  const { t } = useTranslation();
+  const fieldLabel = t(`characters.fieldLabel.${field}`);
   const activeTargetId = useAiPromptContextStore((state) => state.activeTargetId);
   const activeTarget = useAiPromptContextStore((state) => activeTargetId ? state.targets[activeTargetId] : null);
   const addContextSourceToActiveTarget = useAiPromptContextStore((state) => state.addContextSourceToActiveTarget);
@@ -728,7 +723,7 @@ function CharacterField({
 
   return (
     <Field
-      label={config.label}
+      label={fieldLabel}
       className={rows ? "wide" : undefined}
       actions={
         <AiActions
@@ -747,17 +742,17 @@ function CharacterField({
           rows={rows}
           onFocus={activate}
           onClick={activate}
-          aria-label={config.label}
+          aria-label={fieldLabel}
         />
       ) : field === "characterType" ? (
         <select
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onFocus={activate}
-          aria-label={config.label}
+          aria-label={fieldLabel}
         >
-          {characterTypeOptions.map((option) => (
-            <option value={option.value} key={option.value}>{option.label}</option>
+          {characterTypeValues.map((option) => (
+            <option value={option} key={option}>{t(`characters.type.${option}`)}</option>
           ))}
         </select>
       ) : (
@@ -766,7 +761,7 @@ function CharacterField({
           onChange={(event) => onChange(event.target.value)}
           onFocus={activate}
           onClick={activate}
-          aria-label={config.label}
+          aria-label={fieldLabel}
         />
       )}
     </Field>
@@ -786,6 +781,8 @@ function AiActions({
   onGenerate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
   onAddContext: () => void;
 }) {
+  const { t } = useTranslation();
+  const fieldLabel = t(`characters.fieldLabel.${field}`);
   const loading = useProposalStore((state) =>
     pendingProposalStatus(state.proposals, {
       field: field === "characterImage" ? CHARACTER_IMAGE_FIELD : field,
@@ -803,8 +800,8 @@ function AiActions({
           event.stopPropagation();
           onGenerate(field, target);
         }}
-        title={`Generuj pole "${characterFieldConfigs[field].label}" z AI`}
-        aria-label={`Generuj ${characterFieldConfigs[field].label} z AI`}
+        title={t("characters.aiActions.generateTitle", { label: fieldLabel })}
+        aria-label={t("characters.aiActions.generateAriaLabel", { label: fieldLabel })}
       >
         {loading === "running" ? <Loader2 size={14} className="ui-spin" aria-hidden /> : loading === "queued" ? <Clock3 size={14} aria-hidden /> : <Sparkles size={14} aria-hidden />}
         AI
@@ -817,8 +814,8 @@ function AiActions({
           event.stopPropagation();
           onAddContext();
         }}
-        title={addDisabled ? "Pole jest już w kontekście albo nie ma aktywnego promptu." : "Dodaj pole do kontekstu promptu."}
-        aria-label={`Dodaj ${characterFieldConfigs[field].label} do kontekstu promptu`}
+        title={addDisabled ? t("characters.aiActions.addTitleDisabled") : t("characters.aiActions.addTitle")}
+        aria-label={t("characters.aiActions.addAriaLabel", { label: fieldLabel })}
       >
         <Plus size={14} aria-hidden />
       </Button>
@@ -834,22 +831,23 @@ function RelationsSection({ character, workspace, onCreate, onGenerate, onEdit, 
   onEdit: (relationId: string) => void;
   onDelete: (relationId: string) => void;
 }) {
+  const { t } = useTranslation();
   if (!character) {
-    return <EmptyState icon={<Users size={22} />} title="Brak zapisanej postaci" description="Zapisz postać, aby dodawać relacje." />;
+    return <EmptyState icon={<Users size={22} />} title={t("characters.relations.emptyNoCharacterTitle")} description={t("characters.relations.emptyNoCharacterDescription")} />;
   }
   const relations = relationsForCharacter(workspace, character.id);
   const canGenerateRelation = workspace.characters.some((item) => item.id !== character.id);
   return (
     <section className="bible-section">
       <SectionHeading
-        title="Relacje"
+        title={t("characters.relations.title")}
         icon={<Users size={17} />}
-        actionLabel="Dodaj relację"
+        actionLabel={t("characters.relations.addAction")}
         onAction={onCreate}
-        aiActionLabel="AI relacja"
+        aiActionLabel={t("characters.relations.aiAction")}
         onAiAction={onGenerate}
         aiActionDisabled={!canGenerateRelation}
-        aiActionTitle={canGenerateRelation ? "Wygeneruj szkic relacji z AI" : "Dodaj drugą postać, aby wygenerować relację"}
+        aiActionTitle={canGenerateRelation ? t("characters.relations.aiActionTitle") : t("characters.relations.aiActionTitleDisabled")}
       />
       <div className="bible-card-list">
         {relations.map((relation) => {
@@ -867,11 +865,11 @@ function RelationsSection({ character, workspace, onCreate, onGenerate, onEdit, 
                   onEdit(relation.id);
                 }
               }}
-              title="Otwórz relację"
+              title={t("characters.relations.openTitle")}
             >
               <div className="bible-card-heading">
                 <strong>
-                  {other?.name ?? "Postać"} <Chip tone="accent">{relation.relationType}</Chip>
+                  {other?.name ?? t("characters.relations.characterFallback")} <Chip tone="accent">{relationTypeLabel(t, relation.relationType)}</Chip>
                 </strong>
                 <Button
                   variant="icon"
@@ -879,21 +877,21 @@ function RelationsSection({ character, workspace, onCreate, onGenerate, onEdit, 
                     event.stopPropagation();
                     onDelete(relation.id);
                   }}
-                  title="Usuń tylko relację"
-                  aria-label="Usuń tylko relację"
+                  title={t("characters.relations.deleteOnlyTitle")}
+                  aria-label={t("characters.relations.deleteOnlyAriaLabel")}
                 >
                   <Minus size={14} aria-hidden />
                 </Button>
               </div>
-              <p>{relation.description || relation.opinion || "Brak opisu relacji."}</p>
-              <div className="relation-trust" title={`Zaufanie: ${relation.trustLevel}%`}>
+              <p>{relation.description || relation.opinion || t("characters.relations.noDescription")}</p>
+              <div className="relation-trust" title={t("characters.relations.trustTitle", { value: relation.trustLevel })}>
                 <span style={{ width: `${relation.trustLevel}%` }} />
               </div>
             </article>
           );
         })}
         {relations.length === 0 ? (
-          <EmptyState icon={<Users size={22} />} title="Brak relacji" description="Ta postać nie ma jeszcze zapisanych relacji." />
+          <EmptyState icon={<Users size={22} />} title={t("characters.relations.emptyTitle")} description={t("characters.relations.emptyDescription")} />
         ) : null}
       </div>
     </section>
@@ -910,20 +908,21 @@ function MemoriesSection({ character, workspace, onCreate, onGenerate, onEdit, o
   onCreateLink: (memoryId: string) => void;
   onEditLink: (linkId: string) => void;
 }) {
+  const { t } = useTranslation();
   if (!character) {
-    return <EmptyState icon={<Brain size={22} />} title="Brak zapisanej postaci" description="Zapisz postać, aby dodawać wspomnienia." />;
+    return <EmptyState icon={<Brain size={22} />} title={t("characters.memories.emptyNoCharacterTitle")} description={t("characters.memories.emptyNoCharacterDescription")} />;
   }
   const memories = workspace.memories.filter((memory) => memory.characterId === character.id);
   return (
     <section className="bible-section">
       <SectionHeading
-        title="Wspomnienia"
+        title={t("characters.memories.title")}
         icon={<Brain size={17} />}
-        actionLabel="Dodaj wspomnienie"
+        actionLabel={t("characters.memories.addAction")}
         onAction={onCreate}
-        aiActionLabel="AI wspomnienie"
+        aiActionLabel={t("characters.memories.aiAction")}
         onAiAction={onGenerate}
-        aiActionTitle="Wygeneruj szkic wspomnienia z AI"
+        aiActionTitle={t("characters.memories.aiActionTitle")}
       />
       <div className="memory-grid">
         {memories.map((memory) => {
@@ -932,17 +931,17 @@ function MemoriesSection({ character, workspace, onCreate, onGenerate, onEdit, o
             <article className="bible-card" key={memory.id}>
               <div className="bible-card-heading">
                 <strong>{memory.title}</strong>
-                <StatusPill tone="accent" title="Ważność wspomnienia">{memory.importance}</StatusPill>
+                <StatusPill tone="accent" title={t("characters.memories.importanceTitle")}>{memory.importance}</StatusPill>
               </div>
-              <p>{memory.summary || memory.details || "Brak opisu."}</p>
-              <small>{[memory.memoryType, memory.subject, memory.emotion].filter(Boolean).join(" / ")}</small>
+              <p>{memory.summary || memory.details || t("characters.memories.noDescription")}</p>
+              <small>{[memoryTypeLabel(t, memory.memoryType), memory.subject, memory.emotion].filter(Boolean).join(" / ")}</small>
               {links.length > 0 ? (
                 <div className="chip-row">
                   {links.map((link) => (
                     <Chip
                       tone="accent"
                       key={link.id}
-                      title={link.description || "Edytuj połączenie"}
+                      title={link.description || t("characters.memories.linkTitleFallback")}
                       onClick={() => onEditLink(link.id)}
                     >
                       <Network size={11} aria-hidden />
@@ -952,12 +951,12 @@ function MemoriesSection({ character, workspace, onCreate, onGenerate, onEdit, o
                 </div>
               ) : null}
               <div className="button-row">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(memory.id)}>Edytuj</Button>
+                <Button variant="ghost" size="sm" onClick={() => onEdit(memory.id)}>{t("characters.memories.edit")}</Button>
                 <Button variant="ghost" size="sm" onClick={() => onCreateLink(memory.id)}>
                   <Plus size={14} aria-hidden />
-                  Połącz
+                  {t("characters.memories.connect")}
                 </Button>
-                <Button variant="icon" onClick={() => onDelete(memory.id)} title="Usuń wspomnienie" aria-label="Usuń wspomnienie">
+                <Button variant="icon" onClick={() => onDelete(memory.id)} title={t("characters.memories.deleteTitle")} aria-label={t("characters.memories.deleteAriaLabel")}>
                   <Trash2 size={14} aria-hidden />
                 </Button>
               </div>
@@ -965,7 +964,7 @@ function MemoriesSection({ character, workspace, onCreate, onGenerate, onEdit, o
           );
         })}
         {memories.length === 0 ? (
-          <EmptyState icon={<Brain size={22} />} title="Brak wspomnień" description="Ta postać nie ma jeszcze zapisanych wspomnień." />
+          <EmptyState icon={<Brain size={22} />} title={t("characters.memories.emptyTitle")} description={t("characters.memories.emptyDescription")} />
         ) : null}
       </div>
     </section>
@@ -977,21 +976,22 @@ function CharacterImageSection({ character, image, onGenerate }: {
   image: VisualAsset | null;
   onGenerate: () => void;
 }) {
+  const { t } = useTranslation();
   if (!character) {
-    return <EmptyState icon={<Camera size={22} />} title="Brak zapisanej postaci" description="Zapisz postać, aby wygenerować obraz." />;
+    return <EmptyState icon={<Camera size={22} />} title={t("characters.image.emptyNoCharacterTitle")} description={t("characters.image.emptyNoCharacterDescription")} />;
   }
   return (
     <section className="character-image-section">
       <div className="character-image-preview">
-        {image ? <img src={coverImageSource(image.filePath)} alt={`Obraz postaci ${character.name}`} /> : <UserRound size={54} />}
+        {image ? <img src={coverImageSource(image.filePath)} alt={t("characters.image.alt", { name: character.name })} /> : <UserRound size={54} />}
       </div>
       <div>
-        <p className="eyebrow">Obraz referencyjny</p>
+        <p className="eyebrow">{t("characters.image.eyebrow")}</p>
         <h3>{character.name}</h3>
-        <p className="muted-text">{character.visualPrompt || "Prompt obrazu powstanie z profilu postaci i kontekstu książki."}</p>
+        <p className="muted-text">{character.visualPrompt || t("characters.image.promptPlaceholder")}</p>
         <Button variant="primary" onClick={onGenerate}>
           <Camera size={16} aria-hidden />
-          Generuj obraz
+          {t("characters.image.generate")}
         </Button>
       </div>
     </section>
@@ -1008,6 +1008,7 @@ function RelationModal({ state, workspace, saving, onClose, onSubmit, onDelete, 
   onGenerate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
   onActivate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const existing = state.mode === "edit" ? workspace.relations.find((item) => item.id === state.relationId) : null;
   const [draft, setDraft] = useState<UpsertCharacterRelationInput>(() => relationToInput(existing, state, workspace));
   const target = existing ?? relationPreview(draft);
@@ -1017,33 +1018,36 @@ function RelationModal({ state, workspace, saving, onClose, onSubmit, onDelete, 
   });
   return (
     <Modal
-      title={existing ? "Edytuj relację" : "Dodaj relację"}
+      title={existing ? t("characters.relationModal.editTitle") : t("characters.relationModal.addTitle")}
       onClose={onClose}
       size="lg"
       footer={<ModalFooterActions existingId={existing?.id} saving={saving} formId="relation-modal-form" onClose={onClose} onDelete={onDelete} />}
     >
       <form id="relation-modal-form" className="modal-form" onSubmit={(event) => { event.preventDefault(); onSubmit(draft); }}>
-        <Field label="Postać docelowa">
+        <Field label={t("characters.relationModal.targetCharacter")}>
           <select value={draft.toCharacterId} onChange={(event) => setDraft({ ...draft, toCharacterId: event.target.value })}>
-            <option value="">Wybierz postać</option>
+            <option value="">{t("characters.relationModal.chooseCharacter")}</option>
             {workspace.characters.filter((item) => item.id !== draft.fromCharacterId).map((character) => (
               <option key={character.id} value={character.id}>{character.name}</option>
             ))}
           </select>
         </Field>
-        <Field label="Typ relacji">
-          <select value={draft.relationType} onChange={(event) => setDraft({ ...draft, relationType: event.target.value })}>
-            {relationTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+        <Field label={t("characters.relationModal.relationType")}>
+          <select value={relationTypeLabel(t, draft.relationType)} onChange={(event) => setDraft({ ...draft, relationType: event.target.value })}>
+            {relationTypeOptions.map((type) => {
+              const label = t(`characters.relationType.${type}`);
+              return <option key={type} value={label}>{label}</option>;
+            })}
           </select>
         </Field>
         <ModalAiField field="relationDescription" value={draft.description} target={target} onChange={(value) => setDraft({ ...draft, description: value })} onGenerate={onGenerate} onActivate={onActivate} />
         <ModalAiField field="relationConflict" value={draft.conflict} target={target} onChange={(value) => setDraft({ ...draft, conflict: value })} onGenerate={onGenerate} onActivate={onActivate} />
         <ModalAiField field="relationOpinion" value={draft.opinion} target={target} onChange={(value) => setDraft({ ...draft, opinion: value })} onGenerate={onGenerate} onActivate={onActivate} />
-        <Field label={`Zaufanie: ${draft.trustLevel}%`} className="wide">
+        <Field label={t("characters.relationModal.trust", { value: draft.trustLevel })} className="wide">
           <input type="range" min={0} max={100} value={draft.trustLevel} onChange={(event) => setDraft({ ...draft, trustLevel: Number(event.target.value) })} />
         </Field>
         <ModalAiField field="relationSecret" value={draft.secret} target={target} onChange={(value) => setDraft({ ...draft, secret: value })} onGenerate={onGenerate} onActivate={onActivate} />
-        <Collapsible className="wide" title="Zaawansowane" description="Pola pomocnicze — nie trafiają do promptów pisania scen.">
+        <Collapsible className="wide" title={t("characters.relationModal.advancedTitle")} description={t("characters.relationModal.advancedDescription")}>
           <ModalAiField field="relationHistory" value={draft.history} target={target} onChange={(value) => setDraft({ ...draft, history: value })} onGenerate={onGenerate} onActivate={onActivate} />
           <ModalAiField field="relationChangeOverTime" value={draft.changeOverTime} target={target} onChange={(value) => setDraft({ ...draft, changeOverTime: value })} onGenerate={onGenerate} onActivate={onActivate} />
         </Collapsible>
@@ -1062,6 +1066,7 @@ function MemoryModal({ state, workspace, saving, onClose, onSubmit, onDelete, on
   onGenerate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
   onActivate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const existing = state.mode === "edit" ? workspace.memories.find((item) => item.id === state.memoryId) : null;
   const [draft, setDraft] = useState<UpsertCharacterMemoryInput>(() => memoryToInput(existing, state, workspace));
   const target = existing ?? memoryPreview(draft);
@@ -1071,25 +1076,28 @@ function MemoryModal({ state, workspace, saving, onClose, onSubmit, onDelete, on
   });
   return (
     <Modal
-      title={existing ? "Edytuj wspomnienie" : "Dodaj wspomnienie"}
+      title={existing ? t("characters.memoryModal.editTitle") : t("characters.memoryModal.addTitle")}
       onClose={onClose}
       size="lg"
       footer={<ModalFooterActions existingId={existing?.id} saving={saving} formId="memory-modal-form" onClose={onClose} onDelete={onDelete} />}
     >
       <form id="memory-modal-form" className="modal-form" onSubmit={(event) => { event.preventDefault(); onSubmit(draft); }}>
         <ModalAiField field="memoryTitle" value={draft.title} target={target} onChange={(value) => setDraft({ ...draft, title: value })} onGenerate={onGenerate} onActivate={onActivate} rows={1} />
-        <Field label="Typ wspomnienia">
-          <select value={draft.memoryType} onChange={(event) => setDraft({ ...draft, memoryType: event.target.value })}>
-            {memoryTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+        <Field label={t("characters.memoryModal.memoryType")}>
+          <select value={memoryTypeLabel(t, draft.memoryType)} onChange={(event) => setDraft({ ...draft, memoryType: event.target.value })}>
+            {memoryTypeOptions.map((type) => {
+              const label = t(`characters.memoryType.${type}`);
+              return <option key={type} value={label}>{label}</option>;
+            })}
           </select>
         </Field>
         <ModalAiField field="memorySummary" value={draft.summary} target={target} onChange={(value) => setDraft({ ...draft, summary: value })} onGenerate={onGenerate} onActivate={onActivate} />
         <ModalAiField field="memorySubject" value={draft.subject} target={target} onChange={(value) => setDraft({ ...draft, subject: value })} onGenerate={onGenerate} onActivate={onActivate} rows={1} />
         <ModalAiField field="memoryEmotion" value={draft.emotion} target={target} onChange={(value) => setDraft({ ...draft, emotion: value })} onGenerate={onGenerate} onActivate={onActivate} rows={1} />
-        <Field label={`Ważność: ${draft.importance}%`} className="wide">
+        <Field label={t("characters.memoryModal.importance", { value: draft.importance })} className="wide">
           <input type="range" min={0} max={100} value={draft.importance} onChange={(event) => setDraft({ ...draft, importance: Number(event.target.value) })} />
         </Field>
-        <Collapsible className="wide" title="Zaawansowane" description="Szczegóły nie trafiają do promptów pisania scen.">
+        <Collapsible className="wide" title={t("characters.memoryModal.advancedTitle")} description={t("characters.memoryModal.advancedDescription")}>
           <ModalAiField field="memoryDetails" value={draft.details} target={target} onChange={(value) => setDraft({ ...draft, details: value })} onGenerate={onGenerate} onActivate={onActivate} />
         </Collapsible>
       </form>
@@ -1107,6 +1115,7 @@ function MemoryLinkModal({ state, workspace, saving, onClose, onSubmit, onDelete
   onGenerate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
   onActivate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const existing = state.mode === "edit" ? workspace.memoryLinks.find((item) => item.id === state.linkId) : null;
   const [draft, setDraft] = useState<UpsertCharacterMemoryLinkInput>(() => memoryLinkToInput(existing, state, workspace));
   const target = existing ?? memoryLinkPreview(draft);
@@ -1116,25 +1125,25 @@ function MemoryLinkModal({ state, workspace, saving, onClose, onSubmit, onDelete
   });
   return (
     <Modal
-      title={existing ? "Edytuj połączenie" : "Połącz wspomnienia"}
+      title={existing ? t("characters.memoryLinkModal.editTitle") : t("characters.memoryLinkModal.addTitle")}
       onClose={onClose}
       size="md"
       footer={<ModalFooterActions existingId={existing?.id} saving={saving} formId="memory-link-modal-form" onClose={onClose} onDelete={onDelete} />}
     >
       <form id="memory-link-modal-form" className="modal-form single" onSubmit={(event) => { event.preventDefault(); onSubmit(draft); }}>
-        <Field label="Drugie wspomnienie">
+        <Field label={t("characters.memoryLinkModal.secondMemory")}>
           <select value={draft.toMemoryId} onChange={(event) => setDraft({ ...draft, toMemoryId: event.target.value })}>
-            <option value="">Wybierz wspomnienie</option>
+            <option value="">{t("characters.memoryLinkModal.chooseMemory")}</option>
             {workspace.memories.filter((memory) => memory.id !== draft.fromMemoryId).map((memory) => (
               <option key={memory.id} value={memory.id}>{memory.title}</option>
             ))}
           </select>
         </Field>
-        <Field label="Typ połączenia">
+        <Field label={t("characters.memoryLinkModal.linkType")}>
           <input value={draft.linkType} onChange={(event) => setDraft({ ...draft, linkType: event.target.value })} />
         </Field>
         <ModalAiField field="memoryLinkDescription" value={draft.description} target={target} onChange={(value) => setDraft({ ...draft, description: value })} onGenerate={onGenerate} onActivate={onActivate} />
-        <Field label={`Siła: ${draft.strength}%`} className="wide">
+        <Field label={t("characters.memoryLinkModal.strength", { value: draft.strength })} className="wide">
           <input type="range" min={0} max={100} value={draft.strength} onChange={(event) => setDraft({ ...draft, strength: Number(event.target.value) })} />
         </Field>
       </form>
@@ -1149,18 +1158,19 @@ function ModalFooterActions({ existingId, saving, formId, onClose, onDelete }: {
   onClose: () => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       {existingId ? (
         <Button variant="danger" onClick={() => onDelete(existingId)} disabled={saving}>
           <Trash2 size={15} aria-hidden />
-          Usuń
+          {t("characters.modalFooter.delete")}
         </Button>
       ) : null}
-      <Button variant="ghost" onClick={onClose}>Anuluj</Button>
+      <Button variant="ghost" onClick={onClose}>{t("characters.modalFooter.cancel")}</Button>
       <Button variant="primary" type="submit" form={formId} busy={saving}>
         <Save size={15} aria-hidden />
-        {saving ? "Zapisuję" : "Zapisz"}
+        {saving ? t("characters.modalFooter.saving") : t("characters.modalFooter.save")}
       </Button>
     </>
   );
@@ -1175,10 +1185,11 @@ function ModalAiField({ field, value, rows = 3, target, onChange, onGenerate, on
   onGenerate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
   onActivate: (field: CharacterFieldKey, target?: CharacterPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
   const activate = () => onActivate(field, target);
   return (
     <Field
-      label={characterFieldConfigs[field].label}
+      label={t(`characters.fieldLabel.${field}`)}
       className="wide"
       actions={
         <AiActions
@@ -1582,6 +1593,21 @@ function listDisplay(value: string): string {
   }
 }
 
-function typeLabel(value: string): string {
-  return characterTypeOptions.find((option) => option.value === value)?.label ?? value;
+function typeLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  value: string
+): string {
+  return (characterTypeValues as readonly string[]).includes(value)
+    ? t(`characters.type.${value}`)
+    : value;
+}
+
+// Stored value bywa albo stabilnym id (legacy: polskie słowo = klucz), albo już
+// zlokalizowaną etykietą (nowe zapisy). id mapujemy na etykietę, resztę pokazujemy wprost.
+function relationTypeLabel(t: TFunction, value: string): string {
+  return relationTypeOptions.includes(value) ? t(`characters.relationType.${value}`) : value;
+}
+
+function memoryTypeLabel(t: TFunction, value: string): string {
+  return memoryTypeOptions.includes(value) ? t(`characters.memoryType.${value}`) : value;
 }

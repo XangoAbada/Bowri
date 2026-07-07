@@ -52,6 +52,7 @@ vi.mock("../../shared/api/commands", async () => ({
   getAiSettings: vi.fn(async () =>
     (await import("../../shared/api/types")).DEFAULT_AI_SETTINGS
   ),
+  saveAiSettings: vi.fn(() => Promise.resolve()),
   cancelActiveCodexRun: vi.fn(),
   checkCodexCli: vi.fn(),
   chooseExportDirectory: vi.fn(),

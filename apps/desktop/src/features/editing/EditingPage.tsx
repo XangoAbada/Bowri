@@ -1,5 +1,6 @@
 import { BarChart3, BookOpenCheck, FileText, PenLine, RefreshCw, Save, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -40,14 +41,14 @@ type EditingPageProps = {
 
 type EditingTab = "reports" | "stats" | "summaries";
 
-const tabItems: ReadonlyArray<{ id: EditingTab; label: string }> = [
-  { id: "reports", label: "Raporty redaktora" },
-  { id: "stats", label: "Statystyki" },
-  { id: "summaries", label: "Streszczenia" }
-];
-
 export function EditingPage({ projectId }: EditingPageProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<EditingTab>("reports");
+  const tabItems: ReadonlyArray<{ id: EditingTab; label: string }> = [
+    { id: "reports", label: t("editing.tabReports") },
+    { id: "stats", label: t("editing.tabStats") },
+    { id: "summaries", label: t("editing.tabSummaries") }
+  ];
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProject(projectId),
@@ -68,8 +69,8 @@ export function EditingPage({ projectId }: EditingPageProps) {
     return (
       <section className="editing-page">
         <EmptyState
-          title="Wczytywanie danych redakcji"
-          description="Za chwilę pojawią się raporty, statystyki i streszczenia."
+          title={t("editing.loadingTitle")}
+          description={t("editing.loadingDescription")}
         />
       </section>
     );
@@ -77,7 +78,7 @@ export function EditingPage({ projectId }: EditingPageProps) {
 
   return (
     <section className="editing-page">
-      <Segmented ariaLabel="Sekcje redakcji" items={tabItems} value={tab} onChange={setTab} />
+      <Segmented ariaLabel={t("editing.sectionsAria")} items={tabItems} value={tab} onChange={setTab} />
       {tab === "reports" ? (
         <CritiqueReportsSection projectId={projectId} bookId={book.id} plan={plan} />
       ) : null}
@@ -106,6 +107,7 @@ function CritiqueReportsSection({
   bookId: string;
   plan: BookPlan;
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const proposals = useProposalStore((state) => state.proposals);
@@ -186,26 +188,23 @@ function CritiqueReportsSection({
   if (scenes.length === 0) {
     return (
       <EmptyState
-        title="Brak scen w manuskrypcie"
-        description="Raporty redaktora pojawią się, gdy książka będzie miała sceny."
+        title={t("editing.noScenesTitle")}
+        description={t("editing.noScenesDescription")}
       />
     );
   }
 
   return (
     <div className="editing-section">
-      <p className="muted-text">
-        Krytyka redaktorska sceny: tempo, dialogi, POV, telling, powtórzenia, ciągłość.
-        Uwagi z przyciskiem „Zastosuj” pojawiają się w prawym panelu AI.
-      </p>
+      <p className="muted-text">{t("editing.critiqueIntro")}</p>
       <table className="editing-table">
         <thead>
           <tr>
-            <th>Scena</th>
-            <th>Rozdział</th>
-            <th>Raport</th>
-            <th>Uwagi</th>
-            <th>Akcje</th>
+            <th>{t("editing.colScene")}</th>
+            <th>{t("editing.colChapter")}</th>
+            <th>{t("editing.colReport")}</th>
+            <th>{t("editing.colNotes")}</th>
+            <th>{t("editing.colActions")}</th>
           </tr>
         </thead>
         <tbody>
@@ -226,28 +225,28 @@ function CritiqueReportsSection({
             const hasText = Boolean((scene.manuscriptContent ?? "").trim());
             return (
               <tr key={scene.id}>
-                <td>{scene.title || "Bez tytułu"}</td>
-                <td>{chapter ? `${chapter.number}. ${chapter.workingTitle || ""}`.trim() : "—"}</td>
+                <td>{scene.title || t("editing.untitled")}</td>
+                <td>{chapter ? `${chapter.number}. ${chapter.workingTitle || ""}`.trim() : t("editing.dash")}</td>
                 <td>
                   {critique ? (
                     <span className="editing-report-meta">
                       {new Date(critique.updatedAt).toLocaleDateString("pl-PL")}
-                      {stale ? <StatusPill tone="warn">nieaktualny</StatusPill> : null}
+                      {stale ? <StatusPill tone="warn">{t("editing.stale")}</StatusPill> : null}
                     </span>
                   ) : (
-                    <span className="muted-text">brak</span>
+                    <span className="muted-text">{t("editing.none")}</span>
                   )}
                 </td>
                 <td>
                   {findings ? (
                     <span className="editing-report-meta">
-                      {findings.open > 0 ? `${findings.open} otwarte` : null}
-                      {findings.applied > 0 ? ` · ${findings.applied} zast.` : null}
-                      {findings.dismissed > 0 ? ` · ${findings.dismissed} odrz.` : null}
-                      {findings.total === 0 ? "bez uwag" : null}
+                      {findings.open > 0 ? t("editing.findingsOpen", { count: findings.open }) : null}
+                      {findings.applied > 0 ? t("editing.findingsApplied", { count: findings.applied }) : null}
+                      {findings.dismissed > 0 ? t("editing.findingsDismissed", { count: findings.dismissed }) : null}
+                      {findings.total === 0 ? t("editing.findingsNone") : null}
                     </span>
                   ) : (
-                    <span className="muted-text">—</span>
+                    <span className="muted-text">{t("editing.dash")}</span>
                   )}
                 </td>
                 <td>
@@ -257,15 +256,15 @@ function CritiqueReportsSection({
                       size="sm"
                       busy={Boolean(pending)}
                       disabled={!hasText}
-                      title={hasText ? "Uruchom krytykę redaktorską tej sceny" : "Scena nie ma tekstu"}
+                      title={hasText ? t("editing.critiqueRunTitle") : t("editing.critiqueNoText")}
                       onClick={() => queueCritique(scene)}
                     >
                       <PenLine size={14} />
-                      {pending ? "Czyta…" : critique ? "Ponów" : "Krytyka"}
+                      {pending ? t("editing.reading") : critique ? t("editing.rerun") : t("editing.critique")}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => openInEditor(scene.id)}>
                       <FileText size={14} />
-                      Otwórz
+                      {t("editing.open")}
                     </Button>
                   </div>
                 </td>
@@ -307,6 +306,7 @@ function parseFindingCounts(findingsJson: string): {
 // ---------------------------------------------------------------------------
 
 function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
+  const { t } = useTranslation();
   const stats = useMemo(() => {
     const scenes = orderedScenesWithChapters(plan);
     const sceneStats = new Map<string, SceneStats>();
@@ -333,8 +333,8 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
   if (bookStats.wordCount === 0) {
     return (
       <EmptyState
-        title="Brak tekstu do analizy"
-        description="Statystyki pojawią się, gdy sceny będą miały treść."
+        title={t("editing.noTextTitle")}
+        description={t("editing.noTextDescription")}
       />
     );
   }
@@ -342,24 +342,24 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
   return (
     <div className="editing-section">
       <div className="editing-stats-grid">
-        <StatCard icon={<BookOpenCheck size={16} />} label="Słowa w książce" value={bookStats.wordCount.toLocaleString("pl-PL")} />
-        <StatCard icon={<FileText size={16} />} label="Sceny / rozdziały" value={`${bookStats.sceneCount} / ${bookStats.chapterCount}`} />
-        <StatCard icon={<BarChart3 size={16} />} label="Śr. długość sceny" value={`${bookStats.avgSceneLength.toLocaleString("pl-PL")} słów`} />
-        <StatCard icon={<BarChart3 size={16} />} label="Śr. długość zdania" value={`${bookStats.avgSentenceLength} słów`} />
-        <StatCard icon={<BarChart3 size={16} />} label="Udział dialogów" value={`${Math.round(bookStats.dialogueRatio * 100)}%`} />
-        <StatCard icon={<BarChart3 size={16} />} label="Przysłówki (heurystyka)" value={`${bookStats.adverbRate} / 1000 słów`} />
+        <StatCard icon={<BookOpenCheck size={16} />} label={t("editing.statWords")} value={bookStats.wordCount.toLocaleString("pl-PL")} />
+        <StatCard icon={<FileText size={16} />} label={t("editing.statScenesChapters")} value={`${bookStats.sceneCount} / ${bookStats.chapterCount}`} />
+        <StatCard icon={<BarChart3 size={16} />} label={t("editing.statAvgSceneLength")} value={t("editing.statAvgSceneLengthValue", { count: bookStats.avgSceneLength })} />
+        <StatCard icon={<BarChart3 size={16} />} label={t("editing.statAvgSentenceLength")} value={t("editing.statAvgSentenceLengthValue", { count: bookStats.avgSentenceLength })} />
+        <StatCard icon={<BarChart3 size={16} />} label={t("editing.statDialogueRatio")} value={`${Math.round(bookStats.dialogueRatio * 100)}%`} />
+        <StatCard icon={<BarChart3 size={16} />} label={t("editing.statAdverbs")} value={t("editing.statAdverbsValue", { rate: bookStats.adverbRate })} />
       </div>
 
-      <h3>Rozdziały</h3>
+      <h3>{t("editing.chapters")}</h3>
       <table className="editing-table">
         <thead>
           <tr>
-            <th>Rozdział</th>
-            <th>Sceny</th>
-            <th>Słowa</th>
-            <th>Śr. zdanie</th>
-            <th>Dialogi</th>
-            <th>Przysłówki*</th>
+            <th>{t("editing.colChapter")}</th>
+            <th>{t("editing.colScenes")}</th>
+            <th>{t("editing.colWords")}</th>
+            <th>{t("editing.colAvgSentence")}</th>
+            <th>{t("editing.colDialogues")}</th>
+            <th>{t("editing.colAdverbs")}</th>
           </tr>
         </thead>
         <tbody>
@@ -370,7 +370,7 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
             }
             return (
               <tr key={chapter.id}>
-                <td>{chapter.number}. {chapter.workingTitle || "Bez tytułu"}</td>
+                <td>{chapter.number}. {chapter.workingTitle || t("editing.untitled")}</td>
                 <td>{row.sceneCount}</td>
                 <td>{row.wordCount.toLocaleString("pl-PL")}</td>
                 <td>{row.avgSentenceLength}</td>
@@ -382,16 +382,16 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
         </tbody>
       </table>
 
-      <h3>Sceny</h3>
+      <h3>{t("editing.scenes")}</h3>
       <table className="editing-table">
         <thead>
           <tr>
-            <th>Scena</th>
-            <th>Słowa</th>
-            <th>Cel</th>
-            <th>Śr. zdanie</th>
-            <th>Dialogi</th>
-            <th>Przysłówki*</th>
+            <th>{t("editing.colScene")}</th>
+            <th>{t("editing.colWords")}</th>
+            <th>{t("editing.colTarget")}</th>
+            <th>{t("editing.colAvgSentence")}</th>
+            <th>{t("editing.colDialogues")}</th>
+            <th>{t("editing.colAdverbs")}</th>
           </tr>
         </thead>
         <tbody>
@@ -400,9 +400,9 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
             const target = scene.targetWordCount ?? chapter?.targetWordCount ?? null;
             return (
               <tr key={scene.id}>
-                <td>{scene.title || "Bez tytułu"}</td>
+                <td>{scene.title || t("editing.untitled")}</td>
                 <td>{row.wordCount.toLocaleString("pl-PL")}</td>
-                <td>{target ? `${Math.round((row.wordCount / target) * 100)}% z ${target.toLocaleString("pl-PL")}` : "—"}</td>
+                <td>{target ? t("editing.targetValue", { percent: Math.round((row.wordCount / target) * 100), target: target.toLocaleString("pl-PL") }) : t("editing.dash")}</td>
                 <td>{row.avgSentenceLength}</td>
                 <td>{Math.round(row.dialogueRatio * 100)}%</td>
                 <td>{row.adverbRate}</td>
@@ -411,11 +411,11 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
           })}
         </tbody>
       </table>
-      <p className="muted-text">* przybliżona heurystyka językowa, nie pełna analiza gramatyczna.</p>
+      <p className="muted-text">{t("editing.adverbNote")}</p>
 
       {bookStats.repeatedPhrases.length > 0 ? (
         <>
-          <h3>Powtarzające się frazy</h3>
+          <h3>{t("editing.repeatedPhrases")}</h3>
           <ul className="editing-phrase-list">
             {bookStats.repeatedPhrases.map((item) => (
               <li key={item.phrase}>
@@ -428,7 +428,7 @@ function ManuscriptStatsSection({ plan }: { plan: BookPlan }) {
 
       {bookStats.topWords.length > 0 ? (
         <>
-          <h3>Najczęstsze słowa</h3>
+          <h3>{t("editing.topWords")}</h3>
           <ul className="editing-phrase-list">
             {bookStats.topWords.map((item) => (
               <li key={item.phrase}>
@@ -467,6 +467,7 @@ function SummaryReviewSection({
   book: { id: string; storySoFar: string; storySoFarStale: number };
   plan: BookPlan;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [statusText, setStatusText] = useState("");
 
@@ -483,14 +484,14 @@ function SummaryReviewSection({
 
       <div className="editing-summary-block">
         <div className="editing-summary-heading">
-          <h3>Story so far</h3>
-          {book.storySoFarStale === 1 ? <StatusPill tone="warn">nieaktualne</StatusPill> : null}
+          <h3>{t("editing.storySoFar")}</h3>
+          {book.storySoFarStale === 1 ? <StatusPill tone="warn">{t("editing.outdated")}</StatusPill> : null}
           <Button
             variant="ghost"
             size="sm"
-            title="Odśwież nieaktualne streszczenia rozdziałów i story so far przez AI"
+            title={t("editing.refreshStaleTitle")}
             onClick={() => {
-              setStatusText("Odświeżam nieaktualne streszczenia…");
+              setStatusText(t("editing.refreshingStale"));
               void refreshStaleContinuity(projectId, book.id, {
                 onSaved: invalidate,
                 onStatus: setStatusText
@@ -498,44 +499,44 @@ function SummaryReviewSection({
             }}
           >
             <Sparkles size={14} />
-            Odśwież (AI)
+            {t("editing.refreshAi")}
           </Button>
         </div>
         <SummaryEditor
           initialValue={book.storySoFar}
-          placeholder="Skrót całej historii budowany przez pipeline ciągłości…"
+          placeholder={t("editing.storySoFarPlaceholder")}
           onSave={async (value) => {
             await saveStorySoFar({ bookId: book.id, storySoFar: value });
             await invalidate();
-            setStatusText("Zapisano story so far");
+            setStatusText(t("editing.storySoFarSaved"));
           }}
         />
       </div>
 
-      <h3>Rozdziały</h3>
+      <h3>{t("editing.chapters")}</h3>
       {plan.chapters.map((chapter) => (
         <div className="editing-summary-block" key={chapter.id}>
           <div className="editing-summary-heading">
             <h4>
-              {chapter.number}. {chapter.workingTitle || "Bez tytułu"}
+              {chapter.number}. {chapter.workingTitle || t("editing.untitled")}
             </h4>
             {chapter.autoSummaryStale === 1 ? (
-              <StatusPill tone="warn">nieaktualne</StatusPill>
+              <StatusPill tone="warn">{t("editing.outdated")}</StatusPill>
             ) : null}
           </div>
           <SummaryEditor
             initialValue={chapter.autoSummary}
-            placeholder="Brak auto-streszczenia rozdziału."
+            placeholder={t("editing.chapterSummaryPlaceholder")}
             onSave={async (value) => {
               await saveChapterAutoSummary({ chapterId: chapter.id, autoSummary: value });
               await invalidate();
-              setStatusText(`Zapisano streszczenie rozdziału ${chapter.number}`);
+              setStatusText(t("editing.chapterSummarySaved", { number: chapter.number }));
             }}
           />
         </div>
       ))}
 
-      <h3>Sceny</h3>
+      <h3>{t("editing.scenes")}</h3>
       {scenes.map(({ scene, chapter }) => {
         const stale =
           fnv1aHash(htmlToPlainText(scene.manuscriptContent ?? "")) !==
@@ -544,18 +545,18 @@ function SummaryReviewSection({
           <div className="editing-summary-block" key={scene.id}>
             <div className="editing-summary-heading">
               <h4>
-                {scene.title || "Bez tytułu"}
+                {scene.title || t("editing.untitled")}
                 {chapter ? (
-                  <span className="muted-text"> — rozdz. {chapter.number}</span>
+                  <span className="muted-text">{t("editing.sceneOfChapter", { number: chapter.number })}</span>
                 ) : null}
               </h4>
-              {stale ? <StatusPill tone="warn">nieaktualne</StatusPill> : null}
+              {stale ? <StatusPill tone="warn">{t("editing.outdated")}</StatusPill> : null}
               <Button
                 variant="ghost"
                 size="sm"
-                title="Wygeneruj streszczenie tej sceny od nowa przez AI"
+                title={t("editing.refreshSceneSummaryTitle")}
                 onClick={() => {
-                  setStatusText("Odświeżam streszczenie sceny…");
+                  setStatusText(t("editing.refreshingSceneSummary"));
                   void refreshSceneAutoSummary(
                     projectId,
                     book.id,
@@ -566,12 +567,12 @@ function SummaryReviewSection({
                 }}
               >
                 <RefreshCw size={14} />
-                Odśwież (AI)
+                {t("editing.refreshAi")}
               </Button>
             </div>
             <SummaryEditor
               initialValue={scene.autoSummary}
-              placeholder="Brak auto-streszczenia sceny."
+              placeholder={t("editing.sceneSummaryPlaceholder")}
               onSave={async (value) => {
                 // Zachowujemy dotychczasowy hash: ręczna edycja nie udaje świeżości.
                 await saveSceneAutoSummary({
@@ -580,7 +581,7 @@ function SummaryReviewSection({
                   sourceHash: scene.autoSummarySourceHash
                 });
                 await invalidate();
-                setStatusText("Zapisano streszczenie sceny");
+                setStatusText(t("editing.sceneSummarySaved"));
               }}
             />
           </div>
@@ -599,6 +600,7 @@ function SummaryEditor({
   placeholder: string;
   onSave: (value: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initialValue);
   const saveMutation = useMutation({ mutationFn: onSave });
   const dirty = value !== initialValue;
@@ -620,10 +622,10 @@ function SummaryEditor({
           onClick={() => saveMutation.mutate(value)}
         >
           <Save size={14} />
-          Zapisz
+          {t("editing.save")}
         </Button>
         {saveMutation.isError ? (
-          <span className="warning-text">Nie udało się zapisać.</span>
+          <span className="warning-text">{t("editing.saveError")}</span>
         ) : null}
       </div>
     </div>

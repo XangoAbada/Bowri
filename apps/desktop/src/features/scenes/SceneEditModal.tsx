@@ -16,6 +16,7 @@ import {
   X
 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Button, Field, Modal, StatusPill } from "../../shared/ui";
 import type {
@@ -79,15 +80,15 @@ type SceneEditModalProps = {
 
 const sceneTextFields: Array<{
   field: PlanFieldKey;
-  label: string;
+  labelKey: string;
   key: "title" | "summary" | "goal" | "conflict" | "outcome";
   rows: number;
 }> = [
-  { field: "sceneTitle", label: "Tytuł", key: "title", rows: 1 },
-  { field: "sceneSummary", label: "Streszczenie", key: "summary", rows: 4 },
-  { field: "sceneGoal", label: "Cel sceny", key: "goal", rows: 2 },
-  { field: "sceneConflict", label: "Konflikt / napięcie", key: "conflict", rows: 2 },
-  { field: "sceneOutcome", label: "Wynik sceny", key: "outcome", rows: 2 }
+  { field: "sceneTitle", labelKey: "scenes.fieldTitle", key: "title", rows: 1 },
+  { field: "sceneSummary", labelKey: "scenes.fieldSummary", key: "summary", rows: 4 },
+  { field: "sceneGoal", labelKey: "scenes.fieldGoal", key: "goal", rows: 2 },
+  { field: "sceneConflict", labelKey: "scenes.fieldConflict", key: "conflict", rows: 2 },
+  { field: "sceneOutcome", labelKey: "scenes.fieldOutcome", key: "outcome", rows: 2 }
 ];
 
 const relationKinds: SceneRelationKind[] = ["characters", "threads", "elements", "rules"];
@@ -108,6 +109,7 @@ export function SceneEditModal({
   onLinkThreadToChapter,
   onEnsureSaved
 }: SceneEditModalProps) {
+  const { t } = useTranslation();
   const scene =
     state?.mode === "edit"
       ? plan.scenes.find((item) => item.id === state.sceneId) ?? selectedScene ?? null
@@ -192,26 +194,26 @@ export function SceneEditModal({
   const scenePromptEntity = draftTargetId ? sceneDraftPromptEntity(draft, draftTargetId) : undefined;
   const canSuggestRelations = Boolean(scene?.id && scenePromptEntity);
   const completedItems = [
-    { label: "Tytuł", complete: Boolean(draft.title.trim()) },
-    { label: "Streszczenie", complete: Boolean(draft.summary.trim()) },
-    { label: "Cel", complete: Boolean(draft.goal.trim()) },
-    { label: "Konflikt", complete: Boolean(draft.conflict.trim()) },
-    { label: "Wynik", complete: Boolean(draft.outcome.trim()) },
-    { label: "POV", complete: Boolean(draft.povCharacterId) },
-    { label: "Lokacja", complete: Boolean(draft.locationId) },
-    { label: "Postacie", complete: characterIds.length > 0 },
-    { label: "Wątki", complete: threadIds.length > 0 }
+    { label: t("scenes.completeTitle"), complete: Boolean(draft.title.trim()) },
+    { label: t("scenes.completeSummary"), complete: Boolean(draft.summary.trim()) },
+    { label: t("scenes.completeGoal"), complete: Boolean(draft.goal.trim()) },
+    { label: t("scenes.completeConflict"), complete: Boolean(draft.conflict.trim()) },
+    { label: t("scenes.completeOutcome"), complete: Boolean(draft.outcome.trim()) },
+    { label: t("scenes.completePov"), complete: Boolean(draft.povCharacterId) },
+    { label: t("scenes.completeLocation"), complete: Boolean(draft.locationId) },
+    { label: t("scenes.completeCharacters"), complete: characterIds.length > 0 },
+    { label: t("scenes.completeThreads"), complete: threadIds.length > 0 }
   ];
   const completedCount = completedItems.filter((item) => item.complete).length;
   const completionPercent = Math.round((completedCount / completedItems.length) * 100);
   const visualStatus =
     completionPercent >= 85
-      ? "Gotowa do pisania"
+      ? t("scenes.visualStatusReady")
       : completionPercent >= 45
-        ? "W trakcie"
-        : "Szkic";
+        ? t("scenes.visualStatusInProgress")
+        : t("scenes.visualStatusDraft");
   const isSaving = saving || submitting;
-  const modalTitle = scene ? draft.title || "Edytuj scenę" : "Nowa scena";
+  const modalTitle = scene ? draft.title || t("scenes.modalTitleEdit") : t("scenes.modalTitleNew");
 
   function currentRelationIds(kind: SceneRelationKind): string[] {
     if (kind === "characters") return characterIds;
@@ -285,11 +287,11 @@ export function SceneEditModal({
               disabled={isSaving}
             >
               <Trash2 size={15} aria-hidden />
-              Usuń
+              {t("scenes.deleteButton")}
             </Button>
           ) : null}
           <Button variant="ghost" onClick={onClose}>
-            Anuluj
+            {t("scenes.cancel")}
           </Button>
           <Button
             variant="primary"
@@ -298,35 +300,35 @@ export function SceneEditModal({
             busy={isSaving}
             disabled={!bookId}
           >
-            {isSaving ? "Zapisuję" : "Zapisz scenę"}
+            {isSaving ? t("scenes.saving") : t("scenes.saveScene")}
           </Button>
         </>
       }
     >
       <form id="scene-edit-form" className="chapter-edit-form scene-edit-form" onSubmit={submit}>
-        <div className="chapter-edit-metrics" aria-label="Najważniejsze informacje o scenie">
+        <div className="chapter-edit-metrics" aria-label={t("scenes.modalMetricsAria")}>
               <span className="chapter-edit-metric">
                 <BookOpen size={16} />
-                <span>Rozdział:</span>
+                <span>{t("scenes.metricChapter")}</span>
                 <strong>
                   {selectedChapter
-                    ? `${dynamicChapterNumber(plan, selectedChapter.id)}. ${selectedChapter.workingTitle || "Bez tytułu"}`
-                    : "Bez rozdziału"}
+                    ? `${dynamicChapterNumber(plan, selectedChapter.id)}. ${selectedChapter.workingTitle || t("scenes.untitled")}`
+                    : t("scenes.noChapter")}
                 </strong>
               </span>
               <span className="chapter-edit-metric">
                 <Eye size={16} />
-                <span>POV:</span>
-                <strong>{selectedPov?.name ?? "Brak"}</strong>
+                <span>{t("scenes.metricPov")}</span>
+                <strong>{selectedPov?.name ?? t("scenes.none")}</strong>
               </span>
               <span className="chapter-edit-metric">
                 <Map size={16} />
-                <span>Lokacja:</span>
-                <strong>{selectedLocation?.name ?? "Brak"}</strong>
+                <span>{t("scenes.metricLocation")}</span>
+                <strong>{selectedLocation?.name ?? t("scenes.none")}</strong>
               </span>
               <span className="chapter-edit-metric">
                 <CheckCircle2 size={16} />
-                <span>Uzupełnione:</span>
+                <span>{t("scenes.metricCompleted")}</span>
                 <strong>
                   {completedCount} / {completedItems.length}
                 </strong>
@@ -343,14 +345,14 @@ export function SceneEditModal({
                 <section className="chapter-edit-section">
                   <div className="chapter-section-heading">
                     <ClipboardList size={17} />
-                    <h4>Treść sceny</h4>
+                    <h4>{t("scenes.sceneContentHeading")}</h4>
                   </div>
                   <div className="chapter-field-stack">
                     {sceneTextFields.map((item) => (
                       <SceneTextField
                         key={item.field}
                         field={item.field}
-                        label={item.label}
+                        label={t(item.labelKey)}
                         value={String(draft[item.key] ?? "")}
                         targetEntity={scenePromptEntity}
                         rows={item.rows}
@@ -365,10 +367,10 @@ export function SceneEditModal({
                 <section className="chapter-edit-section scene-settings-section">
                   <div className="chapter-section-heading">
                     <Target size={17} />
-                    <h4>Ustawienia sceny</h4>
+                    <h4>{t("scenes.sceneSettingsHeading")}</h4>
                   </div>
                   <div className="scene-settings-grid">
-                    <Field label="Rozdział">
+                    <Field label={t("scenes.fieldChapter")}>
                       <select
                         value={draft.chapterId ?? ""}
                         onChange={(event) => {
@@ -376,23 +378,25 @@ export function SceneEditModal({
                           setLinkThreadsToChapter(false);
                         }}
                       >
-                        <option value="">Bez rozdziału</option>
+                        <option value="">{t("scenes.noChapter")}</option>
                         {orderedChaptersForPlan(plan).map((chapter) => (
                           <option key={chapter.id} value={chapter.id}>
-                            Rozdział {dynamicChapterNumber(plan, chapter.id)}:{" "}
-                            {chapter.workingTitle || "Bez tytułu"}
+                            {t("scenes.chapterOption", {
+                              number: dynamicChapterNumber(plan, chapter.id),
+                              title: chapter.workingTitle || t("scenes.untitled")
+                            })}
                           </option>
                         ))}
                       </select>
                     </Field>
-                    <Field label="POV">
+                    <Field label={t("scenes.fieldPov")}>
                       <select
                         value={draft.povCharacterId ?? ""}
                         onChange={(event) =>
                           setDraft({ ...draft, povCharacterId: event.target.value || null })
                         }
                       >
-                        <option value="">Brak</option>
+                        <option value="">{t("scenes.none")}</option>
                         {characters.characters.map((character) => (
                           <option key={character.id} value={character.id}>
                             {character.name}
@@ -400,14 +404,14 @@ export function SceneEditModal({
                         ))}
                       </select>
                     </Field>
-                    <Field label="Lokacja">
+                    <Field label={t("scenes.fieldLocation")}>
                       <select
                         value={draft.locationId ?? ""}
                         onChange={(event) =>
                           setDraft({ ...draft, locationId: event.target.value || null })
                         }
                       >
-                        <option value="">Brak</option>
+                        <option value="">{t("scenes.none")}</option>
                         {world.elements.map((element) => (
                           <option key={element.id} value={element.id}>
                             {element.name}
@@ -415,17 +419,17 @@ export function SceneEditModal({
                         ))}
                       </select>
                     </Field>
-                    <Field label="Kiedy (znacznik czasu)">
+                    <Field label={t("scenes.fieldTimeMarker")}>
                       <input
                         type="text"
-                        placeholder="np. następnego ranka, 3 dni później"
+                        placeholder={t("scenes.timeMarkerPlaceholder")}
                         value={draft.timeMarker ?? ""}
                         onChange={(event) =>
                           setDraft({ ...draft, timeMarker: event.target.value })
                         }
                       />
                     </Field>
-                    <Field label="Cel słów">
+                    <Field label={t("scenes.fieldWordTarget")}>
                       <input
                         type="number"
                         min={0}
@@ -438,24 +442,24 @@ export function SceneEditModal({
                         }
                       />
                     </Field>
-                    <Field label="Status">
+                    <Field label={t("scenes.fieldStatus")}>
                       <select
                         value={draft.status}
                         onChange={(event) =>
                           setDraft({ ...draft, status: event.target.value as Scene["status"] })
                         }
                       >
-                        <option value="planned">Planowana</option>
-                        <option value="draft">Szkic</option>
-                        <option value="written">Napisana</option>
-                        <option value="revision">Do redakcji</option>
+                        <option value="planned">{t("scenes.statusPlanned")}</option>
+                        <option value="draft">{t("scenes.statusDraft")}</option>
+                        <option value="written">{t("scenes.statusWritten")}</option>
+                        <option value="revision">{t("scenes.statusRevision")}</option>
                       </select>
                     </Field>
                   </div>
                 </section>
               </main>
 
-              <aside className="chapter-edit-sidebar" aria-label="Powiązania sceny">
+              <aside className="chapter-edit-sidebar" aria-label={t("scenes.sceneRelationsAria")}>
                 {selectedChapter ? (
                   <ChapterContextInheritance
                     plan={plan}
@@ -481,15 +485,17 @@ export function SceneEditModal({
                   />
                 ) : null}
 
-                {relationKinds.map((kind) => (
+                {relationKinds.map((kind) => {
+                  const relationTitle = t(sceneRelationTitleKey(kind));
+                  return (
                   <SceneRelationSection
                     key={kind}
-                    title={sceneRelationTitle(kind)}
+                    title={relationTitle}
                     kind={kind}
-                    items={sceneRelationOptions(kind, plan, characters, world).filter((item) =>
+                    items={sceneRelationOptions(kind, plan, characters, world, t).filter((item) =>
                       currentRelationIds(kind).includes(item.id)
                     )}
-                    emptyText={`Brak: ${sceneRelationTitle(kind).toLowerCase()}`}
+                    emptyText={t("scenes.emptyRelation", { title: relationTitle.toLowerCase() })}
                     onOpenPicker={setRelationPicker}
                     onRemove={(id) =>
                       setCurrentRelationIds(
@@ -498,7 +504,8 @@ export function SceneEditModal({
                       )
                     }
                   />
-                ))}
+                  );
+                })}
 
                 {selectedChapter && externalSceneThreadIds.length > 0 ? (
                   <label className="scene-thread-chapter-sync-option">
@@ -507,7 +514,7 @@ export function SceneEditModal({
                       checked={linkThreadsToChapter}
                       onChange={(event) => setLinkThreadsToChapter(event.target.checked)}
                     />
-                    <span>Dopiąć wątki sceny także do rozdziału?</span>
+                    <span>{t("scenes.linkThreadsToChapter")}</span>
                   </label>
                 ) : null}
               </aside>
@@ -566,6 +573,7 @@ function ChapterContextInheritance({
   onGenerateRelations: () => void;
   onActivateRelations: () => void;
 }) {
+  const { t } = useTranslation();
   const chapterThreads = inheritedThreadSuggestions
     .map((id) => plan.threads.find((thread) => thread.id === id))
     .filter((thread): thread is PlotThread => Boolean(thread));
@@ -574,10 +582,10 @@ function ChapterContextInheritance({
     <section className="chapter-side-section scene-side-section chapter-inheritance-section">
       <div className="chapter-side-heading">
         <BookOpen size={16} />
-        <h4>Kontekst rozdziału</h4>
+        <h4>{t("scenes.chapterContext")}</h4>
       </div>
       <div className="scene-inheritance-block">
-        <span className="scene-inheritance-label">Wątki do użycia w scenie</span>
+        <span className="scene-inheritance-label">{t("scenes.threadsToUse")}</span>
         <div className="chapter-side-chip-list">
           {chapterThreads.length > 0 ? (
             chapterThreads.map((thread) => (
@@ -586,19 +594,19 @@ function ChapterContextInheritance({
                 className="chapter-side-chip scene-inherited-chip thread"
                 key={thread.id}
                 onClick={() => onUseThread(thread.id)}
-                title={`Użyj wątku w scenie: ${thread.name}`}
+                title={t("scenes.useThreadInScene", { name: thread.name })}
               >
                 <Plus size={12} />
                 {thread.name}
               </button>
             ))
           ) : (
-            <span className="chapter-side-empty">Scena używa już wątków rozdziału.</span>
+            <span className="chapter-side-empty">{t("scenes.sceneUsesChapterThreads")}</span>
           )}
         </div>
       </div>
       <div className="scene-inheritance-block">
-        <span className="scene-inheritance-label">Beaty rozdziału</span>
+        <span className="scene-inheritance-label">{t("scenes.chapterBeats")}</span>
         <div className="chapter-side-chip-list">
           {chapterBeats.length > 0 ? (
             chapterBeats.map((beat) => (
@@ -607,7 +615,7 @@ function ChapterContextInheritance({
               </span>
             ))
           ) : (
-            <span className="chapter-side-empty">Brak beatów w kontrakcie rozdziału.</span>
+            <span className="chapter-side-empty">{t("scenes.noBeatsInContract")}</span>
           )}
         </div>
       </div>
@@ -620,11 +628,14 @@ function ChapterContextInheritance({
         />
       ) : (
         <span className="chapter-side-empty">
-          Zapisz scenę, żeby AI mogło zasugerować powiązania z istniejącą Story Bible.
+          {t("scenes.saveSceneForRelations")}
         </span>
       )}
       <span className="scene-inheritance-footnote">
-        Rozdział: {dynamicChapterNumber(plan, chapter.id)}. {chapter.workingTitle || "Bez tytułu"}
+        {t("scenes.inheritanceFootnote", {
+          number: dynamicChapterNumber(plan, chapter.id),
+          title: chapter.workingTitle || t("scenes.untitled")
+        })}
       </span>
     </section>
   );
@@ -692,6 +703,7 @@ function SceneFieldAiActions({
   onGenerate: () => void;
   onActivatePrompt: () => void;
 }) {
+  const { t } = useTranslation();
   const activeTargetId = useAiPromptContextStore((state) => state.activeTargetId);
   const activeTarget = useAiPromptContextStore((state) =>
     activeTargetId ? state.targets[activeTargetId] : null
@@ -722,8 +734,8 @@ function SceneFieldAiActions({
         className="icon-button ai-field-button"
         onClick={onGenerate}
         disabled={queued || running || !targetEntity}
-        title={`Generuj ${planFieldConfigs[field].label} z AI`}
-        aria-label={`Generuj ${planFieldConfigs[field].label} z AI`}
+        title={t("scenes.generateFieldAiTitle", { field: planFieldConfigs[field].label })}
+        aria-label={t("scenes.generateFieldAiTitle", { field: planFieldConfigs[field].label })}
       >
         {running ? (
           <Loader2 size={15} className="spin-icon" />
@@ -732,7 +744,7 @@ function SceneFieldAiActions({
         ) : (
           <Sparkles size={15} />
         )}
-        <span>{running ? "Generuje" : queued ? "W kolejce" : "AI"}</span>
+        <span>{running ? t("scenes.generating") : queued ? t("scenes.queued") : t("scenes.aiButton")}</span>
       </button>
       <button
         type="button"
@@ -743,8 +755,8 @@ function SceneFieldAiActions({
           addContextSourceToActiveTarget(promptContextSource);
         }}
         disabled={!activeTarget || fieldAlreadyInContext}
-        title="Dodaj pole do aktywnego kontekstu promptu."
-        aria-label={`Dodaj ${planFieldConfigs[field].label} do kontekstu promptu`}
+        title={t("scenes.addFieldToContext")}
+        aria-label={t("scenes.addFieldToContextAria", { field: planFieldConfigs[field].label })}
       >
         <Plus size={14} />
       </button>
@@ -767,6 +779,7 @@ function SceneRelationSection({
   onOpenPicker: (kind: SceneRelationKind) => void;
   onRemove: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="chapter-side-section scene-side-section">
       <div className="chapter-side-heading">
@@ -786,8 +799,8 @@ function SceneRelationSection({
                 type="button"
                 className="chapter-side-chip-remove"
                 onClick={() => onRemove(item.id)}
-                aria-label={`Odepnij relację: ${item.label}`}
-                title={`Odepnij relację: ${item.label}`}
+                aria-label={t("scenes.unlinkRelation", { label: item.label })}
+                title={t("scenes.unlinkRelation", { label: item.label })}
               >
                 -
               </button>
@@ -801,8 +814,8 @@ function SceneRelationSection({
         type="button"
         className="icon-button chapter-relation-add-button"
         onClick={() => onOpenPicker(kind)}
-        title={`Dodaj: ${title.toLowerCase()}`}
-        aria-label={`Dodaj relację sceny: ${title}`}
+        title={t("scenes.addRelation", { title: title.toLowerCase() })}
+        aria-label={t("scenes.addSceneRelationAria", { title })}
       >
         <Plus size={15} />
       </button>
@@ -827,15 +840,16 @@ function SceneRelationPickerModal({
   onClose: () => void;
   onAdd: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const options = useMemo(
     () =>
-      sceneRelationOptions(kind, plan, characters, world).filter(
+      sceneRelationOptions(kind, plan, characters, world, t).filter(
         (item) => !selectedIds.includes(item.id)
       ),
-    [characters, kind, plan, selectedIds, world]
+    [characters, kind, plan, selectedIds, world, t]
   );
-  const title = `Dodaj: ${sceneRelationTitle(kind).toLowerCase()}`;
+  const title = t("scenes.addRelation", { title: t(sceneRelationTitleKey(kind)).toLowerCase() });
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -859,15 +873,15 @@ function SceneRelationPickerModal({
         type="button"
         className="world-relation-backdrop"
         onClick={onClose}
-        aria-label="Zamknij wybór relacji"
+        aria-label={t("scenes.closeRelationPicker")}
       />
       <div className="world-relation-shell">
         <header className="world-relation-header">
           <div>
-            <p className="eyebrow">Powiązania sceny</p>
+            <p className="eyebrow">{t("scenes.sceneRelationsEyebrow")}</p>
             <h3 id="scene-relation-picker-title">{title}</h3>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} title="Zamknij" aria-label="Zamknij">
+          <button type="button" className="icon-button" onClick={onClose} title={t("common.close")} aria-label={t("common.close")}>
             <X size={17} />
           </button>
         </header>
@@ -887,12 +901,12 @@ function SceneRelationPickerModal({
             );
           })}
           {options.length === 0 ? (
-            <p className="muted-text">Wszystkie elementy z tej grupy są już przypisane do sceny.</p>
+            <p className="muted-text">{t("scenes.allAssignedToScene")}</p>
           ) : null}
         </div>
         <footer className="scene-relation-picker-footer">
           <button type="button" className="ghost-button" onClick={onClose}>
-            Anuluj
+            {t("scenes.cancel")}
           </button>
           <button
             type="button"
@@ -901,7 +915,7 @@ function SceneRelationPickerModal({
             disabled={checkedIds.length === 0}
           >
             <Plus size={16} />
-            Dodaj wybrane
+            {t("scenes.addSelected")}
           </button>
         </footer>
       </div>
@@ -1042,44 +1056,45 @@ function sceneRelationOptions(
   kind: SceneRelationKind,
   plan: BookPlan,
   characters: CharacterWorkspace,
-  world: WorldWorkspace
+  world: WorldWorkspace,
+  t: (key: string) => string
 ): Array<{ id: string; label: string; description: string }> {
   if (kind === "characters") {
     return characters.characters.map((character) => ({
       id: character.id,
-      label: character.name || "Postać bez imienia",
-      description: character.shortDescription || character.arcSummary || character.role || "Brak opisu postaci."
+      label: character.name || t("scenes.characterNoName"),
+      description: character.shortDescription || character.arcSummary || character.role || t("scenes.noCharacterDescription")
     }));
   }
 
   if (kind === "threads") {
     return plan.threads.map((thread) => ({
       id: thread.id,
-      label: thread.name || "Wątek bez nazwy",
-      description: thread.description || thread.status || "Brak opisu wątku."
+      label: thread.name || t("scenes.threadNoName"),
+      description: thread.description || thread.status || t("scenes.noThreadDescription")
     }));
   }
 
   if (kind === "elements") {
     return world.elements.map((element) => ({
       id: element.id,
-      label: element.name || "Element świata bez nazwy",
-      description: element.summary || element.details || element.elementType || "Brak opisu elementu świata."
+      label: element.name || t("scenes.elementNoName"),
+      description: element.summary || element.details || element.elementType || t("scenes.noElementDescription")
     }));
   }
 
   return world.rules.map((rule) => ({
     id: rule.id,
-    label: rule.name || "Reguła bez nazwy",
-    description: rule.description || "Brak opisu reguły świata."
+    label: rule.name || t("scenes.ruleNoName"),
+    description: rule.description || t("scenes.noRuleDescription")
   }));
 }
 
-function sceneRelationTitle(kind: SceneRelationKind): string {
-  if (kind === "characters") return "Postacie";
-  if (kind === "threads") return "Wątki";
-  if (kind === "elements") return "Elementy świata";
-  return "Reguły świata";
+function sceneRelationTitleKey(kind: SceneRelationKind): string {
+  if (kind === "characters") return "scenes.relationCharacters";
+  if (kind === "threads") return "scenes.relationThreads";
+  if (kind === "elements") return "scenes.relationElements";
+  return "scenes.relationRules";
 }
 
 function sceneRelationDotClass(kind: SceneRelationKind): string {

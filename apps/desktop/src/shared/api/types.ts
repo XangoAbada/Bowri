@@ -883,6 +883,7 @@ export type AiSettings = {
   comfyuiBaseUrl: string;
   comfyuiWorkflowJson: string;
   plnPerUsd: number;
+  aiResponseLanguage: string;
 };
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
@@ -898,7 +899,8 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   sdwebuiBaseUrl: "http://127.0.0.1:7860",
   comfyuiBaseUrl: "http://127.0.0.1:8188",
   comfyuiWorkflowJson: "",
-  plnPerUsd: 4.0
+  plnPerUsd: 4.0,
+  aiResponseLanguage: ""
 };
 
 export type CodexModelReasoningLevel = {

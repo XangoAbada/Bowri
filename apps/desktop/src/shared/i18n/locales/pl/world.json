@@ -1,0 +1,160 @@
+{
+  "world": {
+    "elementType": {
+      "location": "Lokacja",
+      "faction": "Frakcja",
+      "object": "Przedmiot",
+      "culture": "Kultura",
+      "technology": "Technologia",
+      "magic": "Magia",
+      "creature": "Istota",
+      "historical_event": "Wydarzenie historyczne",
+      "institution": "Instytucja",
+      "custom": "Zwyczaj",
+      "other": "Inne"
+    },
+    "tabs": {
+      "profile": "Profil",
+      "rules": "Reguły",
+      "links": "Połączenia",
+      "visuals": "Wizualia"
+    },
+    "messages": {
+      "elementSaved": "Zapisano element świata.",
+      "ruleSaved": "Zapisano regułę świata.",
+      "elementDeleted": "Usunięto element świata.",
+      "ruleDeleted": "Usunięto regułę świata.",
+      "chooseElementOrRule": "Wybierz element albo regułę, aby dodać połączenie.",
+      "noProjectData": "Brak danych projektu."
+    },
+    "loading": "Ładuję świat...",
+    "loadError": "Nie można wczytać kreatora świata.",
+    "header": {
+      "eyebrow": "Story Bible",
+      "title": "Świat",
+      "subtitle": "Elementy świata, reguły i ich powiązania z postaciami oraz planem.",
+      "aiElement": "AI element",
+      "aiRule": "AI reguła",
+      "aiLink": "AI połączenie"
+    },
+    "create": {
+      "newRule": "Nowa reguła",
+      "newLink": "Nowe połączenie",
+      "newElement": "Nowy element"
+    },
+    "editorHeader": {
+      "worldRule": "Reguła świata",
+      "ruleLinks": "Połączenia reguły",
+      "elementLinks": "Połączenia elementu",
+      "worldElement": "Element świata",
+      "newElement": "Nowy element",
+      "unnamed": "Bez nazwy",
+      "rulePlaceholder": "Określ zasadę, koszt i konsekwencje naruszenia.",
+      "ruleLinksPlaceholder": "Łącz regułę z elementami, wątkami oraz rozdziałami.",
+      "elementLinksPlaceholder": "Łącz element z regułami, postaciami, wątkami oraz rozdziałami.",
+      "elementPlaceholder": "Określ miejsce elementu w logice świata i fabule."
+    },
+    "list": {
+      "searchPlaceholder": "Szukaj świata",
+      "searchAriaLabel": "Szukaj świata",
+      "filterAriaLabel": "Filtruj listę świata",
+      "filterTitle": "Filtruj listę świata",
+      "segmentAll": "Wszystko",
+      "segmentElements": "Elementy",
+      "segmentRules": "Reguły",
+      "allTypes": "Wszystkie typy",
+      "unnamed": "Bez nazwy",
+      "ruleMeta": "Reguła",
+      "noDescription": "Brak opisu.",
+      "noRuleDescription": "Brak opisu reguły.",
+      "empty": "Brak pozycji pasujących do filtrów."
+    },
+    "editor": {
+      "delete": "Usuń",
+      "sectionsAriaLabel": "Sekcje świata"
+    },
+    "fieldLabel": {
+      "worldElement": "Pełny element świata",
+      "worldRule": "Pełna reguła świata",
+      "worldRuleAnalysis": "Analiza reguły",
+      "elementType": "Typ elementu",
+      "elementName": "Nazwa",
+      "elementSummary": "Krótki opis",
+      "elementDetails": "Szczegóły",
+      "elementStoryPurpose": "Znaczenie fabularne",
+      "elementConstraints": "Ograniczenia",
+      "elementVisualPrompt": "Prompt wizualny",
+      "ruleName": "Nazwa reguły",
+      "ruleDescription": "Opis reguły",
+      "ruleScope": "Zakres",
+      "ruleCost": "Koszt",
+      "ruleLimitation": "Ograniczenie",
+      "ruleExceptions": "Wyjątki",
+      "ruleViolationConsequences": "Konsekwencje naruszenia",
+      "ruleSceneExamples": "Przykłady scen"
+    },
+    "profile": {
+      "elementType": "Typ elementu",
+      "advancedTitle": "Zaawansowane",
+      "advancedDescription": "Szczegóły nie trafiają do promptów pisania scen.",
+      "saveElement": "Zapisz element"
+    },
+    "rules": {
+      "newRule": "Nowa reguła",
+      "analyze": "Analizuj",
+      "advancedTitle": "Zaawansowane",
+      "advancedDescription": "Przykłady ze scen nie trafiają do promptów pisania scen.",
+      "saveRule": "Zapisz regułę"
+    },
+    "visuals": {
+      "savePrompt": "Zapisz prompt"
+    },
+    "aiField": {
+      "generateTitle": "Wygeneruj to pole z AI",
+      "generateAriaLabel": "Wygeneruj pole {{label}}",
+      "addTitle": "Dodaj pole do kontekstu AI",
+      "addAriaLabel": "Dodaj pole {{label}} do kontekstu AI"
+    },
+    "promptContext": {
+      "submitLabel": "Wyślij do AI",
+      "queuedReason": "Pole \"{{label}}\" jest już w kolejce AI."
+    },
+    "links": {
+      "emptyTitle": "Brak wybranej pozycji",
+      "emptyDescription": "Wybierz element albo regułę, aby łączyć je z kanonem.",
+      "characters": "Postacie",
+      "threads": "Wątki",
+      "chapters": "Rozdziały",
+      "elementRules": "Reguły elementu",
+      "scenes": "Sceny",
+      "ruleElements": "Elementy reguły",
+      "ruleThreads": "Wątki reguły",
+      "ruleChapters": "Rozdziały reguły",
+      "ruleScenes": "Sceny reguły",
+      "detach": "Odłącz relację",
+      "characterFallback": "Postać",
+      "threadFallback": "Wątek",
+      "ruleFallback": "Reguła",
+      "elementFallback": "Element",
+      "addRelation": "Dodaj relację: {{title}}"
+    },
+    "picker": {
+      "characters": "Powiąż postacie",
+      "threads": "Powiąż wątki",
+      "chapters": "Powiąż rozdziały",
+      "rules": "Powiąż reguły",
+      "elements": "Powiąż elementy świata",
+      "fallback": "Powiąż encje",
+      "noEntities": "Brak dostępnych encji."
+    },
+    "labels": {
+      "chapter": "Rozdział {{number}}: {{title}}",
+      "chapterUntitled": "Bez tytułu",
+      "chapterFallback": "Rozdział",
+      "sceneFallback": "Scena",
+      "sceneNoChapter": "Bez rozdziału",
+      "scene": "{{prefix}}.{{number}} {{title}}",
+      "sceneUntitled": "Scena bez tytułu"
+    }
+  }
+}

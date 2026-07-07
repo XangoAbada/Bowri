@@ -1,0 +1,217 @@
+{
+  "characters": {
+    "type": {
+      "person": "Human",
+      "animal": "Animal",
+      "creature": "Creature",
+      "object": "Animated object",
+      "spirit": "Spirit / being",
+      "other": "Other"
+    },
+    "relationType": {
+      "rodzina": "family",
+      "przyjaźń": "friendship",
+      "romans": "romance",
+      "rywalizacja": "rivalry",
+      "mentor": "mentor",
+      "wróg": "enemy",
+      "sojusz": "alliance",
+      "zależność": "dependency",
+      "tajemnica": "secret",
+      "inne": "other"
+    },
+    "memoryType": {
+      "wydarzenie": "event",
+      "miejsce": "place",
+      "osoba": "person",
+      "przedmiot": "object",
+      "sekret": "secret",
+      "sen": "dream",
+      "trauma": "trauma",
+      "inne": "other"
+    },
+    "tabs": {
+      "profile": "Profile",
+      "relations": "Relations",
+      "memories": "Memories",
+      "image": "Image"
+    },
+    "groups": {
+      "identity": {
+        "title": "Identity",
+        "description": "Basic information that makes it easy to recognize the character's role in the novel."
+      },
+      "motivation": {
+        "title": "Motivations and conflict",
+        "description": "Goals, needs and inner tensions that drive the character through the plot."
+      },
+      "voice": {
+        "title": "Voice, arc and knowledge",
+        "description": "Way of speaking, direction of transformation and notes needed while writing."
+      },
+      "advanced": {
+        "title": "Advanced",
+        "description": "Helper fields — they don't go into scene-writing prompts. The visual prompt feeds the character image generation."
+      }
+    },
+    "messages": {
+      "characterSaved": "Character saved.",
+      "characterDeleted": "Character deleted.",
+      "relationSaved": "Relation saved.",
+      "memorySaved": "Memory saved.",
+      "memoryLinkSaved": "Memory connection saved.",
+      "needSecondCharacter": "Add at least a second character so the AI can create a relation.",
+      "noProjectData": "No project data."
+    },
+    "loading": "Loading characters...",
+    "loadError": "Unable to load the character builder.",
+    "header": {
+      "eyebrow": "Story Bible",
+      "title": "Characters",
+      "subtitle": "Profiles, relations, memories and reference images for the novel.",
+      "aiCharacter": "AI character",
+      "aiCharacterTitle": "Create a full text character profile with AI without an image",
+      "aiCharacterAriaLabel": "Create a full character profile with AI"
+    },
+    "list": {
+      "searchPlaceholder": "Search characters",
+      "searchAriaLabel": "Search characters",
+      "filterTitle": "Filter character type",
+      "filterAriaLabel": "Filter character type",
+      "allTypes": "All types",
+      "unnamed": "Unnamed",
+      "empty": "No characters match the filters.",
+      "newCharacter": "New character"
+    },
+    "editor": {
+      "profileEyebrow": "Character profile",
+      "newEyebrow": "New character",
+      "unnamed": "Unnamed",
+      "rolePlaceholder": "Define the narrative role and the key tension.",
+      "delete": "Delete",
+      "saving": "Saving",
+      "save": "Save",
+      "sectionsAriaLabel": "Character sections"
+    },
+    "relations": {
+      "emptyNoCharacterTitle": "No saved character",
+      "emptyNoCharacterDescription": "Save the character to add relations.",
+      "title": "Relations",
+      "addAction": "Add relation",
+      "aiAction": "AI relation",
+      "aiActionTitle": "Generate a relation draft with AI",
+      "aiActionTitleDisabled": "Add a second character to generate a relation",
+      "openTitle": "Open relation",
+      "characterFallback": "Character",
+      "deleteOnlyTitle": "Delete relation only",
+      "deleteOnlyAriaLabel": "Delete relation only",
+      "noDescription": "No relation description.",
+      "trustTitle": "Trust: {{value}}%",
+      "emptyTitle": "No relations",
+      "emptyDescription": "This character has no saved relations yet."
+    },
+    "memories": {
+      "emptyNoCharacterTitle": "No saved character",
+      "emptyNoCharacterDescription": "Save the character to add memories.",
+      "title": "Memories",
+      "addAction": "Add memory",
+      "aiAction": "AI memory",
+      "aiActionTitle": "Generate a memory draft with AI",
+      "importanceTitle": "Memory importance",
+      "noDescription": "No description.",
+      "linkTitleFallback": "Edit connection",
+      "edit": "Edit",
+      "connect": "Connect",
+      "deleteTitle": "Delete memory",
+      "deleteAriaLabel": "Delete memory",
+      "emptyTitle": "No memories",
+      "emptyDescription": "This character has no saved memories yet."
+    },
+    "image": {
+      "emptyNoCharacterTitle": "No saved character",
+      "emptyNoCharacterDescription": "Save the character to generate an image.",
+      "alt": "Image of character {{name}}",
+      "eyebrow": "Reference image",
+      "promptPlaceholder": "The image prompt will be built from the character profile and book context.",
+      "generate": "Generate image"
+    },
+    "aiActions": {
+      "generateTitle": "Generate the \"{{label}}\" field with AI",
+      "generateAriaLabel": "Generate {{label}} with AI",
+      "addTitleDisabled": "The field is already in the context or there is no active prompt.",
+      "addTitle": "Add the field to the prompt context.",
+      "addAriaLabel": "Add {{label}} to the prompt context"
+    },
+    "promptContext": {
+      "submitLabel": "Send to AI",
+      "queuedReason": "The \"{{label}}\" field is already in the AI queue."
+    },
+    "relationModal": {
+      "editTitle": "Edit relation",
+      "addTitle": "Add relation",
+      "targetCharacter": "Target character",
+      "chooseCharacter": "Choose a character",
+      "relationType": "Relation type",
+      "trust": "Trust: {{value}}%",
+      "advancedTitle": "Advanced",
+      "advancedDescription": "Helper fields — they don't go into scene-writing prompts."
+    },
+    "memoryModal": {
+      "editTitle": "Edit memory",
+      "addTitle": "Add memory",
+      "memoryType": "Memory type",
+      "importance": "Importance: {{value}}%",
+      "advancedTitle": "Advanced",
+      "advancedDescription": "Details don't go into scene-writing prompts."
+    },
+    "memoryLinkModal": {
+      "editTitle": "Edit connection",
+      "addTitle": "Connect memories",
+      "secondMemory": "Second memory",
+      "chooseMemory": "Choose a memory",
+      "linkType": "Connection type",
+      "strength": "Strength: {{value}}%"
+    },
+    "modalFooter": {
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "saving": "Saving",
+      "save": "Save"
+    },
+    "fieldLabel": {
+      "characterProfile": "Full character profile",
+      "characterRelation": "Full relation",
+      "characterMemory": "Full memory",
+      "characterType": "Character type",
+      "name": "Name",
+      "aliasesJson": "Aliases",
+      "role": "Narrative role",
+      "shortDescription": "Short description",
+      "appearance": "Appearance",
+      "externalGoal": "External goal",
+      "internalNeed": "Internal need",
+      "wound": "Wound",
+      "falseBelief": "False belief",
+      "secret": "Secret",
+      "strengthsJson": "Strengths",
+      "weaknessesJson": "Weaknesses",
+      "voiceNotes": "Character voice",
+      "arcSummary": "Transformation arc",
+      "knowledgeNotes": "Character knowledge",
+      "visualPrompt": "Visual prompt",
+      "relationDescription": "Relation description",
+      "relationHistory": "Relation history",
+      "relationConflict": "Relation conflict",
+      "relationOpinion": "Opinion",
+      "relationSecret": "Relation secret",
+      "relationChangeOverTime": "Change over time",
+      "memoryTitle": "Memory title",
+      "memorySummary": "Memory description",
+      "memoryDetails": "Memory details",
+      "memorySubject": "Memory subject",
+      "memoryEmotion": "Emotion",
+      "memoryLinkDescription": "Connection description",
+      "characterImage": "Character image"
+    }
+  }
+}

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { checkCodexCli, listCodexModels } from "../../shared/api/commands";
 import { REASONING_LEVELS } from "../../shared/api/types";
 import type { ReasoningEffort } from "../../shared/api/types";
@@ -20,6 +21,7 @@ type CodexStatusPanelProps = {
 const reasoningLevels = REASONING_LEVELS;
 
 export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
   const setCodexPath = useCodexSettingsStore((state) => state.setCodexPath);
@@ -79,12 +81,12 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
       {
         value: model,
         label: model,
-        title: "Aktualnie wybrany model"
+        title: t("ai.codexStatus.currentlySelectedModel")
       },
       {
         value: "gpt-5.5",
         label: "GPT-5.5",
-        title: "Fallback, gdy katalog modeli jest niedostępny"
+        title: t("ai.codexStatus.catalogFallback")
       }
     ];
     const seen = new Set<string>();
@@ -95,7 +97,7 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
       seen.add(option.value);
       return true;
     });
-  }, [model, modelQuery.data?.models]);
+  }, [model, modelQuery.data?.models, t]);
 
   function handleCheck() {
     const nextPath = draftPath.trim() || "codex";
@@ -125,8 +127,8 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
       <summary className="provider-summary-row">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Dostawca AI</p>
-            <h2>{compact ? "Codex CLI" : "Status Codex CLI"}</h2>
+            <p className="eyebrow">{t("ai.codexStatus.eyebrow")}</p>
+            <h2>{compact ? t("ai.codexStatus.titleCompact") : t("ai.codexStatus.title")}</h2>
             <p className="muted-text provider-subtitle">
               {model} / {reasoningLabel(reasoningEffort)}
             </p>
@@ -141,7 +143,11 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
             }
           >
             {ready ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-            {ready ? "Gotowy" : statusQuery.isLoading ? "Sprawdzam" : "Konfiguracja"}
+            {ready
+              ? t("ai.codexStatus.ready")
+              : statusQuery.isLoading
+                ? t("ai.codexStatus.checking")
+                : t("ai.codexStatus.config")}
           </span>
         </div>
         <ChevronDown size={16} className="provider-chevron" aria-hidden="true" />
@@ -149,20 +155,20 @@ export function CodexStatusPanel({ compact = false }: CodexStatusPanelProps) {
 
       <div className="provider-body">
         <label className="field-label">
-          Ścieżka do binarki
+          {t("ai.codexStatus.binaryPath")}
           <div className="inline-control">
             <Terminal size={16} aria-hidden="true" />
             <input
               value={draftPath}
               onChange={(event) => setDraftPath(event.target.value)}
               placeholder="codex"
-              title="Komenda lub ścieżka do Codex CLI, np. codex albo pełna ścieżka do binarki."
+              title={t("ai.codexStatus.binaryPathTitle")}
             />
             <Button
               variant="icon"
               onClick={handleCheck}
-              title="Sprawdź Codex CLI i odśwież katalog modeli"
-              aria-label="Sprawdź Codex CLI"
+              title={t("ai.codexStatus.checkTitle")}
+              aria-label={t("ai.codexStatus.checkAria")}
             >
               <RefreshCw size={16} />
             </Button>

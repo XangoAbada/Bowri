@@ -4911,12 +4911,51 @@ a:focus-visible {
   font-size: 15px;
 }
 
+.masthead-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+
+.masthead-ai-language {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-soft);
+}
+
+.masthead-ai-language select {
+  width: auto;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 30px 0 10px;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.masthead-ai-language select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .masthead-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: var(--s3);
-  padding: 6px 14px;
+  padding: 7px 16px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   font-size: 12.5px;
@@ -5000,7 +5039,7 @@ a:focus-visible {
 
 .shelf-label {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s3);
 }
 
@@ -5015,9 +5054,20 @@ a:focus-visible {
   border-bottom: 1px solid var(--border-strong);
 }
 
-.shelf-label span {
+.shelf-label-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.shelf-count {
   font-size: 13px;
   color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.shelf-import {
+  gap: 7px;
 }
 
 .shelf-loading {
@@ -7158,9 +7208,26 @@ button.nav-item {
 }
 
 .book-cost {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  align-self: start;
+  margin-top: 2px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.book-cost-pln {
+  color: var(--text-soft);
+  opacity: 0.72;
+  font-weight: 500;
 }
 
 .proposal-cost {

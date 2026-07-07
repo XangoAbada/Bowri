@@ -11,6 +11,8 @@ import {
   Users
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, Collapsible, EmptyState, Field, Modal, Segmented, Tabs, TwoPane } from "../../shared/ui";
 import {
@@ -40,7 +42,6 @@ import {
   buildWorldPromptPackage,
   renderWorldPromptPackage,
   worldEntityId,
-  worldFieldConfigs,
   WorldFieldKey,
   worldPromptContextSource,
   WorldPromptEntity
@@ -89,25 +90,25 @@ type RelationPickerState =
 const newWorldElementDraftId = "new-world-element";
 const newWorldRuleDraftId = "new-world-rule";
 
-const worldElementTypes = [
-  { value: "location", label: "Lokacja" },
-  { value: "faction", label: "Frakcja" },
-  { value: "object", label: "Przedmiot" },
-  { value: "culture", label: "Kultura" },
-  { value: "technology", label: "Technologia" },
-  { value: "magic", label: "Magia" },
-  { value: "creature", label: "Istota" },
-  { value: "historical_event", label: "Wydarzenie historyczne" },
-  { value: "institution", label: "Instytucja" },
-  { value: "custom", label: "Zwyczaj" },
-  { value: "other", label: "Inne" }
+const worldElementTypeValues = [
+  "location",
+  "faction",
+  "object",
+  "culture",
+  "technology",
+  "magic",
+  "creature",
+  "historical_event",
+  "institution",
+  "custom",
+  "other"
 ];
 
-const worldTabs: Array<{ key: WorldTab; label: string; icon: typeof Globe2 }> = [
-  { key: "profile", label: "Profil", icon: Globe2 },
-  { key: "rules", label: "Reguły", icon: BookOpen },
-  { key: "links", label: "Połączenia", icon: GitBranch },
-  { key: "visuals", label: "Wizualia", icon: Boxes }
+const worldTabs: Array<{ key: WorldTab; icon: typeof Globe2 }> = [
+  { key: "profile", icon: Globe2 },
+  { key: "rules", icon: BookOpen },
+  { key: "links", icon: GitBranch },
+  { key: "visuals", icon: Boxes }
 ];
 
 type ElementFieldItem = {
@@ -144,6 +145,7 @@ const ruleFields: RuleFieldItem[] = [
 ];
 
 export function WorldPage({ projectId }: WorldPageProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const proposals = useProposalStore((state) => state.proposals);
@@ -256,17 +258,17 @@ export function WorldPage({ projectId }: WorldPageProps) {
     const elementItems: WorldSidebarItem[] = world.elements.map((element) => ({
       kind: "element",
       id: element.id,
-      label: element.name || "Bez nazwy",
-      meta: typeLabel(element.elementType),
-      description: element.summary || "Brak opisu.",
+      label: element.name || t("world.list.unnamed"),
+      meta: typeLabel(t, element.elementType),
+      description: element.summary || t("world.list.noDescription"),
       elementType: element.elementType
     }));
     const ruleItems: WorldSidebarItem[] = world.rules.map((rule) => ({
       kind: "rule",
       id: rule.id,
-      label: rule.name || "Bez nazwy",
-      meta: "Reguła",
-      description: rule.description || "Brak opisu reguły."
+      label: rule.name || t("world.list.unnamed"),
+      meta: t("world.list.ruleMeta"),
+      description: rule.description || t("world.list.noRuleDescription")
     }));
     const source =
       activeTab === "rules"
@@ -288,7 +290,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
           .includes(query);
       return matchesType && matchesSearch;
     });
-  }, [activeTab, search, typeFilter, world.elements, world.rules]);
+  }, [activeTab, search, typeFilter, world.elements, world.rules, t]);
 
   const invalidateWorld = async () => {
     await queryClient.invalidateQueries({ queryKey: ["world-workspace", projectId] });
@@ -300,7 +302,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
     mutationFn: (input: UpsertWorldElementInput) => upsertWorldElement(input),
     onSuccess: async (element) => {
       setSelectedElementId(element.id);
-      setMessage("Zapisano element świata.");
+      setMessage(t("world.messages.elementSaved"));
       setErrorMessage("");
       await invalidateWorld();
     },
@@ -310,7 +312,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
     mutationFn: (input: UpsertWorldRuleInput) => upsertWorldRule(input),
     onSuccess: async (rule) => {
       setSelectedRuleId(rule.id);
-      setMessage("Zapisano regułę świata.");
+      setMessage(t("world.messages.ruleSaved"));
       setErrorMessage("");
       await invalidateWorld();
     },
@@ -320,7 +322,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
     mutationFn: (id: string) => deleteWorldElement(id),
     onSuccess: async () => {
       setSelectedElementId(null);
-      setMessage("Usunięto element świata.");
+      setMessage(t("world.messages.elementDeleted"));
       await invalidateWorld();
     },
     onError: showError
@@ -329,7 +331,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
     mutationFn: (id: string) => deleteWorldRule(id),
     onSuccess: async () => {
       setSelectedRuleId(null);
-      setMessage("Usunięto regułę świata.");
+      setMessage(t("world.messages.ruleDeleted"));
       await invalidateWorld();
     },
     onError: showError
@@ -397,7 +399,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
       return;
     }
 
-    setErrorMessage("Wybierz element albo regułę, aby dodać połączenie.");
+    setErrorMessage(t("world.messages.chooseElementOrRule"));
   }
 
   function runHeaderCreateAction() {
@@ -416,14 +418,14 @@ export function WorldPage({ projectId }: WorldPageProps) {
 
   function headerCreateLabel(): string {
     if (activeTab === "rules") {
-      return "Nowa reguła";
+      return t("world.create.newRule");
     }
 
     if (activeTab === "links") {
-      return "Nowe połączenie";
+      return t("world.create.newLink");
     }
 
-    return "Nowy element";
+    return t("world.create.newElement");
   }
 
   function editorHeaderIcon() {
@@ -436,44 +438,44 @@ export function WorldPage({ projectId }: WorldPageProps) {
 
   function editorHeaderEyebrow(): string {
     if (activeTab === "rules") {
-      return "Reguła świata";
+      return t("world.editorHeader.worldRule");
     }
 
     if (activeTab === "links") {
-      return linkFocus === "rule" ? "Połączenia reguły" : "Połączenia elementu";
+      return linkFocus === "rule" ? t("world.editorHeader.ruleLinks") : t("world.editorHeader.elementLinks");
     }
 
-    return selectedElement ? "Element świata" : "Nowy element";
+    return selectedElement ? t("world.editorHeader.worldElement") : t("world.editorHeader.newElement");
   }
 
   function editorHeaderTitle(): string {
     if (activeTab === "rules" || (activeTab === "links" && linkFocus === "rule")) {
-      return ruleDraft.name || "Bez nazwy";
+      return ruleDraft.name || t("world.editorHeader.unnamed");
     }
 
-    return elementDraft.name || "Bez nazwy";
+    return elementDraft.name || t("world.editorHeader.unnamed");
   }
 
   function editorHeaderDescription(): string {
     if (activeTab === "rules") {
-      return ruleDraft.description || "Określ zasadę, koszt i konsekwencje naruszenia.";
+      return ruleDraft.description || t("world.editorHeader.rulePlaceholder");
     }
 
     if (activeTab === "links") {
       if (linkFocus === "rule") {
-        return ruleDraft.description || "Łącz regułę z elementami, wątkami oraz rozdziałami.";
+        return ruleDraft.description || t("world.editorHeader.ruleLinksPlaceholder");
       }
 
-      return elementDraft.summary || "Łącz element z regułami, postaciami, wątkami oraz rozdziałami.";
+      return elementDraft.summary || t("world.editorHeader.elementLinksPlaceholder");
     }
 
-    return elementDraft.summary || "Określ miejsce elementu w logice świata i fabule.";
+    return elementDraft.summary || t("world.editorHeader.elementPlaceholder");
   }
 
   function queueWorldGeneration(field: WorldFieldKey, targetEntity?: WorldPromptEntity) {
     setErrorMessage("");
     if (!project || !book) {
-      setErrorMessage("Brak danych projektu.");
+      setErrorMessage(t("world.messages.noProjectData"));
       return;
     }
 
@@ -529,10 +531,10 @@ export function WorldPage({ projectId }: WorldPageProps) {
 
     activatePromptContextTarget(
       createWorldPromptContextTarget(projectId, field, worldEntityId(effectiveTarget), {
-        submitLabel: "Wyślij do AI",
+        submitLabel: t("world.promptContext.submitLabel"),
         submitDisabled: Boolean(loading),
         submitDisabledReason: loading
-          ? `Pole "${worldFieldConfigs[field].label}" jest już w kolejce AI.`
+          ? t("world.promptContext.queuedReason", { label: t(`world.fieldLabel.${field}`) })
           : undefined,
         onSubmit: () => queueWorldGeneration(field, effectiveTarget)
       })
@@ -573,33 +575,33 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   if (projectQuery.isLoading || worldQuery.isLoading || planQuery.isLoading || characterQuery.isLoading) {
-    return <p className="muted-text">Ładuję świat...</p>;
+    return <p className="muted-text">{t("world.loading")}</p>;
   }
 
   if (projectQuery.isError || worldQuery.isError || !project || !book) {
-    return <p className="warning-text">Nie można wczytać kreatora świata.</p>;
+    return <p className="warning-text">{t("world.loadError")}</p>;
   }
 
   return (
     <section className="bible-page world-page">
       <header className="bible-header">
         <div>
-          <p className="eyebrow">Story Bible</p>
-          <h2>Świat</h2>
-          <p className="muted-text">Elementy świata, reguły i ich powiązania z postaciami oraz planem.</p>
+          <p className="eyebrow">{t("world.header.eyebrow")}</p>
+          <h2>{t("world.header.title")}</h2>
+          <p className="muted-text">{t("world.header.subtitle")}</p>
         </div>
         <div className="bible-header-actions">
           <Button variant="ai" onClick={() => activateWorldPromptContext("worldElement", elementDraftPreview(emptyElementInput(projectId, world.elements.length)))}>
             <Sparkles size={16} aria-hidden />
-            AI element
+            {t("world.header.aiElement")}
           </Button>
           <Button variant="ai" onClick={() => activateWorldPromptContext("worldRule", ruleDraftPreview(emptyRuleInput(projectId, world.rules.length)))}>
             <Sparkles size={16} aria-hidden />
-            AI reguła
+            {t("world.header.aiRule")}
           </Button>
           <Button variant="ai" onClick={openDefaultRelationPicker}>
             <Sparkles size={16} aria-hidden />
-            AI połączenie
+            {t("world.header.aiLink")}
           </Button>
         </div>
       </header>
@@ -613,16 +615,16 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 className="ui-input"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Szukaj świata"
-                aria-label="Szukaj świata"
+                placeholder={t("world.list.searchPlaceholder")}
+                aria-label={t("world.list.searchAriaLabel")}
               />
               {activeTab === "rules" ? null : activeTab === "links" ? (
                 <Segmented
-                  ariaLabel="Filtruj listę świata"
+                  ariaLabel={t("world.list.filterAriaLabel")}
                   items={[
-                    { id: "all", label: "Wszystko" },
-                    { id: "element", label: "Elementy" },
-                    { id: "rule", label: "Reguły" }
+                    { id: "all", label: t("world.list.segmentAll") },
+                    { id: "element", label: t("world.list.segmentElements") },
+                    { id: "rule", label: t("world.list.segmentRules") }
                   ]}
                   value={typeFilter}
                   onChange={setTypeFilter}
@@ -632,12 +634,12 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   className="ui-input"
                   value={typeFilter}
                   onChange={(event) => setTypeFilter(event.target.value)}
-                  title="Filtruj listę świata"
-                  aria-label="Filtruj listę świata"
+                  title={t("world.list.filterTitle")}
+                  aria-label={t("world.list.filterAriaLabel")}
                 >
-                  <option value="all">Wszystkie typy</option>
-                  {worldElementTypes.map((option) => (
-                    <option value={option.value} key={option.value}>{option.label}</option>
+                  <option value="all">{t("world.list.allTypes")}</option>
+                  {worldElementTypeValues.map((value) => (
+                    <option value={value} key={value}>{typeLabel(t, value)}</option>
                   ))}
                 </select>
               )}
@@ -672,7 +674,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 </button>
               ))}
               {sidebarItems.length === 0 ? (
-                <p className="bible-list-empty">Brak pozycji pasujących do filtrów.</p>
+                <p className="bible-list-empty">{t("world.list.empty")}</p>
               ) : null}
             </div>
             <Button variant="secondary" block onClick={runHeaderCreateAction}>
@@ -694,26 +696,26 @@ export function WorldPage({ projectId }: WorldPageProps) {
               {activeTab !== "rules" && selectedElement ? (
                 <Button variant="danger" onClick={() => deleteElementMutation.mutate(selectedElement.id)}>
                   <Trash2 size={15} aria-hidden />
-                  Usuń
+                  {t("world.editor.delete")}
                 </Button>
               ) : null}
               {activeTab === "rules" && selectedRule ? (
                 <Button variant="danger" onClick={() => deleteRuleMutation.mutate(selectedRule.id)}>
                   <Trash2 size={15} aria-hidden />
-                  Usuń
+                  {t("world.editor.delete")}
                 </Button>
               ) : null}
             </div>
           </div>
 
           <Tabs
-            ariaLabel="Sekcje świata"
-            items={worldTabs.map(({ key, label, icon: Icon }) => ({
+            ariaLabel={t("world.editor.sectionsAriaLabel")}
+            items={worldTabs.map(({ key, icon: Icon }) => ({
               id: key,
               label: (
                 <>
                   <Icon size={15} aria-hidden />
-                  {label}
+                  {t(`world.tabs.${key}`)}
                 </>
               )
             }))}
@@ -723,14 +725,14 @@ export function WorldPage({ projectId }: WorldPageProps) {
 
           {activeTab === "profile" ? (
             <form className="bible-form" onSubmit={saveElement}>
-              <Field label="Typ elementu">
+              <Field label={t("world.profile.elementType")}>
                 <select
                   value={elementDraft.elementType}
                   onChange={(event) => setElementDraft({ ...elementDraft, elementType: event.target.value })}
                   onFocus={() => activateWorldPromptContext("elementType", elementDraftPreview(elementDraft))}
                 >
-                  {worldElementTypes.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                  {worldElementTypeValues.map((value) => (
+                    <option key={value} value={value}>{typeLabel(t, value)}</option>
                   ))}
                 </select>
               </Field>
@@ -748,7 +750,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   />
                 ))}
               </div>
-              <Collapsible title="Zaawansowane" description="Szczegóły nie trafiają do promptów pisania scen.">
+              <Collapsible title={t("world.profile.advancedTitle")} description={t("world.profile.advancedDescription")}>
                 {elementFields.filter((item) => item.advanced).map((item) => (
                   <WorldAiField
                     key={item.field}
@@ -766,7 +768,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 message={message}
                 errorMessage={errorMessage}
                 saving={elementMutation.isPending}
-                saveLabel="Zapisz element"
+                saveLabel={t("world.profile.saveElement")}
               />
             </form>
           ) : null}
@@ -774,10 +776,10 @@ export function WorldPage({ projectId }: WorldPageProps) {
           {activeTab === "rules" ? (
             <form className="bible-form" onSubmit={saveRule}>
               <div className="bible-section-heading">
-                <h4><BookOpen size={17} aria-hidden /> {ruleDraft.name || "Nowa reguła"}</h4>
+                <h4><BookOpen size={17} aria-hidden /> {ruleDraft.name || t("world.rules.newRule")}</h4>
                 <Button variant="ai" size="sm" onClick={() => activateWorldPromptContext("worldRuleAnalysis", ruleDraftPreview(ruleDraft))}>
                   <Sparkles size={14} aria-hidden />
-                  Analizuj
+                  {t("world.rules.analyze")}
                 </Button>
               </div>
               <div className="bible-field-grid">
@@ -794,7 +796,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   />
                 ))}
               </div>
-              <Collapsible title="Zaawansowane" description="Przykłady ze scen nie trafiają do promptów pisania scen.">
+              <Collapsible title={t("world.rules.advancedTitle")} description={t("world.rules.advancedDescription")}>
                 {ruleFields.filter((item) => item.advanced).map((item) => (
                   <WorldAiField
                     key={item.field}
@@ -812,7 +814,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 message={message}
                 errorMessage={errorMessage}
                 saving={ruleMutation.isPending}
-                saveLabel="Zapisz regułę"
+                saveLabel={t("world.rules.saveRule")}
               />
             </form>
           ) : null}
@@ -847,7 +849,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 message={message}
                 errorMessage={errorMessage}
                 saving={elementMutation.isPending}
-                saveLabel="Zapisz prompt"
+                saveLabel={t("world.visuals.savePrompt")}
               />
             </form>
           ) : null}
@@ -886,10 +888,12 @@ function WorldAiField({ field, value, rows = 3, target, onChange, onGenerate, on
   onGenerate: (field: WorldFieldKey, target?: WorldPromptEntity) => void;
   onActivate: (field: WorldFieldKey, target?: WorldPromptEntity) => void;
 }) {
+  const { t } = useTranslation();
+  const fieldLabel = t(`world.fieldLabel.${field}`);
   const activate = () => onActivate(field, target);
   return (
     <Field
-      label={worldFieldConfigs[field].label}
+      label={fieldLabel}
       className="wide"
       actions={
         <>
@@ -897,8 +901,8 @@ function WorldAiField({ field, value, rows = 3, target, onChange, onGenerate, on
             variant="ai"
             size="sm"
             onClick={() => onGenerate(field, target)}
-            title="Wygeneruj to pole z AI"
-            aria-label={`Wygeneruj pole ${worldFieldConfigs[field].label}`}
+            title={t("world.aiField.generateTitle")}
+            aria-label={t("world.aiField.generateAriaLabel", { label: fieldLabel })}
           >
             <Sparkles size={14} aria-hidden />
             AI
@@ -907,8 +911,8 @@ function WorldAiField({ field, value, rows = 3, target, onChange, onGenerate, on
             variant="icon"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => useAiPromptContextStore.getState().addContextSourceToActiveTarget(worldPromptContextSource(field, target))}
-            title="Dodaj pole do kontekstu AI"
-            aria-label={`Dodaj pole ${worldFieldConfigs[field].label} do kontekstu AI`}
+            title={t("world.aiField.addTitle")}
+            aria-label={t("world.aiField.addAriaLabel", { label: fieldLabel })}
           >
             <Plus size={14} aria-hidden />
           </Button>
@@ -934,39 +938,40 @@ function WorldLinksPanel({ world, plan, characters, selectedElement, selectedRul
   onUpdateElement: (next: Partial<Omit<SetWorldElementRelationsInput, "projectId" | "elementId">>) => void;
   onUpdateRule: (next: Partial<Omit<SetWorldRuleRelationsInput, "projectId" | "ruleId">>) => void;
 }) {
+  const { t } = useTranslation();
   if (!selectedElement && !selectedRule) {
-    return <EmptyState icon={<GitBranch size={28} />} title="Brak wybranej pozycji" description="Wybierz element albo regułę, aby łączyć je z kanonem." />;
+    return <EmptyState icon={<GitBranch size={28} />} title={t("world.links.emptyTitle")} description={t("world.links.emptyDescription")} />;
   }
 
   return (
     <div className="world-links-grid">
       {selectedElement ? (
         <>
-          <RelationBlock title="Postacie" icon={<Users size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "characters" })}>
+          <RelationBlock title={t("world.links.characters")} icon={<Users size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "characters" })}>
             {elementCharacterIds(world, selectedElement.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateElement({ characterIds: elementCharacterIds(world, selectedElement.id).filter((item) => item !== id) })}>
-                {characters.characters.find((item) => item.id === id)?.name ?? "Postać"}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateElement({ characterIds: elementCharacterIds(world, selectedElement.id).filter((item) => item !== id) })}>
+                {characters.characters.find((item) => item.id === id)?.name ?? t("world.links.characterFallback")}
               </Chip>
             ))}
           </RelationBlock>
-          <RelationBlock title="Wątki" icon={<GitBranch size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "threads" })}>
+          <RelationBlock title={t("world.links.threads")} icon={<GitBranch size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "threads" })}>
             {elementThreadIds(world, selectedElement.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateElement({ threadIds: elementThreadIds(world, selectedElement.id).filter((item) => item !== id) })}>
-                {plan.threads.find((item) => item.id === id)?.name ?? "Wątek"}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateElement({ threadIds: elementThreadIds(world, selectedElement.id).filter((item) => item !== id) })}>
+                {plan.threads.find((item) => item.id === id)?.name ?? t("world.links.threadFallback")}
               </Chip>
             ))}
           </RelationBlock>
-          <RelationBlock title="Rozdziały" icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "chapters" })}>
+          <RelationBlock title={t("world.links.chapters")} icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "chapters" })}>
             {elementChapterIds(world, selectedElement.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateElement({ chapterIds: elementChapterIds(world, selectedElement.id).filter((item) => item !== id) })}>
-                {chapterLabel(plan, id)}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateElement({ chapterIds: elementChapterIds(world, selectedElement.id).filter((item) => item !== id) })}>
+                {chapterLabel(t, plan, id)}
               </Chip>
             ))}
           </RelationBlock>
-          <RelationBlock title="Reguły elementu" icon={<BookOpen size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "rules" })}>
+          <RelationBlock title={t("world.links.elementRules")} icon={<BookOpen size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "rules" })}>
             {elementRuleIds(world, selectedElement.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateElement({ ruleIds: elementRuleIds(world, selectedElement.id).filter((item) => item !== id) })}>
-                {world.rules.find((item) => item.id === id)?.name ?? "Reguła"}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateElement({ ruleIds: elementRuleIds(world, selectedElement.id).filter((item) => item !== id) })}>
+                {world.rules.find((item) => item.id === id)?.name ?? t("world.links.ruleFallback")}
               </Chip>
             ))}
           </RelationBlock>
@@ -974,10 +979,10 @@ function WorldLinksPanel({ world, plan, characters, selectedElement, selectedRul
       ) : null}
 
       {selectedElement ? (
-        <RelationBlock title="Sceny" icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "scenes" })}>
+        <RelationBlock title={t("world.links.scenes")} icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "element", kind: "scenes" })}>
           {elementSceneIds(world, selectedElement.id).map((id) => (
-            <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateElement({ sceneIds: elementSceneIds(world, selectedElement.id).filter((item) => item !== id) })}>
-              {sceneLabel(plan, id)}
+            <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateElement({ sceneIds: elementSceneIds(world, selectedElement.id).filter((item) => item !== id) })}>
+              {sceneLabel(t, plan, id)}
             </Chip>
           ))}
         </RelationBlock>
@@ -985,24 +990,24 @@ function WorldLinksPanel({ world, plan, characters, selectedElement, selectedRul
 
       {selectedRule ? (
         <>
-          <RelationBlock title="Elementy reguły" icon={<Globe2 size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "elements" })}>
+          <RelationBlock title={t("world.links.ruleElements")} icon={<Globe2 size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "elements" })}>
             {ruleElementIds(world, selectedRule.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateRule({ elementIds: ruleElementIds(world, selectedRule.id).filter((item) => item !== id) })}>
-                {world.elements.find((item) => item.id === id)?.name ?? "Element"}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateRule({ elementIds: ruleElementIds(world, selectedRule.id).filter((item) => item !== id) })}>
+                {world.elements.find((item) => item.id === id)?.name ?? t("world.links.elementFallback")}
               </Chip>
             ))}
           </RelationBlock>
-          <RelationBlock title="Wątki reguły" icon={<GitBranch size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "threads" })}>
+          <RelationBlock title={t("world.links.ruleThreads")} icon={<GitBranch size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "threads" })}>
             {ruleThreadIds(world, selectedRule.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateRule({ threadIds: ruleThreadIds(world, selectedRule.id).filter((item) => item !== id) })}>
-                {plan.threads.find((item) => item.id === id)?.name ?? "Wątek"}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateRule({ threadIds: ruleThreadIds(world, selectedRule.id).filter((item) => item !== id) })}>
+                {plan.threads.find((item) => item.id === id)?.name ?? t("world.links.threadFallback")}
               </Chip>
             ))}
           </RelationBlock>
-          <RelationBlock title="Rozdziały reguły" icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "chapters" })}>
+          <RelationBlock title={t("world.links.ruleChapters")} icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "chapters" })}>
             {ruleChapterIds(world, selectedRule.id).map((id) => (
-              <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateRule({ chapterIds: ruleChapterIds(world, selectedRule.id).filter((item) => item !== id) })}>
-                {chapterLabel(plan, id)}
+              <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateRule({ chapterIds: ruleChapterIds(world, selectedRule.id).filter((item) => item !== id) })}>
+                {chapterLabel(t, plan, id)}
               </Chip>
             ))}
           </RelationBlock>
@@ -1010,10 +1015,10 @@ function WorldLinksPanel({ world, plan, characters, selectedElement, selectedRul
       ) : null}
 
       {selectedRule ? (
-        <RelationBlock title="Sceny reguły" icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "scenes" })}>
+        <RelationBlock title={t("world.links.ruleScenes")} icon={<FileText size={17} />} onAdd={() => onOpenPicker({ target: "rule", kind: "scenes" })}>
           {ruleSceneIds(world, selectedRule.id).map((id) => (
-            <Chip tone="accent" key={id} removeLabel="Odłącz relację" onRemove={() => onUpdateRule({ sceneIds: ruleSceneIds(world, selectedRule.id).filter((item) => item !== id) })}>
-              {sceneLabel(plan, id)}
+            <Chip tone="accent" key={id} removeLabel={t("world.links.detach")} onRemove={() => onUpdateRule({ sceneIds: ruleSceneIds(world, selectedRule.id).filter((item) => item !== id) })}>
+              {sceneLabel(t, plan, id)}
             </Chip>
           ))}
         </RelationBlock>
@@ -1023,11 +1028,12 @@ function WorldLinksPanel({ world, plan, characters, selectedElement, selectedRul
 }
 
 function RelationBlock({ title, icon, children, onAdd }: { title: string; icon: ReactNode; children: ReactNode; onAdd: () => void }) {
+  const { t } = useTranslation();
   return (
     <section className="world-link-block">
       <header>
         <h4>{icon}{title}</h4>
-        <Button variant="icon" onClick={onAdd} title={`Dodaj relację: ${title}`} aria-label={`Dodaj relację: ${title}`}>
+        <Button variant="icon" onClick={onAdd} title={t("world.links.addRelation", { title })} aria-label={t("world.links.addRelation", { title })}>
           <Plus size={15} aria-hidden />
         </Button>
       </header>
@@ -1047,9 +1053,10 @@ function RelationPicker({ state, world, plan, characters, selectedElement, selec
   onUpdateElement: (next: Partial<Omit<SetWorldElementRelationsInput, "projectId" | "elementId">>) => void;
   onUpdateRule: (next: Partial<Omit<SetWorldRuleRelationsInput, "projectId" | "ruleId">>) => void;
 }) {
-  const options = pickerOptions(state, world, plan, characters, selectedElement, selectedRule);
+  const { t } = useTranslation();
+  const options = pickerOptions(t, state, world, plan, characters, selectedElement, selectedRule);
   return (
-    <Modal title={pickerTitle(state)} onClose={onClose} size="md">
+    <Modal title={pickerTitle(t, state)} onClose={onClose} size="md">
       <div className="world-relation-list">
         {options.map((option) => (
           <button
@@ -1074,7 +1081,7 @@ function RelationPicker({ state, world, plan, characters, selectedElement, selec
             <span>{option.description}</span>
           </button>
         ))}
-        {options.length === 0 ? <p className="muted-text">Brak dostępnych encji.</p> : null}
+        {options.length === 0 ? <p className="muted-text">{t("world.picker.noEntities")}</p> : null}
       </div>
     </Modal>
   );
@@ -1284,7 +1291,7 @@ function ruleSceneIds(world: WorldWorkspace, ruleId: string): string[] {
   return world.ruleScenes.filter((item) => item.ruleId === ruleId).map((item) => item.sceneId);
 }
 
-function pickerOptions(state: RelationPickerState, world: WorldWorkspace, plan: BookPlan, characters: CharacterWorkspace, selectedElement: WorldElement | null, selectedRule: WorldRule | null) {
+function pickerOptions(t: TFunction, state: RelationPickerState, world: WorldWorkspace, plan: BookPlan, characters: CharacterWorkspace, selectedElement: WorldElement | null, selectedRule: WorldRule | null) {
   const currentIds =
     state.target === "element" && selectedElement
       ? state.kind === "characters"
@@ -1312,9 +1319,9 @@ function pickerOptions(state: RelationPickerState, world: WorldWorkspace, plan: 
       : state.kind === "threads"
         ? plan.threads.map((item) => ({ id: item.id, label: item.name, description: item.description }))
         : state.kind === "chapters"
-          ? plan.chapters.map((item) => ({ id: item.id, label: chapterLabel(plan, item.id), description: item.summary }))
+          ? plan.chapters.map((item) => ({ id: item.id, label: chapterLabel(t, plan, item.id), description: item.summary }))
           : state.kind === "scenes"
-            ? plan.scenes.map((item) => ({ id: item.id, label: sceneLabel(plan, item.id), description: item.summary }))
+            ? plan.scenes.map((item) => ({ id: item.id, label: sceneLabel(t, plan, item.id), description: item.summary }))
           : state.kind === "rules"
             ? world.rules.map((item) => ({ id: item.id, label: item.name, description: item.description }))
             : world.elements.map((item) => ({ id: item.id, label: item.name, description: item.summary }));
@@ -1326,15 +1333,15 @@ function pickerOptions(state: RelationPickerState, world: WorldWorkspace, plan: 
   }));
 }
 
-function pickerTitle(state: RelationPickerState): string {
+function pickerTitle(t: TFunction, state: RelationPickerState): string {
   const labels: Record<string, string> = {
-    characters: "Powiąż postacie",
-    threads: "Powiąż wątki",
-    chapters: "Powiąż rozdziały",
-    rules: "Powiąż reguły",
-    elements: "Powiąż elementy świata"
+    characters: t("world.picker.characters"),
+    threads: t("world.picker.threads"),
+    chapters: t("world.picker.chapters"),
+    rules: t("world.picker.rules"),
+    elements: t("world.picker.elements")
   };
-  return labels[state.kind] ?? "Powiąż encje";
+  return labels[state.kind] ?? t("world.picker.fallback");
 }
 
 function relationInputKey(kind: Extract<RelationPickerState, { target: "element" }>["kind"]) {
@@ -1349,23 +1356,25 @@ function toggleId(ids: string[], id: string): string[] {
   return ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
 }
 
-function chapterLabel(plan: BookPlan, chapterId: string): string {
+function chapterLabel(t: TFunction, plan: BookPlan, chapterId: string): string {
   const chapter = plan.chapters.find((item) => item.id === chapterId);
-  return chapter ? `Rozdział ${chapter.number}: ${chapter.workingTitle || "Bez tytułu"}` : "Rozdział";
+  return chapter
+    ? t("world.labels.chapter", { number: chapter.number, title: chapter.workingTitle || t("world.labels.chapterUntitled") })
+    : t("world.labels.chapterFallback");
 }
 
-function typeLabel(value: string): string {
-  return worldElementTypes.find((option) => option.value === value)?.label ?? value;
+function typeLabel(t: TFunction, value: string): string {
+  return worldElementTypeValues.includes(value) ? t(`world.elementType.${value}`) : value;
 }
 
-function sceneLabel(plan: BookPlan, sceneId: string): string {
+function sceneLabel(t: TFunction, plan: BookPlan, sceneId: string): string {
   const scene = plan.scenes.find((item) => item.id === sceneId);
   if (!scene) {
-    return "Scena";
+    return t("world.labels.sceneFallback");
   }
   const chapter = scene.chapterId ? plan.chapters.find((item) => item.id === scene.chapterId) : null;
-  const chapterPrefix = chapter ? `R${chapter.number}` : "Bez rozdziału";
-  return `${chapterPrefix}.${scene.orderIndex + 1} ${scene.title || "Scena bez tytułu"}`;
+  const chapterPrefix = chapter ? `R${chapter.number}` : t("world.labels.sceneNoChapter");
+  return t("world.labels.scene", { prefix: chapterPrefix, number: scene.orderIndex + 1, title: scene.title || t("world.labels.sceneUntitled") });
 }
 
 function isRuleField(field: WorldFieldKey): boolean {

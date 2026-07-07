@@ -1,6 +1,7 @@
 import { Download, Plus, Sparkles, Trash2, Upload } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   checkCodexCli,
@@ -16,6 +17,7 @@ import {
   listProjects,
   revealExportFile
 } from "../../shared/api/commands";
+import { setUiLanguage, UI_LANGUAGES } from "../../shared/i18n";
 import { formatPln, formatUsd, totalCostOf } from "../ai/pricing";
 import { coverImageSource } from "../../shared/api/assets";
 import { formatLocalDateTime } from "../../shared/date";
@@ -45,17 +47,8 @@ import {
   useProposalStore
 } from "../ai/proposalStore";
 
-function projectCountLabel(count: number): string {
-  if (count === 1) {
-    return "1 projekt";
-  }
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  const few = mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14);
-  return `${count} ${few ? "projekty" : "projektów"}`;
-}
-
 export function DashboardPage() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -103,6 +96,7 @@ export function DashboardPage() {
     retry: 0
   });
   const plnPerUsd = aiSettingsQuery.data?.plnPerUsd ?? 4;
+
   const projectCost = (projectId: string) =>
     totalCostOf(
       (usageTotalsQuery.data ?? []).filter((group) => group.projectId === projectId)
@@ -148,7 +142,7 @@ export function DashboardPage() {
       if (!result) {
         return;
       }
-      setTransferInfo(`Wyeksportowano projekt do pliku: ${result.filePath}`);
+      setTransferInfo(t("dashboard.exportSuccess", { path: result.filePath }));
       setTransferWarnings(result.warnings);
     }
   });
@@ -169,7 +163,7 @@ export function DashboardPage() {
       if (!result) {
         return;
       }
-      setTransferInfo(`Zaimportowano projekt „${result.project.name}”.`);
+      setTransferInfo(t("dashboard.importSuccess", { name: result.project.name }));
       setTransferWarnings(result.warnings);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
     }
@@ -253,11 +247,11 @@ export function DashboardPage() {
   function activateNewProjectTitleTarget(nextName = name) {
     activatePromptContextTarget(
       createNewProjectTitlePromptTarget(nextName, {
-        submitLabel: "Wyślij do AI",
+        submitLabel: t("dashboard.sendToAi"),
         submitDisabled:
           Boolean(newProjectStatus) ||
           createMutation.isPending,
-        submitDisabledReason: "Generowanie tytułu jest teraz niedostępne.",
+        submitDisabledReason: t("dashboard.generateTitleUnavailable"),
         onSubmit: enqueueNewProjectTitle
       })
     );
@@ -273,14 +267,14 @@ export function DashboardPage() {
     setAiError("");
     activatePromptContextTarget(
       createConceptPromptContextTarget(projectId, "workingTitle", {
-        submitLabel: "Wyślij do AI",
+        submitLabel: t("dashboard.sendToAi"),
         submitDisabled:
           Boolean(projectStatus) ||
           codexUnavailable ||
           codexStatusQuery.isLoading,
         submitDisabledReason: projectStatus
-          ? "Tytuł roboczy jest już w kolejce AI."
-          : "Codex CLI nie jest teraz gotowy.",
+          ? t("dashboard.titleAlreadyQueued")
+          : t("dashboard.codexNotReady"),
         onSubmit: () => queueProjectTitle(projectId)
       })
     );
@@ -303,7 +297,7 @@ export function DashboardPage() {
     }
 
     const confirmed = window.confirm(
-      `Usunąć projekt „${displayTitle}”? Tej operacji nie można cofnąć.`
+      t("dashboard.deleteConfirm", { title: displayTitle })
     );
 
     if (confirmed) {
@@ -338,16 +332,29 @@ export function DashboardPage() {
     <main className="dashboard dashboard-with-panel">
       <div className="dashboard-main-column">
         <header className="masthead">
-          <p className="masthead-over">Lokalny warsztat pisarski</p>
+          <p className="masthead-over">{t("dashboard.mastheadOver")}</p>
           <h1>
             Story<em>Forge</em>
           </h1>
-          <p className="masthead-tagline">
-            Od pierwszej iskry pomysłu do gotowego rękopisu.
-          </p>
-          <Link to="/settings" className="masthead-link">
-            Ustawienia AI
-          </Link>
+          <p className="masthead-tagline">{t("dashboard.mastheadTagline")}</p>
+          <div className="masthead-controls">
+            <label className="masthead-ai-language">
+              <span>{t("dashboard.uiLanguage")}</span>
+              <select
+                value={i18n.language}
+                onChange={(event) => setUiLanguage(event.target.value)}
+              >
+                {UI_LANGUAGES.map((language) => (
+                  <option value={language.value} key={language.value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Link to="/settings" className="masthead-link">
+              {t("dashboard.settingsLink")}
+            </Link>
+          </div>
         </header>
 
         <form className="new-project-form" onSubmit={handleSubmit}>
@@ -360,13 +367,13 @@ export function DashboardPage() {
                 setName(event.target.value);
                 activateNewProjectTitleTarget(event.target.value);
               }}
-              placeholder="Roboczy tytuł książki"
-              aria-label="Roboczy tytuł nowej książki"
+              placeholder={t("dashboard.newProjectPlaceholder")}
+              aria-label={t("dashboard.newProjectAriaLabel")}
             />
             <Button
               variant="ai"
-              aria-label="Generuj tytuł dla nowego projektu"
-              title="Generuj tytuł dla nowego projektu"
+              aria-label={t("dashboard.generateNewTitleAria")}
+              title={t("dashboard.generateNewTitleAria")}
               onClick={() => activateNewProjectTitleTarget()}
               disabled={
                 Boolean(newProjectStatus) ||
@@ -380,15 +387,15 @@ export function DashboardPage() {
               ) : (
                 <Sparkles size={15} aria-hidden="true" />
               )}
-              Zaproponuj
+              {t("dashboard.propose")}
             </Button>
             <Button
               variant="icon"
-              aria-label="Dodaj wpis autora do kontekstu promptu"
+              aria-label={t("dashboard.addAuthorNoteAria")}
               title={
                 activePromptTarget
-                  ? "Wpis autora jest już wymaganym kontekstem tego promptu."
-                  : "Najpierw zaznacz pole tekstowe, aby otworzyć kontekst promptu."
+                  ? t("dashboard.addAuthorNoteActive")
+                  : t("dashboard.addAuthorNoteHint")
               }
               disabled
             >
@@ -400,47 +407,59 @@ export function DashboardPage() {
               busy={createMutation.isPending}
               disabled={name.trim().length === 0}
             >
-              Załóż projekt
+              {t("dashboard.createProject")}
             </Button>
           </div>
           {createMutation.isError ? (
-            <p className="warning-text">Nie udało się utworzyć projektu.</p>
+            <p className="warning-text">{t("dashboard.createProjectError")}</p>
           ) : null}
         </form>
 
         <section className="shelf-section">
           <div className="shelf-label">
-            <h2>Twoja półka</h2>
+            <h2>{t("dashboard.shelfTitle")}</h2>
             <div className="rule" aria-hidden="true" />
-            {projectCount > 0 ? <span>{projectCountLabel(projectCount)}</span> : null}
-            <Button
-              variant="icon"
-              onClick={() => importProjectMutation.mutate()}
-              disabled={importProjectMutation.isPending}
-              title="Importuj projekt z pliku ZIP"
-              aria-label="Importuj projekt z pliku ZIP"
-            >
-              {importProjectMutation.isPending ? <Spinner /> : <Upload size={15} />}
-            </Button>
+            <div className="shelf-label-actions">
+              {projectCount > 0 ? (
+                <span className="shelf-count">
+                  {t("dashboard.projectCount", { count: projectCount })}
+                </span>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shelf-import"
+                onClick={() => importProjectMutation.mutate()}
+                disabled={importProjectMutation.isPending}
+                title={t("dashboard.importProject")}
+              >
+                {importProjectMutation.isPending ? (
+                  <Spinner />
+                ) : (
+                  <Upload size={15} aria-hidden="true" />
+                )}
+                {t("dashboard.importProjectShort")}
+              </Button>
+            </div>
           </div>
 
           {projectsQuery.isLoading ? (
             <p className="muted-text shelf-loading">
-              <Spinner /> Ładuję projekty...
+              <Spinner /> {t("dashboard.loadingProjects")}
             </p>
           ) : null}
 
           {projectsQuery.isError ? (
             <EmptyState
-              title="Backend desktopowy nie odpowiada"
-              description="Uruchom aplikację przez Tauri, aby korzystać z lokalnej bazy SQLite i komend Rust."
+              title={t("dashboard.backendUnavailableTitle")}
+              description={t("dashboard.backendUnavailableDescription")}
             />
           ) : null}
 
           {projectsQuery.data?.length === 0 ? (
             <EmptyState
-              title="Jeszcze nie ma projektów"
-              description="Utwórz pierwszy projekt, a StoryForge2 założy książkę i bazę."
+              title={t("dashboard.noProjectsTitle")}
+              description={t("dashboard.noProjectsDescription")}
             />
           ) : null}
 
@@ -484,7 +503,9 @@ export function DashboardPage() {
                       <span className="book-row">
                         <time>{formatLocalDateTime(project.updatedAt)}</time>
                         {generating ? (
-                          <StatusPill tone="warn">AI w toku</StatusPill>
+                          <StatusPill tone="warn">
+                            {t("dashboard.aiInProgress")}
+                          </StatusPill>
                         ) : null}
                       </span>
                       {(() => {
@@ -495,10 +516,13 @@ export function DashboardPage() {
                         return (
                           <span
                             className="book-cost"
-                            title="Szacunkowy koszt generacji AI wg oficjalnych cenników (jakby przez API)."
+                            title={t("dashboard.costTitle")}
                           >
-                            ≈ {cost.estimated ? "~" : ""}
-                            {formatUsd(cost.usd)} ({formatPln(cost.usd, plnPerUsd)})
+                            {cost.estimated ? "~" : ""}
+                            {formatUsd(cost.usd)}
+                            <span className="book-cost-pln">
+                              {formatPln(cost.usd, plnPerUsd)}
+                            </span>
                           </span>
                         );
                       })()}
@@ -514,8 +538,10 @@ export function DashboardPage() {
                         codexStatusQuery.isLoading ||
                         !project.activeBookId
                       }
-                      title="Generuj tytuł roboczy z AI"
-                      aria-label={`Generuj tytuł roboczy z AI dla projektu ${displayTitle}`}
+                      title={t("dashboard.generateTitleAiTitle")}
+                      aria-label={t("dashboard.generateTitleAiAria", {
+                        title: displayTitle
+                      })}
                     >
                       {generating ? <Spinner /> : <Sparkles size={15} />}
                     </Button>
@@ -525,10 +551,12 @@ export function DashboardPage() {
                       disabled={!canAddProjectTitleContext}
                       title={
                         activePromptTarget?.projectId !== project.id
-                          ? "Najpierw otwórz kontekst promptu tego projektu."
-                          : "Tytuł roboczy jest już w kontekście promptu."
+                          ? t("dashboard.addTitleContextOpenFirst")
+                          : t("dashboard.addTitleContextAlready")
                       }
-                      aria-label={`Dodaj tytuł roboczy projektu ${displayTitle} do kontekstu promptu`}
+                      aria-label={t("dashboard.addTitleContextAria", {
+                        title: displayTitle
+                      })}
                     >
                       <Plus size={14} />
                     </Button>
@@ -536,8 +564,10 @@ export function DashboardPage() {
                       variant="icon"
                       onClick={() => exportProjectMutation.mutate(project.id)}
                       disabled={exportProjectMutation.isPending}
-                      title="Eksportuj projekt do pliku ZIP"
-                      aria-label={`Eksportuj projekt ${displayTitle} do pliku ZIP`}
+                      title={t("dashboard.exportProject")}
+                      aria-label={t("dashboard.exportProjectAria", {
+                        title: displayTitle
+                      })}
                     >
                       {exportProjectMutation.isPending &&
                       exportProjectMutation.variables === project.id ? (
@@ -551,8 +581,10 @@ export function DashboardPage() {
                       className="book-delete"
                       onClick={() => requestProjectDelete(project.id, displayTitle)}
                       disabled={deleteMutation.isPending}
-                      title="Usuń projekt"
-                      aria-label={`Usuń projekt ${displayTitle}`}
+                      title={t("dashboard.deleteProject")}
+                      aria-label={t("dashboard.deleteProjectAria", {
+                        title: displayTitle
+                      })}
                     >
                       {deleteMutation.isPending &&
                       deleteMutation.variables === project.id ? (
@@ -569,7 +601,7 @@ export function DashboardPage() {
 
           {aiError ? <p className="warning-text">{aiError}</p> : null}
           {deleteMutation.isError ? (
-            <p className="warning-text">Nie udało się usunąć projektu.</p>
+            <p className="warning-text">{t("dashboard.deleteProjectError")}</p>
           ) : null}
           {transferInfo ? <p className="muted-text">{transferInfo}</p> : null}
           {transferWarnings.map((warning) => (
@@ -579,18 +611,22 @@ export function DashboardPage() {
           ))}
           {exportProjectMutation.isError ? (
             <p className="warning-text">
-              Nie udało się wyeksportować projektu:{" "}
-              {exportProjectMutation.error instanceof Error
-                ? exportProjectMutation.error.message
-                : String(exportProjectMutation.error)}
+              {t("dashboard.exportError", {
+                message:
+                  exportProjectMutation.error instanceof Error
+                    ? exportProjectMutation.error.message
+                    : String(exportProjectMutation.error)
+              })}
             </p>
           ) : null}
           {importProjectMutation.isError ? (
             <p className="warning-text">
-              Nie udało się zaimportować projektu:{" "}
-              {importProjectMutation.error instanceof Error
-                ? importProjectMutation.error.message
-                : String(importProjectMutation.error)}
+              {t("dashboard.importError", {
+                message:
+                  importProjectMutation.error instanceof Error
+                    ? importProjectMutation.error.message
+                    : String(importProjectMutation.error)
+              })}
             </p>
           ) : null}
         </section>
@@ -612,14 +648,12 @@ export function DashboardPage() {
           <section className="context-section compact">
             <div className="section-title-row">
               <div>
-                <p className="eyebrow">Propozycje</p>
-                <h2>Panel AI</h2>
+                <p className="eyebrow">{t("dashboard.proposalsEyebrow")}</p>
+                <h2>{t("dashboard.proposalsPanelTitle")}</h2>
               </div>
               <Sparkles size={18} aria-hidden="true" />
             </div>
-            <p className="muted-text">
-              Wybierz projekt i uruchom generowanie tytułu roboczego.
-            </p>
+            <p className="muted-text">{t("dashboard.proposalsEmpty")}</p>
           </section>
         )}
       </aside>

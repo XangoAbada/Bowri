@@ -1,0 +1,217 @@
+{
+  "characters": {
+    "type": {
+      "person": "Człowiek",
+      "animal": "Zwierzę",
+      "creature": "Istota",
+      "object": "Ożywiony przedmiot",
+      "spirit": "Duch / byt",
+      "other": "Inne"
+    },
+    "relationType": {
+      "rodzina": "rodzina",
+      "przyjaźń": "przyjaźń",
+      "romans": "romans",
+      "rywalizacja": "rywalizacja",
+      "mentor": "mentor",
+      "wróg": "wróg",
+      "sojusz": "sojusz",
+      "zależność": "zależność",
+      "tajemnica": "tajemnica",
+      "inne": "inne"
+    },
+    "memoryType": {
+      "wydarzenie": "wydarzenie",
+      "miejsce": "miejsce",
+      "osoba": "osoba",
+      "przedmiot": "przedmiot",
+      "sekret": "sekret",
+      "sen": "sen",
+      "trauma": "trauma",
+      "inne": "inne"
+    },
+    "tabs": {
+      "profile": "Profil",
+      "relations": "Relacje",
+      "memories": "Wspomnienia",
+      "image": "Obraz"
+    },
+    "groups": {
+      "identity": {
+        "title": "Tożsamość",
+        "description": "Podstawowe informacje, po których łatwo rozpoznać rolę postaci w powieści."
+      },
+      "motivation": {
+        "title": "Motywacje i konflikt",
+        "description": "Cele, potrzeby i wewnętrzne napięcia, które prowadzą postać przez fabułę."
+      },
+      "voice": {
+        "title": "Głos, łuk i wiedza",
+        "description": "Sposób mówienia, kierunek przemiany i notatki potrzebne podczas pisania."
+      },
+      "advanced": {
+        "title": "Zaawansowane",
+        "description": "Pola pomocnicze — nie trafiają do promptów pisania scen. Prompt wizualny zasila generowanie obrazu postaci."
+      }
+    },
+    "messages": {
+      "characterSaved": "Zapisano postać.",
+      "characterDeleted": "Usunięto postać.",
+      "relationSaved": "Zapisano relację.",
+      "memorySaved": "Zapisano wspomnienie.",
+      "memoryLinkSaved": "Zapisano połączenie wspomnień.",
+      "needSecondCharacter": "Dodaj przynajmniej drugą postać, aby AI mogło utworzyć relację.",
+      "noProjectData": "Brak danych projektu."
+    },
+    "loading": "Ładuję postacie...",
+    "loadError": "Nie można wczytać kreatora postaci.",
+    "header": {
+      "eyebrow": "Story Bible",
+      "title": "Postacie",
+      "subtitle": "Profile, relacje, wspomnienia i obrazy referencyjne dla powieści.",
+      "aiCharacter": "AI postać",
+      "aiCharacterTitle": "Utwórz pełny tekstowy profil postaci z AI bez obrazu",
+      "aiCharacterAriaLabel": "Utwórz pełny profil postaci z AI"
+    },
+    "list": {
+      "searchPlaceholder": "Szukaj postaci",
+      "searchAriaLabel": "Szukaj postaci",
+      "filterTitle": "Filtruj rodzaj postaci",
+      "filterAriaLabel": "Filtruj rodzaj postaci",
+      "allTypes": "Wszystkie rodzaje",
+      "unnamed": "Bez nazwy",
+      "empty": "Brak postaci pasujących do filtrów.",
+      "newCharacter": "Nowa postać"
+    },
+    "editor": {
+      "profileEyebrow": "Profil postaci",
+      "newEyebrow": "Nowa postać",
+      "unnamed": "Bez nazwy",
+      "rolePlaceholder": "Określ rolę fabularną i najważniejsze napięcie.",
+      "delete": "Usuń",
+      "saving": "Zapisuję",
+      "save": "Zapisz",
+      "sectionsAriaLabel": "Sekcje postaci"
+    },
+    "relations": {
+      "emptyNoCharacterTitle": "Brak zapisanej postaci",
+      "emptyNoCharacterDescription": "Zapisz postać, aby dodawać relacje.",
+      "title": "Relacje",
+      "addAction": "Dodaj relację",
+      "aiAction": "AI relacja",
+      "aiActionTitle": "Wygeneruj szkic relacji z AI",
+      "aiActionTitleDisabled": "Dodaj drugą postać, aby wygenerować relację",
+      "openTitle": "Otwórz relację",
+      "characterFallback": "Postać",
+      "deleteOnlyTitle": "Usuń tylko relację",
+      "deleteOnlyAriaLabel": "Usuń tylko relację",
+      "noDescription": "Brak opisu relacji.",
+      "trustTitle": "Zaufanie: {{value}}%",
+      "emptyTitle": "Brak relacji",
+      "emptyDescription": "Ta postać nie ma jeszcze zapisanych relacji."
+    },
+    "memories": {
+      "emptyNoCharacterTitle": "Brak zapisanej postaci",
+      "emptyNoCharacterDescription": "Zapisz postać, aby dodawać wspomnienia.",
+      "title": "Wspomnienia",
+      "addAction": "Dodaj wspomnienie",
+      "aiAction": "AI wspomnienie",
+      "aiActionTitle": "Wygeneruj szkic wspomnienia z AI",
+      "importanceTitle": "Ważność wspomnienia",
+      "noDescription": "Brak opisu.",
+      "linkTitleFallback": "Edytuj połączenie",
+      "edit": "Edytuj",
+      "connect": "Połącz",
+      "deleteTitle": "Usuń wspomnienie",
+      "deleteAriaLabel": "Usuń wspomnienie",
+      "emptyTitle": "Brak wspomnień",
+      "emptyDescription": "Ta postać nie ma jeszcze zapisanych wspomnień."
+    },
+    "image": {
+      "emptyNoCharacterTitle": "Brak zapisanej postaci",
+      "emptyNoCharacterDescription": "Zapisz postać, aby wygenerować obraz.",
+      "alt": "Obraz postaci {{name}}",
+      "eyebrow": "Obraz referencyjny",
+      "promptPlaceholder": "Prompt obrazu powstanie z profilu postaci i kontekstu książki.",
+      "generate": "Generuj obraz"
+    },
+    "aiActions": {
+      "generateTitle": "Generuj pole \"{{label}}\" z AI",
+      "generateAriaLabel": "Generuj {{label}} z AI",
+      "addTitleDisabled": "Pole jest już w kontekście albo nie ma aktywnego promptu.",
+      "addTitle": "Dodaj pole do kontekstu promptu.",
+      "addAriaLabel": "Dodaj {{label}} do kontekstu promptu"
+    },
+    "promptContext": {
+      "submitLabel": "Wyślij do AI",
+      "queuedReason": "Pole \"{{label}}\" jest już w kolejce AI."
+    },
+    "relationModal": {
+      "editTitle": "Edytuj relację",
+      "addTitle": "Dodaj relację",
+      "targetCharacter": "Postać docelowa",
+      "chooseCharacter": "Wybierz postać",
+      "relationType": "Typ relacji",
+      "trust": "Zaufanie: {{value}}%",
+      "advancedTitle": "Zaawansowane",
+      "advancedDescription": "Pola pomocnicze — nie trafiają do promptów pisania scen."
+    },
+    "memoryModal": {
+      "editTitle": "Edytuj wspomnienie",
+      "addTitle": "Dodaj wspomnienie",
+      "memoryType": "Typ wspomnienia",
+      "importance": "Ważność: {{value}}%",
+      "advancedTitle": "Zaawansowane",
+      "advancedDescription": "Szczegóły nie trafiają do promptów pisania scen."
+    },
+    "memoryLinkModal": {
+      "editTitle": "Edytuj połączenie",
+      "addTitle": "Połącz wspomnienia",
+      "secondMemory": "Drugie wspomnienie",
+      "chooseMemory": "Wybierz wspomnienie",
+      "linkType": "Typ połączenia",
+      "strength": "Siła: {{value}}%"
+    },
+    "modalFooter": {
+      "delete": "Usuń",
+      "cancel": "Anuluj",
+      "saving": "Zapisuję",
+      "save": "Zapisz"
+    },
+    "fieldLabel": {
+      "characterProfile": "Pełny profil postaci",
+      "characterRelation": "Pełna relacja",
+      "characterMemory": "Pełne wspomnienie",
+      "characterType": "Rodzaj postaci",
+      "name": "Imię / nazwa",
+      "aliasesJson": "Aliasy",
+      "role": "Rola fabularna",
+      "shortDescription": "Krótki opis",
+      "appearance": "Wygląd",
+      "externalGoal": "Cel zewnętrzny",
+      "internalNeed": "Potrzeba wewnętrzna",
+      "wound": "Rana",
+      "falseBelief": "Fałszywe przekonanie",
+      "secret": "Sekret",
+      "strengthsJson": "Siły",
+      "weaknessesJson": "Słabości",
+      "voiceNotes": "Głos postaci",
+      "arcSummary": "Łuk przemiany",
+      "knowledgeNotes": "Wiedza postaci",
+      "visualPrompt": "Prompt wizualny",
+      "relationDescription": "Opis relacji",
+      "relationHistory": "Historia relacji",
+      "relationConflict": "Konflikt relacji",
+      "relationOpinion": "Opinia",
+      "relationSecret": "Sekret relacji",
+      "relationChangeOverTime": "Zmiana w czasie",
+      "memoryTitle": "Tytuł wspomnienia",
+      "memorySummary": "Opis wspomnienia",
+      "memoryDetails": "Szczegóły wspomnienia",
+      "memorySubject": "Temat wspomnienia",
+      "memoryEmotion": "Emocja",
+      "memoryLinkDescription": "Opis połączenia",
+      "characterImage": "Obraz postaci"
+    }
+  }
+}

@@ -3,6 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { FileText, List, PenLine, Pilcrow, Plus, Redo2, Save, Sparkles, Star, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createSceneSnapshot,
@@ -98,14 +99,16 @@ type PlanPromptEntity = Scene | Chapter;
 
 const relationKinds: SceneRelationKind[] = ["characters", "threads", "elements", "rules"];
 
-const insertModeItems: ReadonlyArray<{ id: SceneEditorInsertMode; label: string }> = [
-  { id: "append_to_scene", label: "Dopisz" },
-  { id: "replace_selection", label: "Zastąp" },
-  { id: "insert_after_selection", label: "Po zazn." },
-  { id: "save_as_variant", label: "Wariant" }
+const insertModeIds: ReadonlyArray<{ id: SceneEditorInsertMode; labelKey: string }> = [
+  { id: "append_to_scene", labelKey: "scenes.insertModeAppend" },
+  { id: "replace_selection", labelKey: "scenes.insertModeReplace" },
+  { id: "insert_after_selection", labelKey: "scenes.insertModeAfter" },
+  { id: "save_as_variant", labelKey: "scenes.insertModeVariant" }
 ];
 
 export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
+  const { t } = useTranslation();
+  const insertModeItems = insertModeIds.map((item) => ({ id: item.id, label: t(item.labelKey) }));
   const queryClient = useQueryClient();
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const proposals = useProposalStore((state) => state.proposals);
@@ -123,7 +126,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
   const [selectionText, setSelectionText] = useState("");
   const [customInstruction, setCustomInstruction] = useState("");
   const [insertMode, setInsertMode] = useState<SceneEditorInsertMode>("append_to_scene");
-  const [statusText, setStatusText] = useState("Wybierz scenę");
+  const [statusText, setStatusText] = useState(t("scenes.statusSelectScene"));
   const [variants, setVariants] = useState<SceneVariant[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [snapshotPreview, setSnapshotPreview] = useState<{ id: string; text: string } | null>(null);
@@ -195,7 +198,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: "Pisz scenę tutaj..."
+        placeholder: t("scenes.editorPlaceholder")
       })
     ],
     content: selectedScene?.manuscriptContent || "",
@@ -230,10 +233,10 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
   const snapshotMutation = useMutation({
     mutationFn: () => createSceneSnapshot(selectedSceneId ?? "", "manual"),
     onSuccess: async (snapshot) => {
-      setStatusText(snapshot ? "Zapisano migawkę" : "Scena jest pusta — migawki nie utworzono");
+      setStatusText(snapshot ? t("scenes.snapshotSaved") : t("scenes.snapshotEmptyScene"));
       await queryClient.invalidateQueries({ queryKey: ["scene-snapshots", selectedSceneId] });
     },
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Błąd migawki")
+    onError: (error) => setStatusText(error instanceof Error ? error.message : t("scenes.snapshotError"))
   });
 
   const restoreSnapshotMutation = useMutation({
@@ -253,18 +256,18 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
         return next;
       });
       setSnapshotPreview(null);
-      setStatusText("Przywrócono migawkę");
+      setStatusText(t("scenes.snapshotRestored"));
       await invalidatePlan();
       await queryClient.invalidateQueries({ queryKey: ["scene-snapshots", selectedSceneId] });
     },
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Błąd przywracania")
+    onError: (error) => setStatusText(error instanceof Error ? error.message : t("scenes.restoreError"))
   });
 
   const saveMutation = useMutation({
     mutationFn: async (input: UpsertSceneInput) => upsertScene(input),
     onSuccess: async (scene) => {
       setSelectedSceneId(scene.id);
-      setStatusText(`Zapisano ${new Date().toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}`);
+      setStatusText(t("scenes.savedAt", { time: new Date().toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" }) }));
       await invalidatePlan();
       // Streszczenie ciągłości odświeża się w tle po pauzie w pisaniu.
       if (bookId) {
@@ -285,7 +288,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       setSceneModal(null);
       setSelectedSceneId(null);
       setDraft(null);
-      setStatusText("Usunięto scenę");
+      setStatusText(t("scenes.sceneDeleted"));
       await invalidatePlan();
     },
     onError: (error) => {
@@ -298,8 +301,8 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     onSuccess: async (scene) => {
       setStatusText(
         scene.isStyleReference
-          ? "Oznaczono scenę jako wzorzec stylu dla AI"
-          : "Usunięto oznaczenie wzorca stylu"
+          ? t("scenes.styleReferenceMarked")
+          : t("scenes.styleReferenceUnmarked")
       );
       await invalidatePlan();
     },
@@ -313,7 +316,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     onSuccess: async (chapter) => {
       setSelectedChapterId(chapter.id);
       setChapterModal(null);
-      setStatusText("Zapisano ustawienia rozdziału");
+      setStatusText(t("scenes.chapterSettingsSaved"));
       await invalidatePlan();
     },
     onError: (error) => {
@@ -327,7 +330,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       setSelectedChapterId(null);
       setSelectedSceneId(null);
       setChapterModal(null);
-      setStatusText("Usunięto rozdział");
+      setStatusText(t("scenes.chapterDeleted"));
       await invalidatePlan();
     },
     onError: (error) => {
@@ -375,7 +378,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     setSelectionText("");
     setVariants(loadVariants(selectedScene.id));
     setSelectedVariantId(null);
-    setStatusText("Scena gotowa");
+    setStatusText(t("scenes.sceneReady"));
   }, [editor, selectedScene?.id]);
 
   useEffect(() => {
@@ -388,7 +391,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       return;
     }
 
-    setStatusText("Autosave...");
+    setStatusText(t("scenes.autosave"));
     const timeoutId = window.setTimeout(() => {
       lastSavedSignature.current = nextSignature;
       saveMutation.mutate(draft);
@@ -432,7 +435,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       } else {
         editor.chain().focus().setTextSelection(editor.state.doc.content.size).insertContent(html).run();
         if (mode !== "append_to_scene" && selectedText) {
-          setStatusText("Nie znaleziono zaznaczonego fragmentu — tekst dodano na końcu sceny");
+          setStatusText(t("scenes.quoteNotFoundAppended"));
         }
       }
     });
@@ -448,7 +451,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     }
     const range = findQuoteRangeInDoc(editor.state.doc, finding.quote);
     if (!range) {
-      setStatusText("Nie znaleziono cytatu w tekście sceny — uwaga została w panelu");
+      setStatusText(t("scenes.quoteNotFoundInScene"));
       return false;
     }
     editor.chain().focus().setTextSelection(range).run();
@@ -461,7 +464,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       selectedText,
       customInstruction: instruction
     });
-    setStatusText("Fragment zaznaczony — propozycja przepisania w kolejce AI");
+    setStatusText(t("scenes.fragmentSelectedQueued"));
     return true;
   };
 
@@ -513,9 +516,9 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
   function activatePlanPromptContext(field: PlanFieldKey, targetEntity?: PlanPromptEntity) {
     activatePromptContextTarget(
       createPlanPromptContextTarget(projectId, field, targetEntity ? planPromptEntityId(targetEntity) : undefined, {
-        submitLabel: "Wygeneruj",
+        submitLabel: t("scenes.generate"),
         submitDisabled: !projectQuery.data || !bookId,
-        submitDisabledReason: "Najpierw wczytaj dane projektu.",
+        submitDisabledReason: t("scenes.loadProjectFirst"),
         onSubmit: () => queueSceneField(field, targetEntity)
       })
     );
@@ -534,13 +537,13 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     activatePromptContextTarget({
       targetId,
       projectId,
-      title: "Pisanie sceny",
-      subtitle: selectedScene.title || "Aktywna scena",
+      title: t("scenes.sceneWriting"),
+      subtitle: selectedScene.title || t("scenes.activeScene"),
       sources,
       defaultSources: sources,
-      submitLabel: "AI",
+      submitLabel: t("scenes.aiButton"),
       submitDisabled: !projectQuery.data || !bookId || Boolean(pendingEditorStatus),
-      submitDisabledReason: pendingEditorStatus ? "AI już pracuje nad tą sceną." : "Najpierw wczytaj dane projektu.",
+      submitDisabledReason: pendingEditorStatus ? t("scenes.aiAlreadyWorking") : t("scenes.loadProjectFirst"),
       onSubmit: () => queueEditorAction(field, mode),
       renderPrompt: () => renderSceneEditorPrompt(field, mode)
     });
@@ -707,7 +710,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     }
     const sceneText = editor.getText();
     if (!sceneText.trim()) {
-      setStatusText("Scena nie ma jeszcze tekstu do krytyki");
+      setStatusText(t("scenes.sceneNoTextForCritique"));
       return;
     }
     const sceneContext = buildScenePromptContext({
@@ -738,7 +741,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
       promptPackageJson: promptPackage,
       prompt: renderSceneCritiquePromptPackage(promptPackage)
     });
-    setStatusText("Redaktor czyta scenę…");
+    setStatusText(t("scenes.editorReadingScene"));
   }
 
   async function saveSceneFromModal(input: UpsertSceneInput, relations: Omit<SetSceneRelationsInput, "bookId" | "sceneId">) {
@@ -754,21 +757,21 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
     setSelectedSceneId(savedScene.id);
     setSelectedChapterId(savedScene.chapterId ?? null);
     setSceneModal(null);
-    setStatusText("Zapisano ustawienia sceny");
+    setStatusText(t("scenes.sceneSettingsSaved"));
     await invalidatePlan();
   }
 
   return (
     <div className="scene-editor-page">
-      <aside className="scene-rail" aria-label="Rozdziały i sceny">
-        <Field label="Rozdział">
+      <aside className="scene-rail" aria-label={t("scenes.railAriaLabel")}>
+        <Field label={t("scenes.chapter")}>
           <select value={activeChapterId ?? ""} onChange={(event) => selectChapter(event.target.value || null)}>
             {chapters.map((chapter) => (
               <option key={chapter.id} value={chapter.id}>
-                {chapter.number} — {chapter.workingTitle || "Bez tytułu"}
+                {chapter.number} — {chapter.workingTitle || t("scenes.untitled")}
               </option>
             ))}
-            <option value="">Bez rozdziału</option>
+            <option value="">{t("scenes.noChapter")}</option>
           </select>
         </Field>
 
@@ -780,22 +783,22 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
             disabled={!selectedChapter}
           >
             <FileText size={15} />
-            Ustawienia rozdziału
+            {t("scenes.chapterSettings")}
           </Button>
           <Button
             variant="icon"
             className="scene-context-add-rail-button"
             onClick={() => selectedChapter && addSceneEditorContextSource(chapterPromptContextSource(selectedChapter))}
             disabled={!selectedChapter || !activePromptContextTarget || (selectedChapter ? contextSourceAlreadyAdded(activePromptContextTarget.sources, chapterPromptContextSource(selectedChapter).key) : true)}
-            title="Dodaj rozdział do aktywnego kontekstu AI"
-            aria-label="Dodaj rozdział do aktywnego kontekstu AI"
+            title={t("scenes.addChapterToContext")}
+            aria-label={t("scenes.addChapterToContext")}
           >
             <Plus size={15} />
           </Button>
         </div>
 
         <div className="scene-rail-list">
-          <span className="ui-field-label">Sceny</span>
+          <span className="ui-field-label">{t("scenes.scenesLabel")}</span>
           <ul className="scene-list">
             {chapterScenes.map((scene) => {
               const words = scene.actualWordCount || countWords(htmlToText(scene.manuscriptContent));
@@ -809,10 +812,10 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                       setSelectedSceneId(scene.id);
                     }}
                   >
-                    <span className="t">{scene.title || "Scena bez tytułu"}</span>
+                    <span className="t">{scene.title || t("scenes.sceneUntitled")}</span>
                     <span className="m">
-                      <StatusPill tone={sceneStatusTone(scene.status)}>{sceneStatusLabel(scene.status)}</StatusPill>
-                      <span>{words > 0 ? `${words.toLocaleString("pl-PL")} słów` : "—"}</span>
+                      <StatusPill tone={sceneStatusTone(scene.status)}>{t(sceneStatusLabelKey(scene.status))}</StatusPill>
+                      <span>{words > 0 ? t("scenes.wordsCount", { count: words }) : "—"}</span>
                     </span>
                   </button>
                   <div className="scene-row-actions">
@@ -828,10 +831,10 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                       disabled={styleReferenceMutation.isPending}
                       title={
                         scene.isStyleReference
-                          ? "Scena wzorcowa stylu — AI naśladuje jej prozę (kliknij, by odznaczyć)"
-                          : "Oznacz jako scenę wzorcową stylu dla AI"
+                          ? t("scenes.styleReferenceActiveTitle")
+                          : t("scenes.styleReferenceMarkTitle")
                       }
-                      aria-label={`Wzorzec stylu: ${scene.title || "Scena bez tytułu"}`}
+                      aria-label={t("scenes.styleReferenceAria", { title: scene.title || t("scenes.sceneUntitled") })}
                       aria-pressed={Boolean(scene.isStyleReference)}
                     >
                       <Star size={14} fill={scene.isStyleReference ? "currentColor" : "none"} />
@@ -841,8 +844,8 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                       className="scene-context-add-button"
                       onClick={() => addSceneEditorContextSource(scenePromptContextSource(scene))}
                       disabled={!activePromptContextTarget || contextSourceAlreadyAdded(activePromptContextTarget.sources, scenePromptContextSource(scene).key)}
-                      title={`Dodaj scenę do aktywnego kontekstu AI: ${scene.title || "Scena bez tytułu"}`}
-                      aria-label={`Dodaj scenę do aktywnego kontekstu AI: ${scene.title || "Scena bez tytułu"}`}
+                      title={t("scenes.addSceneToContext", { title: scene.title || t("scenes.sceneUntitled") })}
+                      aria-label={t("scenes.addSceneToContext", { title: scene.title || t("scenes.sceneUntitled") })}
                     >
                       <Plus size={14} />
                     </Button>
@@ -851,12 +854,12 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
               );
             })}
           </ul>
-          {chapterScenes.length === 0 ? <span className="scene-empty-note">Brak scen w tej sekcji.</span> : null}
+          {chapterScenes.length === 0 ? <span className="scene-empty-note">{t("scenes.noScenesInSection")}</span> : null}
         </div>
 
         <Button block onClick={() => openCreateSceneModal()}>
           <Plus size={15} />
-          Nowa scena
+          {t("scenes.newScene")}
         </Button>
       </aside>
 
@@ -866,36 +869,36 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
             <EditorToolbar editor={editor} />
 
             {selectionText ? (
-              <div className="scene-selection-popover" role="toolbar" aria-label="AI dla zaznaczenia">
-                <span>{countWords(selectionText)} słów zaznaczenia</span>
-                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("rewriteSelection", "replace_selection")}>Przepisz</Button>
-                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("expandSelection", "insert_after_selection")}>Rozwiń</Button>
-                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("rewriteSelection", "replace_selection")}>Popraw dialog</Button>
-                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("expandSelection", "insert_after_selection")}>Dodaj napięcie</Button>
+              <div className="scene-selection-popover" role="toolbar" aria-label={t("scenes.aiForSelection")}>
+                <span>{t("scenes.wordsSelected", { count: countWords(selectionText) })}</span>
+                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("rewriteSelection", "replace_selection")}>{t("scenes.rewrite")}</Button>
+                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("expandSelection", "insert_after_selection")}>{t("scenes.expand")}</Button>
+                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("rewriteSelection", "replace_selection")}>{t("scenes.fixDialogue")}</Button>
+                <Button variant="ai" size="sm" onClick={() => activateSceneEditorPromptContext("expandSelection", "insert_after_selection")}>{t("scenes.addTension")}</Button>
               </div>
             ) : null}
 
             <article className="manuscript">
               <div className="scene-no">
-                {selectedChapter ? `Rozdział ${selectedChapter.number}` : "Sceny robocze"}
-                {selectedSceneIndex >= 0 ? ` · Scena ${selectedSceneIndex + 1}` : ""}
+                {selectedChapter ? t("scenes.chapterLabel", { number: selectedChapter.number }) : t("scenes.draftScenes")}
+                {selectedSceneIndex >= 0 ? t("scenes.sceneNumber", { number: selectedSceneIndex + 1 }) : ""}
               </div>
-              <h2>{draft.title || "Scena bez tytułu"}</h2>
+              <h2>{draft.title || t("scenes.sceneUntitled")}</h2>
               <EditorContent
                 editor={editor}
                 onFocusCapture={() => activateSceneEditorPromptContext()}
                 onClick={() => activateSceneEditorPromptContext()}
               />
               <div className="ms-count">
-                {currentWordCount.toLocaleString("pl-PL")} słów
-                {targetWordCount ? ` · cel sceny: ${targetWordCount.toLocaleString("pl-PL")}` : ""}
+                {t("scenes.sceneWordCount", { count: currentWordCount })}
+                {targetWordCount ? t("scenes.sceneTarget", { target: targetWordCount.toLocaleString("pl-PL") }) : ""}
               </div>
             </article>
 
             <div className="scene-meta-row">
-              <StatusPill tone={sceneStatusTone(draft.status)}>{sceneStatusLabel(draft.status)}</StatusPill>
+              <StatusPill tone={sceneStatusTone(draft.status)}>{t(sceneStatusLabelKey(draft.status))}</StatusPill>
               {relationKinds.flatMap((kind) =>
-                sceneRelationOptions(kind, plan, characters, world)
+                sceneRelationOptions(kind, plan, characters, world, t)
                   .filter((item) => sceneRelationIds(plan, selectedScene.id, kind).includes(item.id))
                   .map((item) => (
                     <Chip
@@ -907,22 +910,22 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                     </Chip>
                   ))
               )}
-              <Chip onClick={() => setSceneModal({ mode: "edit", sceneId: selectedScene.id })}>+ powiąż</Chip>
+              <Chip onClick={() => setSceneModal({ mode: "edit", sceneId: selectedScene.id })}>{t("scenes.linkRelation")}</Chip>
             </div>
 
-            <section className="scene-ai-panel" aria-label="Pisanie z AI">
-              <h3><Sparkles size={14} aria-hidden /> Pisanie z AI</h3>
-              <Field label="Własna instrukcja">
+            <section className="scene-ai-panel" aria-label={t("scenes.aiWritingPanel")}>
+              <h3><Sparkles size={14} aria-hidden /> {t("scenes.aiWritingPanel")}</h3>
+              <Field label={t("scenes.customInstruction")}>
                 <input
                   value={customInstruction}
                   onChange={(event) => setCustomInstruction(event.target.value)}
-                  placeholder="np. dopisz zakończenie sceny w napiętym tonie…"
+                  placeholder={t("scenes.customInstructionPlaceholder")}
                 />
               </Field>
               <div className="scene-ai-mode">
-                <span className="ui-field-label">Tryb wstawiania</span>
+                <span className="ui-field-label">{t("scenes.insertMode")}</span>
                 <Segmented
-                  ariaLabel="Tryb wstawiania"
+                  ariaLabel={t("scenes.insertMode")}
                   items={insertModeItems}
                   value={insertMode}
                   onChange={(mode) => setInsertMode(mode)}
@@ -935,21 +938,21 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                   onClick={() => activateSceneEditorPromptContext("continueScene", insertMode)}
                 >
                   <Sparkles size={15} />
-                  {pendingEditorStatus ? "AI pracuje…" : "Generuj kontynuację"}
+                  {pendingEditorStatus ? t("scenes.aiWorking") : t("scenes.generateContinuation")}
                 </Button>
                 <Button
                   variant="ghost"
                   busy={Boolean(pendingCritiqueStatus)}
-                  title="Krytyka redaktorska sceny: tempo, dialogi, POV, telling, powtórzenia, ciągłość. Uwagi pojawią się w prawym panelu."
+                  title={t("scenes.editorTitle")}
                   onClick={() => queueSceneCritique()}
                 >
                   <PenLine size={15} />
-                  {pendingCritiqueStatus ? "Redaktor czyta…" : "Redaktor"}
+                  {pendingCritiqueStatus ? t("scenes.editorReading") : t("scenes.editorButton")}
                 </Button>
                 <details className="scene-variants-menu">
                   <summary>
                     <Sparkles size={15} aria-hidden />
-                    {selectedVariantLabel(variants, selectedVariantId)}
+                    {selectedVariantLabel(t, variants, selectedVariantId)}
                   </summary>
                   <div className="scene-variants-popover">
                     {variants.map((variant) => (
@@ -966,13 +969,13 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                         <strong>{variant.mode}</strong>
                       </button>
                     ))}
-                    {variants.length === 0 ? <p>Brak zapisanych wariantów dla tej sceny.</p> : null}
+                    {variants.length === 0 ? <p>{t("scenes.noSavedVariants")}</p> : null}
                   </div>
                 </details>
                 <details className="scene-variants-menu scene-history-menu">
                   <summary>
                     <Undo2 size={15} aria-hidden />
-                    Historia ({snapshotsQuery.data?.length ?? 0})
+                    {t("scenes.history", { count: snapshotsQuery.data?.length ?? 0 })}
                   </summary>
                   <div className="scene-variants-popover">
                     <Button
@@ -981,14 +984,14 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                       onClick={() => snapshotMutation.mutate()}
                     >
                       <Save size={14} />
-                      Zapisz migawkę teraz
+                      {t("scenes.saveSnapshotNow")}
                     </Button>
                     <Button
                       variant="ghost"
-                      title="Wygeneruj od nowa streszczenie tej sceny używane jako kontekst ciągłości dla AI"
+                      title={t("scenes.refreshSceneSummaryTitle")}
                       onClick={() => {
                         if (bookId && selectedSceneId) {
-                          setStatusText("Odświeżam streszczenie sceny…");
+                          setStatusText(t("scenes.refreshingSceneSummary"));
                           void refreshSceneAutoSummary(
                             projectId,
                             bookId,
@@ -1000,14 +1003,14 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                       }}
                     >
                       <Sparkles size={14} />
-                      Odśwież streszczenie sceny
+                      {t("scenes.refreshSceneSummary")}
                     </Button>
                     {(snapshotsQuery.data ?? []).map((snapshot) => (
                       <div className="scene-snapshot-item" key={snapshot.id}>
                         <button
                           type="button"
                           className="scene-variant-item"
-                          title="Pokaż początek tekstu migawki"
+                          title={t("scenes.snapshotPreviewTitle")}
                           onClick={() => {
                             if (snapshotPreview?.id === snapshot.id) {
                               setSnapshotPreview(null);
@@ -1023,7 +1026,7 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                         >
                           <span>{new Date(snapshot.createdAt).toLocaleString("pl-PL")}</span>
                           <strong>
-                            {snapshotSourceLabel(snapshot.source)} · {snapshot.wordCount} słów
+                            {t("scenes.snapshotWords", { source: t(snapshotSourceLabelKey(snapshot.source)), count: snapshot.wordCount })}
                           </strong>
                         </button>
                         {snapshotPreview?.id === snapshot.id ? (
@@ -1034,12 +1037,12 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
                           busy={restoreSnapshotMutation.isPending}
                           onClick={() => restoreSnapshotMutation.mutate(snapshot.id)}
                         >
-                          Przywróć
+                          {t("scenes.restore")}
                         </Button>
                       </div>
                     ))}
                     {(snapshotsQuery.data ?? []).length === 0 ? (
-                      <p>Brak migawek tej sceny. Powstają automatycznie przed zmianami z AI.</p>
+                      <p>{t("scenes.noSnapshots")}</p>
                     ) : null}
                   </div>
                 </details>
@@ -1049,11 +1052,11 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
             <footer className="scene-save-row">
               <Button variant="primary" busy={saveMutation.isPending} onClick={() => draft && saveMutation.mutate(draft)}>
                 <Save size={15} />
-                Zapisz scenę
+                {t("scenes.saveScene")}
               </Button>
               <Button variant="ghost" onClick={() => setSceneModal({ mode: "edit", sceneId: selectedScene.id })}>
                 <FileText size={15} />
-                Ustawienia sceny
+                {t("scenes.sceneSettings")}
               </Button>
               <span className="scene-autosave">{statusText}</span>
             </footer>
@@ -1061,12 +1064,12 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
         ) : (
           <EmptyState
             icon={<PenLine size={28} aria-hidden />}
-            title="Brak sceny do edycji"
-            description="Dodaj pierwszą scenę z listy rozdziałów, żeby rozpocząć pisanie."
+            title={t("scenes.noSceneTitle")}
+            description={t("scenes.noSceneDescription")}
             action={
               <Button variant="primary" onClick={() => openCreateSceneModal(chapters[0]?.id ?? null)}>
                 <Plus size={15} />
-                Dodaj scenę
+                {t("scenes.addScene")}
               </Button>
             }
           />
@@ -1116,14 +1119,15 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
 }
 
 function EditorToolbar({ editor }: { editor: Editor | null }) {
+  const { t } = useTranslation();
   return (
-    <div className="ms-toolbar" role="toolbar" aria-label="Formatowanie sceny">
+    <div className="ms-toolbar" role="toolbar" aria-label={t("scenes.formatToolbarAria")}>
       <Button
         variant="icon"
         className={editor?.isActive("bold") ? "active" : ""}
         onClick={() => editor?.chain().focus().toggleBold().run()}
-        title="Pogrubienie"
-        aria-label="Pogrubienie"
+        title={t("scenes.bold")}
+        aria-label={t("scenes.bold")}
       >
         <b>B</b>
       </Button>
@@ -1131,8 +1135,8 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant="icon"
         className={editor?.isActive("italic") ? "active" : ""}
         onClick={() => editor?.chain().focus().toggleItalic().run()}
-        title="Kursywa"
-        aria-label="Kursywa"
+        title={t("scenes.italic")}
+        aria-label={t("scenes.italic")}
       >
         <i>I</i>
       </Button>
@@ -1141,24 +1145,24 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant="icon"
         className={editor?.isActive("bulletList") ? "active" : ""}
         onClick={() => editor?.chain().focus().toggleBulletList().run()}
-        title="Lista"
-        aria-label="Lista"
+        title={t("scenes.list")}
+        aria-label={t("scenes.list")}
       >
         <List size={15} />
       </Button>
       <Button
         variant="icon"
         onClick={() => editor?.chain().focus().setParagraph().run()}
-        title="Akapit"
-        aria-label="Akapit"
+        title={t("scenes.paragraph")}
+        aria-label={t("scenes.paragraph")}
       >
         <Pilcrow size={15} />
       </Button>
       <span className="sep" aria-hidden />
-      <Button variant="icon" onClick={() => editor?.chain().focus().undo().run()} title="Cofnij" aria-label="Cofnij">
+      <Button variant="icon" onClick={() => editor?.chain().focus().undo().run()} title={t("scenes.undo")} aria-label={t("scenes.undo")}>
         <Undo2 size={15} />
       </Button>
-      <Button variant="icon" onClick={() => editor?.chain().focus().redo().run()} title="Ponów" aria-label="Ponów">
+      <Button variant="icon" onClick={() => editor?.chain().focus().redo().run()} title={t("scenes.redo")} aria-label={t("scenes.redo")}>
         <Redo2 size={15} />
       </Button>
     </div>
@@ -1270,40 +1274,46 @@ function chapterThreadRelation(plan: BookPlan, threadId: string, chapterId: stri
 }
 
 
-function sceneRelationOptions(kind: SceneRelationKind, plan: BookPlan, characters: CharacterWorkspace, world: WorldWorkspace): Array<{ id: string; label: string; description: string }> {
+function sceneRelationOptions(
+  kind: SceneRelationKind,
+  plan: BookPlan,
+  characters: CharacterWorkspace,
+  world: WorldWorkspace,
+  t: (key: string) => string
+): Array<{ id: string; label: string; description: string }> {
   if (kind === "characters") {
     return characters.characters.map((character) => ({
       id: character.id,
-      label: character.name || "Postać bez imienia",
-      description: character.shortDescription || character.arcSummary || character.role || "Brak opisu postaci."
+      label: character.name || t("scenes.characterNoName"),
+      description: character.shortDescription || character.arcSummary || character.role || t("scenes.noCharacterDescription")
     }));
   }
   if (kind === "threads") {
     return plan.threads.map((thread) => ({
       id: thread.id,
-      label: thread.name || "Wątek bez nazwy",
-      description: thread.description || thread.status || "Brak opisu wątku."
+      label: thread.name || t("scenes.threadNoName"),
+      description: thread.description || thread.status || t("scenes.noThreadDescription")
     }));
   }
   if (kind === "elements") {
     return world.elements.map((element) => ({
       id: element.id,
-      label: element.name || "Element świata bez nazwy",
-      description: element.summary || element.details || element.elementType || "Brak opisu elementu świata."
+      label: element.name || t("scenes.elementNoName"),
+      description: element.summary || element.details || element.elementType || t("scenes.noElementDescription")
     }));
   }
   return world.rules.map((rule) => ({
     id: rule.id,
-    label: rule.name || "Reguła bez nazwy",
-    description: rule.description || "Brak opisu reguły świata."
+    label: rule.name || t("scenes.ruleNoName"),
+    description: rule.description || t("scenes.noRuleDescription")
   }));
 }
 
-function sceneStatusLabel(status: Scene["status"]): string {
-  if (status === "written") return "Napisana";
-  if (status === "draft") return "Szkic";
-  if (status === "revision") return "Do redakcji";
-  return "Planowana";
+function sceneStatusLabelKey(status: Scene["status"]): string {
+  if (status === "written") return "scenes.statusWritten";
+  if (status === "draft") return "scenes.statusDraft";
+  if (status === "revision") return "scenes.statusRevision";
+  return "scenes.statusPlanned";
 }
 
 function sceneStatusTone(status: Scene["status"]): "success" | "warn" | "muted" | "accent" {
@@ -1414,9 +1424,15 @@ function sceneEditorManualContextSnippets(
     .filter((snippet): snippet is { key: string; label: string; content: string } => Boolean(snippet));
 }
 
-function selectedVariantLabel(variants: SceneVariant[], selectedVariantId: string | null): string {
+function selectedVariantLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  variants: SceneVariant[],
+  selectedVariantId: string | null
+): string {
   const selected = selectedVariantId ? variants.find((variant) => variant.id === selectedVariantId) : null;
-  return selected ? `Wariant: ${new Date(selected.createdAt).toLocaleString("pl-PL")}` : "Warianty AI";
+  return selected
+    ? t("scenes.variantLabel", { date: new Date(selected.createdAt).toLocaleString("pl-PL") })
+    : t("scenes.aiVariants");
 }
 
 
@@ -1452,14 +1468,14 @@ function variantsKey(sceneId: string): string {
   return `storyforge2:scene-variants:${sceneId}`;
 }
 
-function snapshotSourceLabel(source: string): string {
+function snapshotSourceLabelKey(source: string): string {
   if (source === "ai_replace") {
-    return "przed AI";
+    return "scenes.snapshotSourceBeforeAi";
   }
   if (source === "restore") {
-    return "przed przywróceniem";
+    return "scenes.snapshotSourceBeforeRestore";
   }
-  return "ręczna";
+  return "scenes.snapshotSourceManual";
 }
 
 function loadVariants(sceneId: string): SceneVariant[] {

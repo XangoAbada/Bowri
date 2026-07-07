@@ -1,0 +1,17 @@
+{
+  "common": {
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "delete": "Usuń",
+    "close": "Zamknij",
+    "edit": "Edytuj",
+    "add": "Dodaj",
+    "loading": "Ładowanie…",
+    "error": "Błąd",
+    "retry": "Spróbuj ponownie",
+    "confirm": "Potwierdź",
+    "saving": "Zapisywanie…",
+    "saved": "Zapisano",
+    "back": "Wstecz"
+  }
+}

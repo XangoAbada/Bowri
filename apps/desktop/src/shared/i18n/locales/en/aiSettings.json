@@ -1,0 +1,92 @@
+{
+  "aiSettings": {
+    "eyebrow": "Settings",
+    "heading": "AI providers",
+    "uiLanguage": "Interface language",
+    "subscriptionsEyebrow": "Subscriptions",
+    "activeAccounts": "Active accounts",
+    "checkingStatus": "Checking status...",
+    "openaiCodex": "OpenAI (Codex CLI)",
+    "anthropicClaude": "Anthropic (Claude Code CLI)",
+    "loginViaCodex": "Sign in via Codex CLI",
+    "loginViaCodexTitle": "Runs `codex login` — sign-in opens in the browser.",
+    "refreshOpenaiStatus": "Refresh OpenAI subscription status",
+    "claudePathLabel": "Path to Claude Code CLI",
+    "checkClaudeCli": "Check Claude Code CLI",
+    "openLoginTerminal": "Open sign-in terminal",
+    "openLoginTerminalTitle": "Opens a terminal with Claude Code CLI — type /login to sign in with your subscription.",
+    "anthropicStatusHelp": "The Anthropic sign-in status is a heuristic (based on Claude Code CLI login files). After signing in in the terminal, refresh the status.",
+    "textEyebrow": "Text generation",
+    "textProviderHeading": "Content provider",
+    "aiResponseLanguage": "AI response language",
+    "aiResponseLanguagePlaceholder": "e.g. English, français… (empty = Polish)",
+    "aiResponseLanguageHelp": "Empty = AI replies in Polish. Type any language for generated content.",
+    "claudeModel": "Claude model",
+    "openaiModel": "OpenAI model",
+    "anthropicModel": "Anthropic model",
+    "reasoningLevel": "Reasoning level",
+    "reasoningHelp": "Shared across Codex, OpenAI API and Claude Code CLI (for Claude it maps to <effort>--effort</effort>). The same value drives the slider in the model panel on the top bar.",
+    "imageEyebrow": "Image generation",
+    "imageProviderHeading": "Image provider",
+    "openaiImageModel": "OpenAI image model",
+    "sdwebuiUrl": "SD WebUI address",
+    "comfyuiUrl": "ComfyUI address",
+    "comfyuiWorkflow": "ComfyUI workflow (API format)",
+    "comfyuiWorkflowPlaceholder": "Paste the JSON exported via \"Save (API Format)\"",
+    "comfyuiHelp": "In the workflow use the placeholders {{prompt}}, {{negative}} and {{seed}} in the positive text, negative text and seed fields. Export: ComfyUI → Save (API Format).",
+    "keysEyebrow": "API keys",
+    "keysHeading": "API authentication",
+    "openaiApiKey": "OpenAI API key",
+    "anthropicApiKey": "Anthropic API key",
+    "keysHelp": "Keys are stored locally in the app settings file and sent only to the selected provider.",
+    "timeoutLabel": "Generation timeout (seconds)",
+    "plnRateLabel": "USD→PLN rate (cost estimate)",
+    "plnRateTitle": "Used only for a rough conversion of generation costs to PLN.",
+    "missingOpenaiKey": "OpenAI API provider selected, but no OpenAI key was provided.",
+    "missingAnthropicKey": "Anthropic API provider selected, but no Anthropic key was provided.",
+    "saveError": "Failed to save settings: {{error}}",
+    "save": "Save settings",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "pillChecking": "Checking",
+    "pillNoCli": "No CLI",
+    "pillLoggedIn": "Signed in",
+    "pillNeedsLogin": "Needs sign-in",
+    "textProvider": {
+      "codex-cli": {
+        "label": "Codex CLI (OpenAI subscription)",
+        "hint": "Current default. Requires a signed-in Codex CLI."
+      },
+      "claude-cli": {
+        "label": "Claude Code CLI (Anthropic subscription)",
+        "hint": "Requires an installed and signed-in Claude Code CLI."
+      },
+      "openai-api": {
+        "label": "OpenAI API (key)",
+        "hint": "Direct API calls — billed per token."
+      },
+      "anthropic-api": {
+        "label": "Anthropic API (key)",
+        "hint": "Direct API calls — billed per token."
+      }
+    },
+    "imageProvider": {
+      "codex-cli": {
+        "label": "Codex CLI (OpenAI subscription)",
+        "hint": "Current default — generation via the image_generation tool."
+      },
+      "openai-api": {
+        "label": "OpenAI Images API (key)",
+        "hint": "gpt-image-1 via API key."
+      },
+      "local-sdwebui": {
+        "label": "Local SD WebUI / A1111",
+        "hint": "Requires a running WebUI with the --api flag."
+      },
+      "local-comfyui": {
+        "label": "Local ComfyUI",
+        "hint": "Requires pasting a workflow in API format."
+      }
+    }
+  }
+}

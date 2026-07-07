@@ -6,6 +6,7 @@ import {
   Terminal
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   checkClaudeCli,
@@ -23,6 +24,7 @@ import type {
   TextProviderId
 } from "../../shared/api/types";
 import { DEFAULT_AI_SETTINGS, REASONING_LEVELS } from "../../shared/api/types";
+import { setUiLanguage, UI_LANGUAGES } from "../../shared/i18n";
 import { Button, Field, StatusPill } from "../../shared/ui";
 import { CodexStatusPanel } from "./CodexStatusPanel";
 import { useCodexSettingsStore } from "./codexSettingsStore";
@@ -32,53 +34,22 @@ import {
   OPENAI_TEXT_MODELS
 } from "./textProviderInfo";
 
-const TEXT_PROVIDERS: Array<{ value: TextProviderId; label: string; hint: string }> = [
-  {
-    value: "codex-cli",
-    label: "Codex CLI (subskrypcja OpenAI)",
-    hint: "Obecne domyślne. Wymaga zalogowanego Codex CLI."
-  },
-  {
-    value: "claude-cli",
-    label: "Claude Code CLI (subskrypcja Anthropic)",
-    hint: "Wymaga zainstalowanego i zalogowanego Claude Code CLI."
-  },
-  {
-    value: "openai-api",
-    label: "OpenAI API (klucz)",
-    hint: "Bezpośrednie wywołania API — rozliczane za tokeny."
-  },
-  {
-    value: "anthropic-api",
-    label: "Anthropic API (klucz)",
-    hint: "Bezpośrednie wywołania API — rozliczane za tokeny."
-  }
+const TEXT_PROVIDER_IDS: TextProviderId[] = [
+  "codex-cli",
+  "claude-cli",
+  "openai-api",
+  "anthropic-api"
 ];
 
-const IMAGE_PROVIDERS: Array<{ value: ImageProviderId; label: string; hint: string }> = [
-  {
-    value: "codex-cli",
-    label: "Codex CLI (subskrypcja OpenAI)",
-    hint: "Obecne domyślne — generowanie przez narzędzie image_generation."
-  },
-  {
-    value: "openai-api",
-    label: "OpenAI Images API (klucz)",
-    hint: "gpt-image-1 przez klucz API."
-  },
-  {
-    value: "local-sdwebui",
-    label: "Lokalny SD WebUI / A1111",
-    hint: "Wymaga uruchomionego WebUI z flagą --api."
-  },
-  {
-    value: "local-comfyui",
-    label: "Lokalny ComfyUI",
-    hint: "Wymaga wklejenia workflow w formacie API."
-  }
+const IMAGE_PROVIDER_IDS: ImageProviderId[] = [
+  "codex-cli",
+  "openai-api",
+  "local-sdwebui",
+  "local-comfyui"
 ];
 
 export function AiSettingsPage() {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
   const timeoutSeconds = useCodexSettingsStore((state) => state.timeoutSeconds);
@@ -140,9 +111,9 @@ export function AiSettingsPage() {
   const missingKeyWarning =
     (draft.textProvider === "openai-api" && !draft.openaiApiKey.trim()) ||
     (draft.imageProvider === "openai-api" && !draft.openaiApiKey.trim())
-      ? "Wybrano dostawcę OpenAI API, ale nie podano klucza OpenAI."
+      ? t("aiSettings.missingOpenaiKey")
       : draft.textProvider === "anthropic-api" && !draft.anthropicApiKey.trim()
-        ? "Wybrano dostawcę Anthropic API, ale nie podano klucza Anthropic."
+        ? t("aiSettings.missingAnthropicKey")
         : null;
 
   const codexAvailable = codexCliQuery.data?.available === true;
@@ -154,28 +125,41 @@ export function AiSettingsPage() {
     <section className="content-panel settings-content">
       <div className="section-title-row">
         <div>
-          <p className="eyebrow">Ustawienia</p>
-          <h2>Dostawcy AI</h2>
+          <p className="eyebrow">{t("aiSettings.eyebrow")}</p>
+          <h2>{t("aiSettings.heading")}</h2>
         </div>
         <SlidersHorizontal size={20} aria-hidden="true" />
       </div>
 
+      <Field label={t("aiSettings.uiLanguage")} className="field-label-narrow">
+        <select
+          value={i18n.language}
+          onChange={(event) => setUiLanguage(event.target.value)}
+        >
+          {UI_LANGUAGES.map((lang) => (
+            <option value={lang.value} key={lang.value}>
+              {lang.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
       <div className="settings-panel provider-panel">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Subskrypcje</p>
-            <h2>Aktywne konta</h2>
+            <p className="eyebrow">{t("aiSettings.subscriptionsEyebrow")}</p>
+            <h2>{t("aiSettings.activeAccounts")}</h2>
           </div>
         </div>
 
         <div className="provider-body">
           <div className="section-title-row">
             <div>
-              <strong>OpenAI (Codex CLI)</strong>
+              <strong>{t("aiSettings.openaiCodex")}</strong>
               <p className="muted-text">
                 {codexLoginQuery.data?.message ??
                   codexCliQuery.data?.message ??
-                  "Sprawdzam status..."}
+                  t("aiSettings.checkingStatus")}
               </p>
             </div>
             <SubscriptionPill
@@ -190,9 +174,10 @@ export function AiSettingsPage() {
                 void startCodexLogin(codexPath);
               }}
               disabled={!codexAvailable}
-              title="Uruchamia `codex login` — logowanie otworzy się w przeglądarce."
+              title={t("aiSettings.loginViaCodexTitle")}
             >
-              <ExternalLink size={14} aria-hidden="true" /> Zaloguj przez Codex CLI
+              <ExternalLink size={14} aria-hidden="true" />{" "}
+              {t("aiSettings.loginViaCodex")}
             </Button>
             <Button
               variant="icon"
@@ -200,8 +185,8 @@ export function AiSettingsPage() {
                 void queryClient.invalidateQueries({ queryKey: ["codex-login"] });
                 void queryClient.invalidateQueries({ queryKey: ["codex-cli"] });
               }}
-              title="Odśwież status subskrypcji OpenAI"
-              aria-label="Odśwież status subskrypcji OpenAI"
+              title={t("aiSettings.refreshOpenaiStatus")}
+              aria-label={t("aiSettings.refreshOpenaiStatus")}
             >
               <RefreshCw size={16} />
             </Button>
@@ -209,9 +194,9 @@ export function AiSettingsPage() {
 
           <div className="section-title-row">
             <div>
-              <strong>Anthropic (Claude Code CLI)</strong>
+              <strong>{t("aiSettings.anthropicClaude")}</strong>
               <p className="muted-text">
-                {claudeQuery.data?.message ?? "Sprawdzam status..."}
+                {claudeQuery.data?.message ?? t("aiSettings.checkingStatus")}
               </p>
             </div>
             <SubscriptionPill
@@ -220,7 +205,7 @@ export function AiSettingsPage() {
               loading={claudeQuery.isLoading}
             />
           </div>
-          <Field label="Ścieżka do Claude Code CLI">
+          <Field label={t("aiSettings.claudePathLabel")}>
             <div className="inline-control">
               <Terminal size={16} aria-hidden="true" />
               <input
@@ -233,8 +218,8 @@ export function AiSettingsPage() {
                 onClick={() => {
                   void queryClient.invalidateQueries({ queryKey: ["claude-cli"] });
                 }}
-                title="Sprawdź Claude Code CLI"
-                aria-label="Sprawdź Claude Code CLI"
+                title={t("aiSettings.checkClaudeCli")}
+                aria-label={t("aiSettings.checkClaudeCli")}
               >
                 <RefreshCw size={16} />
               </Button>
@@ -246,38 +231,38 @@ export function AiSettingsPage() {
                 void startClaudeLogin(draft.claudePath);
               }}
               disabled={!claudeAvailable}
-              title="Otwiera terminal z Claude Code CLI — wpisz /login, aby zalogować się subskrypcją."
+              title={t("aiSettings.openLoginTerminalTitle")}
             >
-              <ExternalLink size={14} aria-hidden="true" /> Otwórz terminal logowania
+              <ExternalLink size={14} aria-hidden="true" />{" "}
+              {t("aiSettings.openLoginTerminal")}
             </Button>
           </div>
-          <p className="help-text">
-            Status logowania Anthropic to heurystyka (na podstawie plików logowania
-            Claude Code CLI). Po zalogowaniu w terminalu odśwież status.
-          </p>
+          <p className="help-text">{t("aiSettings.anthropicStatusHelp")}</p>
         </div>
       </div>
 
       <div className="settings-panel provider-panel">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Generowanie tekstu</p>
-            <h2>Dostawca treści</h2>
+            <p className="eyebrow">{t("aiSettings.textEyebrow")}</p>
+            <h2>{t("aiSettings.textProviderHeading")}</h2>
           </div>
         </div>
         <div className="provider-body">
-          {TEXT_PROVIDERS.map((provider) => (
-            <label className="field-label" key={provider.value}>
+          {TEXT_PROVIDER_IDS.map((provider) => (
+            <label className="field-label" key={provider}>
               <div className="inline-control">
                 <input
                   type="radio"
                   name="text-provider"
-                  checked={draft.textProvider === provider.value}
-                  onChange={() => update("textProvider", provider.value)}
+                  checked={draft.textProvider === provider}
+                  onChange={() => update("textProvider", provider)}
                 />
                 <span>
-                  {provider.label}
-                  <p className="muted-text">{provider.hint}</p>
+                  {t(`aiSettings.textProvider.${provider}.label`)}
+                  <p className="muted-text">
+                    {t(`aiSettings.textProvider.${provider}.hint`)}
+                  </p>
                 </span>
               </div>
             </label>
@@ -287,7 +272,7 @@ export function AiSettingsPage() {
 
           {draft.textProvider === "claude-cli" ? (
             <label className="field-label narrow">
-              Model Claude
+              {t("aiSettings.claudeModel")}
               <select
                 value={draft.claudeModel}
                 onChange={(event) => update("claudeModel", event.target.value)}
@@ -303,7 +288,7 @@ export function AiSettingsPage() {
 
           {draft.textProvider === "openai-api" ? (
             <label className="field-label narrow">
-              Model OpenAI
+              {t("aiSettings.openaiModel")}
               <select
                 value={draft.openaiTextModel}
                 onChange={(event) => update("openaiTextModel", event.target.value)}
@@ -321,7 +306,7 @@ export function AiSettingsPage() {
 
           {draft.textProvider === "anthropic-api" ? (
             <label className="field-label narrow">
-              Model Anthropic
+              {t("aiSettings.anthropicModel")}
               <select
                 value={draft.anthropicModel}
                 onChange={(event) => update("anthropicModel", event.target.value)}
@@ -336,7 +321,7 @@ export function AiSettingsPage() {
           ) : null}
 
           <label className="field-label narrow">
-            Poziom reasoning
+            {t("aiSettings.reasoningLevel")}
             <select
               value={reasoningEffort}
               onChange={(event) =>
@@ -355,33 +340,47 @@ export function AiSettingsPage() {
             </select>
           </label>
           <p className="help-text">
-            Wspólny dla Codeksa, OpenAI API i Claude Code CLI (dla Claude mapuje
-            się na <code>--effort</code>). Ta sama wartość steruje suwakiem w
-            panelu modelu na górnym pasku.
+            <Trans i18nKey="aiSettings.reasoningHelp" components={{ effort: <code /> }} />
           </p>
+
+          <Field
+            label={t("aiSettings.aiResponseLanguage")}
+            className="field-label-narrow"
+          >
+            <input
+              value={draft.aiResponseLanguage}
+              onChange={(event) =>
+                update("aiResponseLanguage", event.target.value)
+              }
+              placeholder={t("aiSettings.aiResponseLanguagePlaceholder")}
+            />
+          </Field>
+          <p className="help-text">{t("aiSettings.aiResponseLanguageHelp")}</p>
         </div>
       </div>
 
       <div className="settings-panel provider-panel">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Generowanie obrazów</p>
-            <h2>Dostawca grafik</h2>
+            <p className="eyebrow">{t("aiSettings.imageEyebrow")}</p>
+            <h2>{t("aiSettings.imageProviderHeading")}</h2>
           </div>
         </div>
         <div className="provider-body">
-          {IMAGE_PROVIDERS.map((provider) => (
-            <label className="field-label" key={provider.value}>
+          {IMAGE_PROVIDER_IDS.map((provider) => (
+            <label className="field-label" key={provider}>
               <div className="inline-control">
                 <input
                   type="radio"
                   name="image-provider"
-                  checked={draft.imageProvider === provider.value}
-                  onChange={() => update("imageProvider", provider.value)}
+                  checked={draft.imageProvider === provider}
+                  onChange={() => update("imageProvider", provider)}
                 />
                 <span>
-                  {provider.label}
-                  <p className="muted-text">{provider.hint}</p>
+                  {t(`aiSettings.imageProvider.${provider}.label`)}
+                  <p className="muted-text">
+                    {t(`aiSettings.imageProvider.${provider}.hint`)}
+                  </p>
                 </span>
               </div>
             </label>
@@ -389,7 +388,7 @@ export function AiSettingsPage() {
 
           {draft.imageProvider === "openai-api" ? (
             <label className="field-label narrow">
-              Model obrazów OpenAI
+              {t("aiSettings.openaiImageModel")}
               <input
                 value={draft.openaiImageModel}
                 onChange={(event) => update("openaiImageModel", event.target.value)}
@@ -400,7 +399,7 @@ export function AiSettingsPage() {
 
           {draft.imageProvider === "local-sdwebui" ? (
             <label className="field-label narrow">
-              Adres SD WebUI
+              {t("aiSettings.sdwebuiUrl")}
               <input
                 value={draft.sdwebuiBaseUrl}
                 onChange={(event) => update("sdwebuiBaseUrl", event.target.value)}
@@ -412,7 +411,7 @@ export function AiSettingsPage() {
           {draft.imageProvider === "local-comfyui" ? (
             <>
               <label className="field-label narrow">
-                Adres ComfyUI
+                {t("aiSettings.comfyuiUrl")}
                 <input
                   value={draft.comfyuiBaseUrl}
                   onChange={(event) => update("comfyuiBaseUrl", event.target.value)}
@@ -420,20 +419,22 @@ export function AiSettingsPage() {
                 />
               </label>
               <label className="field-label">
-                Workflow ComfyUI (format API)
+                {t("aiSettings.comfyuiWorkflow")}
                 <textarea
                   rows={8}
                   value={draft.comfyuiWorkflowJson}
                   onChange={(event) =>
                     update("comfyuiWorkflowJson", event.target.value)
                   }
-                  placeholder='Wklej JSON wyeksportowany przez "Save (API Format)"'
+                  placeholder={t("aiSettings.comfyuiWorkflowPlaceholder")}
                 />
               </label>
               <p className="help-text">
-                W workflow użyj placeholderów {"{PROMPT}"}, {"{NEGATIVE}"} i{" "}
-                {"{SEED}"} w polach tekstu pozytywnego, negatywnego i seeda. Eksport:
-                ComfyUI → Save (API Format).
+                {t("aiSettings.comfyuiHelp", {
+                  prompt: "{PROMPT}",
+                  negative: "{NEGATIVE}",
+                  seed: "{SEED}"
+                })}
               </p>
             </>
           ) : null}
@@ -443,13 +444,13 @@ export function AiSettingsPage() {
       <div className="settings-panel provider-panel">
         <div className="section-title-row">
           <div>
-            <p className="eyebrow">Klucze API</p>
-            <h2>Uwierzytelnianie API</h2>
+            <p className="eyebrow">{t("aiSettings.keysEyebrow")}</p>
+            <h2>{t("aiSettings.keysHeading")}</h2>
           </div>
           <KeyRound size={18} aria-hidden="true" />
         </div>
         <div className="provider-body">
-          <Field label="Klucz OpenAI API">
+          <Field label={t("aiSettings.openaiApiKey")}>
             <input
               type="password"
               value={draft.openaiApiKey}
@@ -458,7 +459,7 @@ export function AiSettingsPage() {
               autoComplete="off"
             />
           </Field>
-          <Field label="Klucz Anthropic API">
+          <Field label={t("aiSettings.anthropicApiKey")}>
             <input
               type="password"
               value={draft.anthropicApiKey}
@@ -467,14 +468,14 @@ export function AiSettingsPage() {
               autoComplete="off"
             />
           </Field>
-          <p className="help-text">
-            Klucze są zapisywane lokalnie w pliku ustawień aplikacji i wysyłane
-            wyłącznie do wybranego dostawcy.
-          </p>
+          <p className="help-text">{t("aiSettings.keysHelp")}</p>
         </div>
       </div>
 
-      <Field label="Timeout generowania (sekundy)" className="field-label-narrow">
+      <Field
+        label={t("aiSettings.timeoutLabel")}
+        className="field-label-narrow"
+      >
         <input
           type="number"
           min={30}
@@ -485,14 +486,17 @@ export function AiSettingsPage() {
         />
       </Field>
 
-      <Field label="Kurs USD→PLN (szacunek kosztów)" className="field-label-narrow">
+      <Field
+        label={t("aiSettings.plnRateLabel")}
+        className="field-label-narrow"
+      >
         <input
           type="number"
           min={0}
           step={0.1}
           value={draft.plnPerUsd}
           onChange={(event) => update("plnPerUsd", Number(event.target.value))}
-          title="Używany tylko do orientacyjnego przeliczenia kosztów generacji na PLN."
+          title={t("aiSettings.plnRateTitle")}
         />
       </Field>
 
@@ -502,7 +506,7 @@ export function AiSettingsPage() {
 
       {saveMutation.isError ? (
         <p className="warning-text">
-          Nie udało się zapisać ustawień: {String(saveMutation.error)}
+          {t("aiSettings.saveError", { error: String(saveMutation.error) })}
         </p>
       ) : null}
 
@@ -513,9 +517,13 @@ export function AiSettingsPage() {
           onClick={() => saveMutation.mutate(draft)}
           disabled={settingsQuery.isLoading}
         >
-          {saveMutation.isPending ? "Zapisywanie..." : "Zapisz ustawienia"}
+          {saveMutation.isPending
+            ? t("aiSettings.saving")
+            : t("aiSettings.save")}
         </Button>
-        {saved ? <StatusPill tone="success">Zapisano</StatusPill> : null}
+        {saved ? (
+          <StatusPill tone="success">{t("aiSettings.saved")}</StatusPill>
+        ) : null}
       </div>
     </section>
   );
@@ -530,14 +538,17 @@ function SubscriptionPill({
   loggedIn: boolean;
   loading: boolean;
 }) {
+  const { t } = useTranslation();
   if (loading) {
-    return <StatusPill tone="muted">Sprawdzam</StatusPill>;
+    return <StatusPill tone="muted">{t("aiSettings.pillChecking")}</StatusPill>;
   }
   if (!available) {
-    return <StatusPill tone="danger">Brak CLI</StatusPill>;
+    return <StatusPill tone="danger">{t("aiSettings.pillNoCli")}</StatusPill>;
   }
   if (loggedIn) {
-    return <StatusPill tone="success">Zalogowano</StatusPill>;
+    return (
+      <StatusPill tone="success">{t("aiSettings.pillLoggedIn")}</StatusPill>
+    );
   }
-  return <StatusPill tone="muted">Wymaga logowania</StatusPill>;
+  return <StatusPill tone="muted">{t("aiSettings.pillNeedsLogin")}</StatusPill>;
 }

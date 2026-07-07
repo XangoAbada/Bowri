@@ -21,6 +21,7 @@ import {
   useRef,
   useState
 } from "react";
+import { useTranslation } from "react-i18next";
 import { Button, Chip, Collapsible, Field, StatusPill } from "../../shared/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -99,14 +100,13 @@ type ConceptStageKey =
 
 type ConceptStage = {
   key: ConceptStageKey;
-  title: string;
-  summary: string;
+  titleKey: string;
+  summaryKey: string;
   fields: (keyof ConceptForm)[];
 };
 
 type ChoiceOption = {
-  value: string;
-  hint: string;
+  id: string;
 };
 
 const ConceptPromptContext = createContext<(field: ConceptFieldKey) => void>(
@@ -137,134 +137,136 @@ const emptyForm: ConceptForm = {
   styleGuide: ""
 };
 
-const fieldHints: Record<ConceptFieldKey, string> = {
-  title: "Kandydat na tytuł do okładki, eksportu i prezentacji projektu.",
-  workingTitle: "Robocza nazwa projektu, która pomaga rozpoznać książkę zanim powstanie finalny tytuł.",
-  premise: "Krótka obietnica historii: kto, czego chce, co mu przeszkadza i dlaczego to ważne.",
-  protagonistSummary: "Najważniejsza postać prowadząca historię; kim jest na starcie i dlaczego to ona niesie książkę.",
-  protagonistGoal: "Konkretne zewnętrzne dążenie, które popycha fabułę do przodu.",
-  expandedPremise: "Jeden akapit łączący rdzeń pomysłu, konflikt i przewidywany kierunek książki.",
-  centralConflict: "Główne napięcie, które napędza decyzje bohatera i strukturę fabuły.",
-  antagonistForce: "Antagonista, system, problem, tajemnica albo wewnętrzna blokada stojąca na drodze bohatera.",
-  stakes: "To, co bohater, relacje albo świat tracą, jeśli cel nie zostanie osiągnięty.",
-  settingSketch: "Miejsce, czas i podstawowe warunki świata, które realnie wpływają na konflikt.",
-  endingDirection: "Robocza odpowiedź, dokąd historia ma emocjonalnie lub fabularnie dojść.",
-  genre: "Główna konwencja, która ustawia oczekiwania czytelnika.",
-  subgenre: "Doprecyzowanie obietnicy gatunkowej lub mieszanki konwencji.",
-  targetAudience: "Grupa czytelników, pod którą dopasowujemy język, tempo, poziom mroku i złożoność.",
-  tone: "Dominujący nastrój narracji i scen.",
-  pointOfView: "Perspektywa i tryb narracji, które będą prowadzić sceny.",
-  targetWordCount: "Orientacyjna długość książki używana później do planowania rozdziałów i tempa.",
-  themesJson: "Główne idee, które mają wracać w postaciach, konflikcie i scenach.",
-  unwantedThemes: "Treści, których AI i autor mają unikać w dalszej pracy.",
-  alternativeTitlesJson: "Lista wariantów do porównania przed wyborem finalnym.",
-  styleGuide: "Praktyczne zasady języka, rytmu, dialogu, opisów, humoru, mroku i zakazów stylistycznych."
+const fieldHintKeys: Record<ConceptFieldKey, string> = {
+  title: "book.hintTitle",
+  workingTitle: "book.hintWorkingTitle",
+  premise: "book.hintPremise",
+  protagonistSummary: "book.hintProtagonistSummary",
+  protagonistGoal: "book.hintProtagonistGoal",
+  expandedPremise: "book.hintExpandedPremise",
+  centralConflict: "book.hintCentralConflict",
+  antagonistForce: "book.hintAntagonistForce",
+  stakes: "book.hintStakes",
+  settingSketch: "book.hintSettingSketch",
+  endingDirection: "book.hintEndingDirection",
+  genre: "book.hintGenre",
+  subgenre: "book.hintSubgenre",
+  targetAudience: "book.hintTargetAudience",
+  tone: "book.hintTone",
+  pointOfView: "book.hintPointOfView",
+  targetWordCount: "book.hintTargetWordCount",
+  themesJson: "book.hintThemes",
+  unwantedThemes: "book.hintUnwantedThemes",
+  alternativeTitlesJson: "book.hintAlternativeTitles",
+  styleGuide: "book.hintStyleGuide"
 };
 
 const conceptStages: ConceptStage[] = [
   {
     key: "idea",
-    title: "Pomysł",
-    summary: "Robocza nazwa i krótka obietnica historii.",
+    titleKey: "book.stageIdeaTitle",
+    summaryKey: "book.stageIdeaSummary",
     fields: ["workingTitle", "premise"]
   },
   {
     key: "hero",
-    title: "Bohater i konflikt",
-    summary: "Postać prowadząca, jej dążenie oraz napięcie i siła przeciwna, które uruchamiają fabułę.",
+    titleKey: "book.stageHeroTitle",
+    summaryKey: "book.stageHeroSummary",
     fields: ["protagonistSummary", "protagonistGoal", "centralConflict", "antagonistForce"]
   },
   {
     key: "world",
-    title: "Świat",
-    summary: "Miejsce, czas i warunki, które wpływają na konflikt.",
+    titleKey: "book.stageWorldTitle",
+    summaryKey: "book.stageWorldSummary",
     fields: ["settingSketch"]
   },
   {
     key: "stakesEnding",
-    title: "Stawki i finał",
-    summary: "Koszt porażki, kierunek zakończenia i rozwinięta premisa.",
+    titleKey: "book.stageStakesEndingTitle",
+    summaryKey: "book.stageStakesEndingSummary",
     fields: ["stakes", "endingDirection", "expandedPremise"]
   },
   {
     key: "readerVoice",
-    title: "Gatunek i forma",
-    summary: "Gatunek, odbiorca, ton, perspektywa i skala książki.",
+    titleKey: "book.stageReaderVoiceTitle",
+    summaryKey: "book.stageReaderVoiceSummary",
     fields: ["genre", "subgenre", "targetAudience", "tone", "pointOfView", "targetWordCount"]
   },
   {
     key: "rules",
-    title: "Styl i granice",
-    summary: "Tematy, granice i styl, które utrzymają późniejsze generacje w ryzach.",
+    titleKey: "book.stageRulesTitle",
+    summaryKey: "book.stageRulesSummary",
     fields: ["themesJson", "unwantedThemes", "styleGuide"]
   },
   {
     key: "cover",
-    title: "Tytuł i okładka",
-    summary: "Finalny tytuł, warianty tytułu i opcjonalna robocza okładka.",
+    titleKey: "book.stageCoverTitle",
+    summaryKey: "book.stageCoverSummary",
     fields: ["title", "alternativeTitlesJson"]
   }
 ];
 
+// ponytail: chip option hints/values left as data (decorative tooltips + prompt values); i18n them if the option lists ever need translated tooltips.
 const genreOptions: ChoiceOption[] = [
-  { value: "fantasy", hint: "Magia, reguły świata, obietnica niezwykłości." },
-  { value: "kryminal", hint: "Zagadka, tropy, śledztwo i ujawnianie prawdy." },
-  { value: "obyczajowa", hint: "Relacje, codzienność i emocjonalna przemiana." },
-  { value: "thriller", hint: "Presja czasu, zagrożenie i wysokie napięcie." },
-  { value: "horror", hint: "Lęk, niepewność i narastające poczucie grozy." },
-  { value: "science fiction", hint: "Technologia, spekulacja i konsekwencje idei." },
-  { value: "romans", hint: "Relacja uczuciowa jako główna oś napięcia." },
-  { value: "realizm magiczny", hint: "Niezwykłość traktowana jak codzienność." }
+  { id: "fantasy" },
+  { id: "kryminal" },
+  { id: "obyczajowa" },
+  { id: "thriller" },
+  { id: "horror" },
+  { id: "scienceFiction" },
+  { id: "romans" },
+  { id: "realizmMagiczny" }
 ];
 
 const subgenreOptions: ChoiceOption[] = [
-  { value: "dark academia", hint: "Sekrety, instytucje i intelektualny mrok." },
-  { value: "cozy mystery", hint: "Zagadka bez brutalności na pierwszym planie." },
-  { value: "urban fantasy", hint: "Niezwykłość wpisana we współczesne miasto." },
-  { value: "space opera", hint: "Szeroka skala, przygoda i konflikt systemów." },
-  { value: "slow burn romance", hint: "Relacja budowana przez dłuższe napięcie." }
+  { id: "darkAcademia" },
+  { id: "cozyMystery" },
+  { id: "urbanFantasy" },
+  { id: "spaceOpera" },
+  { id: "slowBurnRomance" }
 ];
 
 const audienceOptions: ChoiceOption[] = [
-  { value: "adult", hint: "Dorosły czytelnik, większa złożoność i tematy." },
-  { value: "YA", hint: "Młodzi dorośli, szybkie tempo i silna identyfikacja." },
-  { value: "new adult", hint: "Wejście w dorosłość, relacje i niezależność." },
-  { value: "middle grade", hint: "Młodsi czytelnicy, przygoda i klarowny konflikt." },
-  { value: "dzieci", hint: "Prostszy język, bezpieczniejsze tematy i wyraźny rytm." },
-  { value: "fani kryminału", hint: "Czytelnicy oczekujący tropów, zwrotów i fair play." },
-  { value: "fani fantasy", hint: "Czytelnicy lubiący świat, mitologię i konsekwencje magii." }
+  { id: "adult" },
+  { id: "ya" },
+  { id: "newAdult" },
+  { id: "middleGrade" },
+  { id: "dzieci" },
+  { id: "faniKryminalu" },
+  { id: "faniFantasy" }
 ];
 
 const toneOptions: ChoiceOption[] = [
-  { value: "mroczny", hint: "Cięższy nastrój, tajemnica i moralne koszty." },
-  { value: "ciepły", hint: "Bliskość, nadzieja i empatia wobec postaci." },
-  { value: "ironiczny", hint: "Dystans, błyskotliwość i podważający narrator." },
-  { value: "liryczny", hint: "Obrazowy język, rytm i emocjonalna gęstość." },
-  { value: "napięty", hint: "Presja i ciągłe pytanie co dalej." },
-  { value: "kameralny", hint: "Mniejsza skala, intymne sceny i relacje." },
-  { value: "epicki", hint: "Szeroka skala, wysokie stawki i rozmach." },
-  { value: "humorystyczny", hint: "Lekki rytm, komizm sytuacyjny lub dialogowy." }
+  { id: "mroczny" },
+  { id: "cieply" },
+  { id: "ironiczny" },
+  { id: "liryczny" },
+  { id: "napiety" },
+  { id: "kameralny" },
+  { id: "epicki" },
+  { id: "humorystyczny" }
 ];
 
 const pointOfViewOptions: ChoiceOption[] = [
-  { value: "pierwsza osoba", hint: "Blisko emocji i subiektywnej narracji." },
-  { value: "trzecia osoba ograniczona", hint: "Blisko POV, ale z większą kontrolą dystansu." },
-  { value: "trzecia osoba wszechwiedząca", hint: "Szersza skala i swobodny przegląd świata." },
-  { value: "wielu POV", hint: "Kilka perspektyw w jednej strukturze." },
-  { value: "czas teraźniejszy", hint: "Natychmiastowość i mocniejszy puls scen." },
-  { value: "czas przeszły", hint: "Klasyczny rytm narracyjny." }
+  { id: "pierwszaOsoba" },
+  { id: "trzeciaOsobaOgraniczona" },
+  { id: "trzeciaOsobaWszechwiedzaca" },
+  { id: "wieluPov" },
+  { id: "czasTerazniejszy" },
+  { id: "czasPrzeszly" }
 ];
 
 const themeOptions: ChoiceOption[] = [
-  { value: "tożsamość", hint: "Kim jest bohater, kiedy odpadają role." },
-  { value: "pamięć", hint: "Co zostaje z prawdy po czasie i manipulacji." },
-  { value: "władza", hint: "Koszt kontroli nad innymi." },
-  { value: "rodzina", hint: "Więzi, lojalność i dziedziczone rany." },
-  { value: "wolność", hint: "Cena samostanowienia." },
-  { value: "zdrada", hint: "Pęknięcie zaufania i jego konsekwencje." }
+  { id: "tozsamosc" },
+  { id: "pamiec" },
+  { id: "wladza" },
+  { id: "rodzina" },
+  { id: "wolnosc" },
+  { id: "zdrada" }
 ];
 
 export function BookConceptPage({ projectId }: BookConceptPageProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const stageTabsRef = useRef<HTMLDivElement>(null);
   const codexPath = useCodexSettingsStore((state) => state.codexPath);
@@ -374,10 +376,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   const saveMutation = useMutation({
     mutationFn: () => {
       if (!projectQuery.data) {
-        throw new Error("Brak projektu do zapisu.");
+        throw new Error(t("book.noProjectToSave"));
       }
 
-      const validation = validateConceptForm(form);
+      const validation = validateConceptForm(form, t);
       if (validation) {
         throw new ValidationError(validation);
       }
@@ -385,7 +387,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
       return updateBookConcept(projectQuery.data.book.id, conceptInputFromForm(form));
     },
     onSuccess: async () => {
-      setSaveMessage("Zapisano koncepcje.");
+      setSaveMessage(t("book.conceptSaved"));
       setValidationMessage("");
       await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -400,7 +402,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   const generateFieldMutation = useMutation({
     mutationFn: async (field: ConceptFieldKey) => {
       if (!projectQuery.data || !bookForPrompt) {
-        throw new GenerationError("Brak danych projektu.");
+        throw new GenerationError(t("book.noProjectData"));
       }
 
       const targetId = conceptPromptContextTargetId(projectId, field);
@@ -462,11 +464,11 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
     activatePromptContextTarget(
       createConceptPromptContextTarget(projectId, field, {
-        submitLabel: "Wy\u015blij do AI",
+        submitLabel: t("book.submitToAi"),
         submitDisabled: Boolean(loading),
         submitDisabledReason: loading
-          ? `Pole "${config.label}" jest ju\u017c w kolejce AI.`
-          : "Codex CLI nie jest teraz gotowy.",
+          ? t("book.fieldQueuedReason", { label: config.label })
+          : t("book.codexNotReady"),
         onSubmit: () => queueFieldGeneration(field),
         renderPrompt: () => {
           if (!projectQuery.data || !bookForPrompt) {
@@ -502,7 +504,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
   function generateCover() {
     setAiError("");
     if (!projectQuery.data || !bookForPrompt) {
-      setAiError("Brak danych projektu.");
+      setAiError(t("book.noProjectData"));
       return;
     }
 
@@ -620,8 +622,8 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
       {projectQuery.isError ? (
         <div className="empty-state">
-          <h3>Nie można wczytać projektu</h3>
-          <p>Sprawdź, czy aplikacja działa w Tauri i baza jest dostępna.</p>
+          <h3>{t("book.loadProjectErrorTitle")}</h3>
+          <p>{t("book.loadProjectErrorHint")}</p>
         </div>
       ) : null}
 
@@ -631,8 +633,8 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 type="button"
                 className="stage-scroll-button previous"
                 onClick={() => scrollStageTabs(-1)}
-                aria-label="Pokaż wcześniejsze etapy"
-                title="Pokaż wcześniejsze etapy"
+                aria-label={t("book.showPreviousStages")}
+                title={t("book.showPreviousStages")}
               >
                 <ChevronLeft size={18} />
               </button>
@@ -640,7 +642,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 ref={stageTabsRef}
                 className="concept-steps"
                 role="tablist"
-                aria-label="Etapy koncepcji"
+                aria-label={t("book.conceptStagesLabel")}
               >
           {conceptStages.map((stage, index) => {
             const completion = stageCompletion(stage, form);
@@ -670,7 +672,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   <span className="concept-step-n" aria-hidden="true">
                     {done ? "✓" : index + 1}
                   </span>
-                  <span className="concept-step-label">{stage.title}</span>
+                  <span className="concept-step-label">{t(stage.titleKey)}</span>
                   <span className="ui-tab-badge">
                     {completion.complete}/{completion.total}
                   </span>
@@ -683,8 +685,8 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 type="button"
                 className="stage-scroll-button next"
                 onClick={() => scrollStageTabs(1)}
-                aria-label="Pokaż kolejne etapy"
-                title="Pokaż kolejne etapy"
+                aria-label={t("book.showNextStages")}
+                title={t("book.showNextStages")}
               >
                 <ChevronRight size={18} />
               </button>
@@ -697,9 +699,12 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 </span>
                 <div>
                   <h2>
-                    Faza 2.{activeStageNumber} {activeStageConfig.title}
+                    {t("book.phaseHeading", {
+                      number: activeStageNumber,
+                      title: t(activeStageConfig.titleKey)
+                    })}
                   </h2>
-                  <p>{activeStageConfig.summary}</p>
+                  <p>{t(activeStageConfig.summaryKey)}</p>
                 </div>
               </div>
 
@@ -707,20 +712,20 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
           {activeStage === "idea" ? (
             <FormSection>
               <TextField
-                label="Tytuł roboczy"
+                label={t("book.labelWorkingTitle")}
                 field="workingTitle"
                 value={form.workingTitle}
-                placeholder="Nazwa projektu na czas pracy"
+                placeholder={t("book.placeholderWorkingTitle")}
                 disabled={aiDisabled}
                 loading={fieldStatus("workingTitle")}
                 onGenerate={generateField}
                 onChange={(value) => updateField("workingTitle", value)}
               />
               <TextField
-                label="Premise"
+                label={t("book.labelPremise")}
                 field="premise"
                 value={form.premise}
-                placeholder="Kto, czego chce, co mu przeszkadza i dlaczego to ważne"
+                placeholder={t("book.placeholderPremise")}
                 rows={4}
                 disabled={aiDisabled}
                 loading={fieldStatus("premise")}
@@ -734,10 +739,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
             <FormSection>
               <div className="form-grid">
                 <TextField
-                  label="Bohater / bohaterka"
+                  label={t("book.labelProtagonistSummary")}
                   field="protagonistSummary"
                   value={form.protagonistSummary}
-                  placeholder="Kim jest postać prowadząca historię"
+                  placeholder={t("book.placeholderProtagonistSummary")}
                   rows={4}
                   disabled={aiDisabled}
                   loading={fieldStatus("protagonistSummary")}
@@ -745,10 +750,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("protagonistSummary", value)}
                 />
                 <TextField
-                  label="Cel bohatera"
+                  label={t("book.labelProtagonistGoal")}
                   field="protagonistGoal"
                   value={form.protagonistGoal}
-                  placeholder="Konkretne dążenie napędzające fabułę"
+                  placeholder={t("book.placeholderProtagonistGoal")}
                   rows={4}
                   disabled={aiDisabled}
                   loading={fieldStatus("protagonistGoal")}
@@ -756,10 +761,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("protagonistGoal", value)}
                 />
                 <TextField
-                  label="Konflikt centralny"
+                  label={t("book.labelCentralConflict")}
                   field="centralConflict"
                   value={form.centralConflict}
-                  placeholder="Główne tarcie fabularne"
+                  placeholder={t("book.placeholderCentralConflict")}
                   rows={3}
                   disabled={aiDisabled}
                   loading={fieldStatus("centralConflict")}
@@ -767,10 +772,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("centralConflict", value)}
                 />
                 <TextField
-                  label="Siła przeciwna"
+                  label={t("book.labelAntagonistForce")}
                   field="antagonistForce"
                   value={form.antagonistForce}
-                  placeholder="Antagonista, system, tajemnica albo blokada"
+                  placeholder={t("book.placeholderAntagonistForce")}
                   rows={3}
                   disabled={aiDisabled}
                   loading={fieldStatus("antagonistForce")}
@@ -784,10 +789,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
           {activeStage === "world" ? (
             <FormSection>
               <TextField
-                label="Setting"
+                label={t("book.labelSetting")}
                 field="settingSketch"
                 value={form.settingSketch}
-                placeholder="Miejsce, czas i warunki świata wpływające na konflikt"
+                placeholder={t("book.placeholderSetting")}
                 rows={4}
                 disabled={aiDisabled}
                 loading={fieldStatus("settingSketch")}
@@ -801,10 +806,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
             <FormSection>
               <div className="form-grid">
                 <TextField
-                  label="Stawki"
+                  label={t("book.labelStakes")}
                   field="stakes"
                   value={form.stakes}
-                  placeholder="Co zostanie utracone, jeśli bohater przegra"
+                  placeholder={t("book.placeholderStakes")}
                   rows={4}
                   disabled={aiDisabled}
                   loading={fieldStatus("stakes")}
@@ -812,10 +817,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   onChange={(value) => updateField("stakes", value)}
                 />
                 <TextField
-                  label="Kierunek zakończenia"
+                  label={t("book.labelEndingDirection")}
                   field="endingDirection"
                   value={form.endingDirection}
-                  placeholder="Roboczy finał fabularny lub emocjonalny"
+                  placeholder={t("book.placeholderEndingDirection")}
                   rows={4}
                   disabled={aiDisabled}
                   loading={fieldStatus("endingDirection")}
@@ -824,10 +829,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 />
               </div>
               <TextField
-                label="Rozszerzona premisa"
+                label={t("book.labelExpandedPremise")}
                 field="expandedPremise"
                 value={form.expandedPremise}
-                placeholder="Akapit rozwijający założenie książki"
+                placeholder={t("book.placeholderExpandedPremise")}
                 rows={5}
                 disabled={aiDisabled}
                 loading={fieldStatus("expandedPremise")}
@@ -841,60 +846,65 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
             <FormSection>
               <div className="form-grid concept-choice-grid">
                 <MultiChoiceField
-                  label="Gatunek"
+                  label={t("book.labelGenre")}
                   field="genre"
                   value={form.genre}
                   options={genreOptions}
+                  keyBase="book.optGenre"
                   onChange={(value) => updateField("genre", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
                   loading={fieldStatus("genre")}
                 />
                 <MultiChoiceField
-                  label="Podgatunek"
+                  label={t("book.labelSubgenre")}
                   field="subgenre"
                   value={form.subgenre}
                   options={subgenreOptions}
+                  keyBase="book.optSubgenre"
                   onChange={(value) => updateField("subgenre", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
                   loading={fieldStatus("subgenre")}
                 />
                 <MultiChoiceField
-                  label="Odbiorcy"
+                  label={t("book.labelTargetAudience")}
                   field="targetAudience"
                   value={form.targetAudience}
                   options={audienceOptions}
+                  keyBase="book.optAudience"
                   onChange={(value) => updateField("targetAudience", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
                   loading={fieldStatus("targetAudience")}
                 />
                 <MultiChoiceField
-                  label="Ton"
+                  label={t("book.labelTone")}
                   field="tone"
                   value={form.tone}
                   options={toneOptions}
+                  keyBase="book.optTone"
                   onChange={(value) => updateField("tone", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
                   loading={fieldStatus("tone")}
                 />
                 <MultiChoiceField
-                  label="Punkt widzenia"
+                  label={t("book.labelPointOfView")}
                   field="pointOfView"
                   value={form.pointOfView}
                   options={pointOfViewOptions}
+                  keyBase="book.optPov"
                   onChange={(value) => updateField("pointOfView", value)}
                   onGenerate={generateField}
                   disabled={aiDisabled}
                   loading={fieldStatus("pointOfView")}
                 />
                 <TextField
-                  label="Docelowa liczba słów"
+                  label={t("book.labelTargetWordCount")}
                   field="targetWordCount"
                   value={form.targetWordCount}
-                  placeholder="np. 85000"
+                  placeholder={t("book.placeholderTargetWordCount")}
                   disabled={aiDisabled}
                   loading={fieldStatus("targetWordCount")}
                   onGenerate={generateField}
@@ -907,20 +917,21 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
           {activeStage === "rules" ? (
             <FormSection>
               <MultiChoiceField
-                label="Tematy"
+                label={t("book.labelThemes")}
                 field="themesJson"
                 value={form.themesJson}
                 options={themeOptions}
+                keyBase="book.optTheme"
                 onChange={(value) => updateField("themesJson", value)}
                 onGenerate={generateField}
                 disabled={aiDisabled}
                 loading={fieldStatus("themesJson")}
               />
               <TextField
-                label="Granice i tematy niechciane"
+                label={t("book.labelUnwantedThemes")}
                 field="unwantedThemes"
                 value={form.unwantedThemes}
-                placeholder="Czego unikać w późniejszych promptach"
+                placeholder={t("book.placeholderUnwantedThemes")}
                 rows={4}
                 disabled={aiDisabled}
                 loading={fieldStatus("unwantedThemes")}
@@ -928,10 +939,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                 onChange={(value) => updateField("unwantedThemes", value)}
               />
               <TextField
-                label="Style guide"
+                label={t("book.labelStyleGuide")}
                 field="styleGuide"
                 value={form.styleGuide}
-                placeholder="Notatki o języku, rytmie, zakazach i preferencjach"
+                placeholder={t("book.placeholderStyleGuide")}
                 rows={5}
                 disabled={aiDisabled}
                 loading={fieldStatus("styleGuide")}
@@ -946,21 +957,21 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
               <div className="cover-stage-layout">
                 <div className="cover-title-fields">
                   <TextField
-                    label="Tytuł finalny"
+                    label={t("book.labelFinalTitle")}
                     field="title"
                     value={form.title}
-                    placeholder="Tytuł, który trafi na okładkę"
+                    placeholder={t("book.placeholderFinalTitle")}
                     disabled={aiDisabled}
                     loading={fieldStatus("title")}
                     onGenerate={generateField}
                     onChange={(value) => updateField("title", value)}
                   />
-                  <Collapsible title="Zaawansowane" description="Warianty tytułu do burzy mózgów — nie trafiają do promptów.">
+                  <Collapsible title={t("book.advancedTitle")} description={t("book.advancedTitlesDescription")}>
                     <TextField
-                      label="Alternatywne tytuły"
+                      label={t("book.labelAlternativeTitles")}
                       field="alternativeTitlesJson"
                       value={form.alternativeTitlesJson}
-                      placeholder="Jeden tytuł na linię albo po przecinku"
+                      placeholder={t("book.placeholderAlternativeTitles")}
                       rows={5}
                       disabled={aiDisabled}
                       loading={fieldStatus("alternativeTitlesJson")}
@@ -980,18 +991,18 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                       onClick={() =>
                         setPreviewImage({
                           src: coverSrc,
-                          alt: "Okładka robocza"
+                          alt: t("book.coverWorkingAlt")
                         })
                       }
-                      title="Otwórz okładkę w pełnym podglądzie"
+                      title={t("book.coverOpenFullPreview")}
                     >
-                      <img src={coverSrc} alt="Okładka robocza" />
+                      <img src={coverSrc} alt={t("book.coverWorkingAlt")} />
                     </button>
                   ) : (
                     <div className="cover-preview">
                       <div className="cover-placeholder">
                         <ImageIcon size={30} aria-hidden="true" />
-                        <span>Brak okładki</span>
+                        <span>{t("book.coverNone")}</span>
                       </div>
                     </div>
                   )}
@@ -1006,7 +1017,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                       !projectQuery.data ||
                       codexUnavailable
                     }
-                    title="Utwórz okładkę na podstawie danych z widoku koncepcji"
+                    title={t("book.coverGenerateTitle")}
                   >
                     {coverQueued ? (
                       <Clock3 size={16} aria-hidden />
@@ -1014,10 +1025,10 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                       <Sparkles size={16} aria-hidden />
                     )}
                     {coverRunning
-                      ? "Tworzę"
+                      ? t("book.coverCreating")
                       : coverQueued
-                        ? "W kolejce"
-                        : "Utwórz okładkę"}
+                        ? t("book.coverQueued")
+                        : t("book.coverCreate")}
                   </Button>
 
                   {coverProgressText ? (
@@ -1037,7 +1048,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
                   {coverTask?.status === "error" ? (
                     <p className="warning-text">
-                      {coverTask.errorMessage || "Nie udało się utworzyć okładki."}
+                      {coverTask.errorMessage || t("book.coverGenerateError")}
                     </p>
                   ) : null}
                 </div>
@@ -1057,20 +1068,20 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   disabled={!projectQuery.data}
                 >
                   {saveMutation.isPending ? null : <Save size={16} aria-hidden />}
-                  {saveMutation.isPending ? "Zapisuję" : "Zapisz zmiany"}
+                  {saveMutation.isPending ? t("book.saving") : t("book.saveChanges")}
                 </Button>
                 <Button variant="secondary" onClick={goToNextStage} disabled={!nextStage}>
-                  Następny etap
+                  {t("book.nextStage")}
                   <ArrowRight size={16} aria-hidden />
                 </Button>
                 <Button
                   variant="ghost"
                   className="concept-plan-link"
                   disabled
-                  title="Widok planu będzie dostępny w kolejnej fazie."
+                  title={t("book.planViewComingSoon")}
                 >
                   <ListChecks size={16} aria-hidden />
-                  Przejdź do widoku planu
+                  {t("book.goToPlanView")}
                 </Button>
                 {saveMessage ? (
                   <StatusPill tone="success">{saveMessage}</StatusPill>
@@ -1079,7 +1090,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
                   <span className="warning-text">{validationMessage}</span>
                 ) : null}
                 {saveMutation.isError && !validationMessage ? (
-                  <span className="warning-text">Nie udało się zapisać koncepcji.</span>
+                  <span className="warning-text">{t("book.saveConceptError")}</span>
                 ) : null}
               </div>
             </div>
@@ -1087,8 +1098,7 @@ export function BookConceptPage({ projectId }: BookConceptPageProps) {
 
       {codexUnavailable ? (
         <p className="warning-text">
-          {providerInfo.providerLabel} nie jest gotowy. Skonfiguruj dostawcę
-          tekstu na ekranie AI.
+          {t("book.providerNotReady", { provider: providerInfo.providerLabel })}
         </p>
       ) : null}
 
@@ -1141,13 +1151,14 @@ function TextField({
   onChange,
   onGenerate
 }: TextFieldProps) {
+  const { t } = useTranslation();
   const activatePromptContext = useContext(ConceptPromptContext);
   const activate = () => activatePromptContext(field);
 
   return (
     <Field
       label={label}
-      hint={fieldHints[field]}
+      hint={t(fieldHintKeys[field])}
       actions={
         <AiFieldActions
           field={field}
@@ -1195,6 +1206,7 @@ function AiFieldActions({
   loading,
   onGenerate
 }: AiFieldButtonProps) {
+  const { t } = useTranslation();
   const config = conceptFieldConfigs[field];
   const activeTargetId = useAiPromptContextStore((state) => state.activeTargetId);
   const activeTarget = useAiPromptContextStore((state) =>
@@ -1205,7 +1217,7 @@ function AiFieldActions({
   );
   const running = loading === "running";
   const queued = loading === "queued";
-  const label = running ? "Generuje" : queued ? "W kolejce" : "AI";
+  const label = running ? t("book.aiFieldGenerating") : queued ? t("book.aiFieldQueued") : t("book.aiFieldIdle");
   const fieldAlreadyInContext = Boolean(
     activeTarget?.sources.some((source) => source.key === field)
   );
@@ -1223,12 +1235,12 @@ function AiFieldActions({
         disabled={disabled || queued || running}
         title={
           queued
-            ? `Pole "${config.label}" czeka w kolejce AI.`
+            ? t("book.aiFieldQueuedTitle", { label: config.label })
             : running
-              ? `Pole "${config.label}" jest generowane.`
-              : `Generuj pole "${config.label}" z AI.`
+              ? t("book.aiFieldRunningTitle", { label: config.label })
+              : t("book.aiFieldGenerateTitle", { label: config.label })
         }
-        aria-label={`Generuj ${config.label} z AI`}
+        aria-label={t("book.aiFieldGenerateAria", { label: config.label })}
       >
         {running ? (
           <Loader2 size={14} className="ui-spin" aria-hidden />
@@ -1249,12 +1261,12 @@ function AiFieldActions({
         disabled={addDisabled}
         title={
           !activeTarget
-            ? "Najpierw zaznacz pole tekstowe, aby otworzyc kontekst promptu."
+            ? t("book.aiContextAddNoTarget")
             : fieldAlreadyInContext
-              ? `Pole "${config.label}" jest juz w kontekscie promptu.`
-              : `Dodaj pole "${config.label}" do kontekstu promptu.`
+              ? t("book.aiContextAddAlready", { label: config.label })
+              : t("book.aiContextAddTitle", { label: config.label })
         }
-        aria-label={`Dodaj ${config.label} do kontekstu promptu`}
+        aria-label={t("book.aiContextAddAria", { label: config.label })}
       >
         <Plus size={14} aria-hidden />
       </Button>
@@ -1267,6 +1279,7 @@ type MultiChoiceFieldProps = {
   field: ConceptFieldKey;
   value: string;
   options: ChoiceOption[];
+  keyBase: string;
   disabled: boolean;
   loading: AiProposalStatus | null;
   onChange: (value: string) => void;
@@ -1278,14 +1291,18 @@ function MultiChoiceField({
   field,
   value,
   options,
+  keyBase,
   disabled,
   loading,
   onChange,
   onGenerate
 }: MultiChoiceFieldProps) {
+  const { t } = useTranslation();
   const [customValue, setCustomValue] = useState("");
   const selectedValues = parseChoiceString(value);
-  const knownValues = new Set(options.map((option) => option.value));
+  // Treść idzie za językiem UI: wyświetlaną i zapisywaną wartością chipa jest przetłumaczona etykieta.
+  const optionLabel = (option: ChoiceOption) => t(`${keyBase}.${option.id}.label`);
+  const knownValues = new Set(options.map(optionLabel));
   const customSelectedValues = selectedValues.filter(
     (selected) => !knownValues.has(selected)
   );
@@ -1319,7 +1336,7 @@ function MultiChoiceField({
   return (
     <Field
       label={label}
-      hint={fieldHints[field]}
+      hint={t(fieldHintKeys[field])}
       actions={
         <AiFieldActions
           field={field}
@@ -1330,23 +1347,26 @@ function MultiChoiceField({
       }
     >
       <div className="concept-chip-list" role="group" aria-label={label}>
-        {options.map((option) => (
-          <Chip
-            key={option.value}
-            pressed={selectedValues.includes(option.value)}
-            onClick={() => toggleChoice(option.value)}
-            title={`${option.value}: ${option.hint}`}
-          >
-            {option.value}
-          </Chip>
-        ))}
+        {options.map((option) => {
+          const chipLabel = optionLabel(option);
+          return (
+            <Chip
+              key={option.id}
+              pressed={selectedValues.includes(chipLabel)}
+              onClick={() => toggleChoice(chipLabel)}
+              title={`${chipLabel}: ${t(`${keyBase}.${option.id}.hint`)}`}
+            >
+              {chipLabel}
+            </Chip>
+          );
+        })}
         {customSelectedValues.map((selected) => (
           <Chip
             key={selected}
             tone="accent"
             onRemove={() => toggleChoice(selected)}
-            removeLabel={`Usuń własną opcję ${selected}`}
-            title={`Własna opcja: ${selected}`}
+            removeLabel={t("book.customOptionRemove", { value: selected })}
+            title={t("book.customOptionTitle", { value: selected })}
           >
             {selected}
           </Chip>
@@ -1363,15 +1383,15 @@ function MultiChoiceField({
             }
           }}
           onFocus={() => activatePromptContext(field)}
-          placeholder="Własna opcja"
-          title={`Dopisz własną wartość dla pola ${label}.`}
-          aria-label={`Własna opcja ${label}`}
+          placeholder={t("book.customOption")}
+          title={t("book.customOptionAddValueTitle", { label })}
+          aria-label={t("book.customOptionAria", { label })}
         />
         <Button
           variant="icon"
           onClick={addCustomValue}
-          title={`Dodaj własną opcję do pola ${label}`}
-          aria-label={`Dodaj własną opcję ${label}`}
+          title={t("book.customOptionAddTitle", { label })}
+          aria-label={t("book.customOptionAddAria", { label })}
         >
           <Plus size={15} aria-hidden />
         </Button>
@@ -1452,13 +1472,16 @@ function coverTaskStatusRank(status: AiProposalStatus): number {
   }
 }
 
-function validateConceptForm(form: ConceptForm): string {
+function validateConceptForm(
+  form: ConceptForm,
+  t: (key: string) => string
+): string {
   if (form.targetWordCount.trim() && parseOptionalPositiveInt(form.targetWordCount) === null) {
-    return "Docelowa liczba słów musi być dodatnią liczbą albo pozostać pusta.";
+    return t("book.validationWordCount");
   }
 
   if (form.premise.length > conceptFieldMaxResponseCharacters.premise) {
-    return "Premise jest zbyt długa; przenieś szczegóły do rozszerzonej premisy.";
+    return t("book.validationPremiseTooLong");
   }
 
   return "";

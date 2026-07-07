@@ -1,5 +1,7 @@
 import { Check, FileJson, History, Loader2 } from "lucide-react";
 import { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../../shared/i18n";
 import { Button, Chip, StatusPill } from "../../shared/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,6 +27,7 @@ type AiLogPageProps = {
 };
 
 export function AiLogPage({ projectId }: AiLogPageProps) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const logQuery = useQuery({
     queryKey: ["ai-runs", projectId],
@@ -59,8 +62,8 @@ export function AiLogPage({ projectId }: AiLogPageProps) {
     <section className="content-panel ai-log-page">
       <div className="section-title-row">
         <div>
-          <p className="eyebrow">AI</p>
-          <h2>Log promptów i odpowiedzi</h2>
+          <p className="eyebrow">{t("ai.log.eyebrow")}</p>
+          <h2>{t("ai.log.title")}</h2>
         </div>
         <History size={20} aria-hidden="true" />
       </div>
@@ -68,22 +71,22 @@ export function AiLogPage({ projectId }: AiLogPageProps) {
       {logQuery.isLoading ? (
         <p className="muted-text ai-log-loading">
           <Loader2 size={15} className="spin-icon" />
-          Ładuję log AI...
+          {t("ai.log.loading")}
         </p>
       ) : null}
 
       {logQuery.isError ? (
         <div className="empty-state">
-          <h3>Nie można wczytać loga AI</h3>
-          <p>Sprawdź, czy backend Tauri ma dostęp do lokalnej bazy SQLite.</p>
+          <h3>{t("ai.log.loadErrorTitle")}</h3>
+          <p>{t("ai.log.loadErrorHint")}</p>
         </div>
       ) : null}
 
       {logQuery.data?.length === 0 ? (
         <div className="empty-state">
           <FileJson size={24} aria-hidden="true" />
-          <h3>Brak wpisów</h3>
-          <p>Prompt i odpowiedź pojawią się tutaj po pierwszej generacji AI w projekcie.</p>
+          <h3>{t("ai.log.emptyTitle")}</h3>
+          <p>{t("ai.log.emptyHint")}</p>
         </div>
       ) : null}
 
@@ -135,6 +138,7 @@ function AiLogEntryDetails({
   applyErrorMessage: string;
   onApply: (proposal: ActiveAiProposal) => void;
 }) {
+  const { t } = useTranslation();
   const aiSettingsQuery = useQuery({
     queryKey: ["ai-settings"],
     queryFn: getAiSettings
@@ -162,47 +166,47 @@ function AiLogEntryDetails({
 
       <div className="ai-log-entry-body">
         <section className="ai-log-readable-block">
-          <h3>Request</h3>
+          <h3>{t("ai.log.request")}</h3>
           <div className="ai-log-meta">
-            <Chip tone="accent" title="Akcja">
+            <Chip tone="accent" title={t("ai.log.actionTitle")}>
               {summary.actionLabel}
             </Chip>
-            {summary.fieldLabel ? <Chip title="Pole">{summary.fieldLabel}</Chip> : null}
+            {summary.fieldLabel ? <Chip title={t("ai.log.fieldTitle")}>{summary.fieldLabel}</Chip> : null}
             {summary.mode ? (
-              <Chip title="Tryb generowania">
-                {summary.mode === "expand" ? "Rozwijanie" : "Generowanie"}
+              <Chip title={t("ai.log.modeTitle")}>
+                {summary.mode === "expand" ? t("ai.log.modeExpand") : t("ai.log.modeGenerate")}
               </Chip>
             ) : null}
-            <StatusPill tone={decisionStatusTone(entry.decisionStatus)} title="Status decyzji">
+            <StatusPill tone={decisionStatusTone(entry.decisionStatus)} title={t("ai.log.decisionTitle")}>
               {decisionStatusLabel(entry.decisionStatus)}
             </StatusPill>
-            <Chip title="Provider">{entry.providerId}</Chip>
-            <Chip title="Model">{entry.model?.trim() || "Nie zapisano"}</Chip>
-            <Chip tone="ai" title="Stopień rozumowania">
+            <Chip title={t("ai.log.providerTitle")}>{entry.providerId}</Chip>
+            <Chip title={t("ai.log.modelTitle")}>{entry.model?.trim() || t("ai.log.modelNotSaved")}</Chip>
+            <Chip tone="ai" title={t("ai.log.reasoningTitle")}>
               {reasoningLabel(entry.reasoningEffort)}
             </Chip>
             {entry.status === "success" ? (
               <Chip
                 tone="accent"
-                title="Szacunkowy koszt wg oficjalnego cennika (~ = szacowane tokeny)"
+                title={t("ai.log.costTitle")}
               >
                 {entryCostLabel(entry, plnPerUsd)}
                 {entry.imageCount > 0
-                  ? ` · ${entry.imageCount} obr.`
+                  ? ` · ${t("ai.log.images", { count: entry.imageCount })}`
                   : totalTokens > 0
-                    ? ` · ${totalTokens} tok.${entry.tokensEstimated ? " (szac.)" : ""}`
+                    ? ` · ${entry.tokensEstimated ? t("ai.log.tokensEstimated", { count: totalTokens }) : t("ai.log.tokens", { count: totalTokens })}`
                     : ""}
               </Chip>
             ) : null}
           </div>
           <div className="ai-log-prompt">
-            <h4>Prompt</h4>
-            <pre>{entry.prompt || "Brak zapisanego promptu dla starszego wpisu."}</pre>
+            <h4>{t("ai.log.prompt")}</h4>
+            <pre>{entry.prompt || t("ai.log.promptEmpty")}</pre>
           </div>
         </section>
 
         <section className="ai-log-readable-block">
-          <h3>Response</h3>
+          <h3>{t("ai.log.response")}</h3>
           {entry.errorMessage ? (
             <p className="warning-text">{entry.errorMessage}</p>
           ) : null}
@@ -217,14 +221,14 @@ function AiLogEntryDetails({
               }}
             >
               {applying ? null : <Check size={15} />}
-              {applying ? "Zapisuję" : "Zastosuj i zaakceptuj"}
+              {applying ? t("ai.log.applying") : t("ai.log.apply")}
             </Button>
           ) : null}
           {applyErrorMessage ? (
             <p className="warning-text">{applyErrorMessage}</p>
           ) : null}
           {entry.status === "terminated" ? (
-            <p className="muted-text">Generacja została przerwana przez zamknięcie aplikacji.</p>
+            <p className="muted-text">{t("ai.log.terminated")}</p>
           ) : null}
         </section>
       </div>
@@ -233,8 +237,9 @@ function AiLogEntryDetails({
 }
 
 function ReadableResponse({ rawOutput }: { rawOutput?: string | null }) {
+  const { t } = useTranslation();
   if (!rawOutput?.trim()) {
-    return <p className="muted-text">Brak odpowiedzi.</p>;
+    return <p className="muted-text">{t("ai.log.responseEmpty")}</p>;
   }
 
   const parsed = parseResponse(rawOutput);
@@ -256,7 +261,7 @@ function ReadableResponse({ rawOutput }: { rawOutput?: string | null }) {
 
 function applyErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || "");
-  return message || "Nie udało się zastosować propozycji z logu AI.";
+  return message || i18n.t("ai.log.applyError");
 }
 
 function proposalFromLogEntry(entry: AiLogEntry): ActiveAiProposal | null {
@@ -287,17 +292,17 @@ function proposalFromLogEntry(entry: AiLogEntry): ActiveAiProposal | null {
 }
 
 function generationStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    queued: "W kolejce",
-    running: "W toku",
-    success: "Zakończona",
-    error: "Błąd",
-    timeout: "Timeout",
-    cancelled: "Anulowana",
-    terminated: "Przerwana"
+  const keys: Record<string, string> = {
+    queued: "ai.generationStatus.queued",
+    running: "ai.generationStatus.running",
+    success: "ai.generationStatus.success",
+    error: "ai.generationStatus.error",
+    timeout: "ai.generationStatus.timeout",
+    cancelled: "ai.generationStatus.cancelled",
+    terminated: "ai.generationStatus.terminated"
   };
 
-  return labels[status] ?? status;
+  return keys[status] ? i18n.t(keys[status]) : status;
 }
 
 function generationStatusTone(status: string): "success" | "danger" | "muted" {
@@ -326,14 +331,14 @@ function decisionStatusTone(status?: string | null): "success" | "danger" | "mut
 
 function decisionStatusLabel(status?: string | null): string {
   if (status === "accepted") {
-    return "Zaakceptowane";
+    return i18n.t("ai.decisionStatus.accepted");
   }
 
   if (status === "rejected") {
-    return "Odrzucone";
+    return i18n.t("ai.decisionStatus.rejected");
   }
 
-  return "Niezaakceptowane";
+  return i18n.t("ai.decisionStatus.pending");
 }
 
 function requestSummary(entry: AiLogEntry): {
@@ -384,7 +389,7 @@ function parseResponse(rawOutput: string): unknown {
 function renderReadableValue(value: unknown): ReactNode {
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <span className="muted-text">Brak</span>;
+      return <span className="muted-text">{i18n.t("ai.log.noneValue")}</span>;
     }
 
     return (
@@ -410,7 +415,7 @@ function renderReadableValue(value: unknown): ReactNode {
   }
 
   if (typeof value === "boolean") {
-    return value ? "Tak" : "Nie";
+    return value ? i18n.t("ai.log.yes") : i18n.t("ai.log.no");
   }
 
   if (value === null || value === undefined || value === "") {
@@ -421,37 +426,32 @@ function renderReadableValue(value: unknown): ReactNode {
 }
 
 function responseLabel(key: string): string {
-  const labels: Record<string, string> = {
-    version: "Wersja",
-    kind: "Typ",
-    field: "Pole",
-    summary: "Podsumowanie",
-    value: "Wartość",
-    values: "Elementy",
-    rationale: "Uzasadnienie",
-    warnings: "Ostrzeżenia",
-    imagePath: "Ścieżka obrazu",
-    risks: "Ryzyka",
-    questionsForAuthor: "Pytania dla autora"
-  };
+  const keys = [
+    "version",
+    "kind",
+    "field",
+    "summary",
+    "value",
+    "values",
+    "rationale",
+    "warnings",
+    "imagePath",
+    "risks",
+    "questionsForAuthor"
+  ];
 
-  return labels[key] ?? key;
+  return keys.includes(key) ? i18n.t(`ai.responseLabel.${key}`) : key;
 }
 
 function reasoningLabel(reasoningEffort?: string | null): string {
-  const labels: Record<string, string> = {
-    low: "Low",
-    medium: "Medium",
-    high: "High",
-    xhigh: "XHigh"
-  };
+  const keys = ["low", "medium", "high", "xhigh"];
   const normalized = reasoningEffort?.trim();
 
   if (!normalized) {
-    return "Nie zapisano";
+    return i18n.t("ai.reasoning.notSaved");
   }
 
-  return labels[normalized] ?? normalized;
+  return keys.includes(normalized) ? i18n.t(`ai.reasoning.${normalized}`) : normalized;
 }
 
 function isConceptFieldKey(value: string): value is ConceptFieldKey {
@@ -464,21 +464,21 @@ function isPlanFieldKey(value: string): value is PlanFieldKey {
 
 function targetFieldLabel(targetField: string): string {
   const overrides: Record<string, string> = {
-    characterProfile: "Postać",
-    characterRelation: "Relacja postaci",
-    characterMemory: "Wspomnienie postaci",
-    characterImage: "Obraz postaci",
-    worldElement: "Element świata",
-    worldRule: "Reguła świata",
-    worldRuleAnalysis: "Analiza reguły świata",
-    draftScene: "Szkic sceny",
-    continueScene: "Kontynuacja sceny",
-    rewriteSelection: "Przepisanie zaznaczenia",
-    expandSelection: "Rozwinięcie zaznaczenia",
-    [SCENE_STORY_BIBLE_AUDIT_FIELD]: "Analiza sceny"
+    characterProfile: "characterProfile",
+    characterRelation: "characterRelation",
+    characterMemory: "characterMemory",
+    characterImage: "characterImage",
+    worldElement: "worldElement",
+    worldRule: "worldRule",
+    worldRuleAnalysis: "worldRuleAnalysis",
+    draftScene: "draftScene",
+    continueScene: "continueScene",
+    rewriteSelection: "rewriteSelection",
+    expandSelection: "expandSelection",
+    [SCENE_STORY_BIBLE_AUDIT_FIELD]: "sceneAudit"
   };
   if (overrides[targetField]) {
-    return overrides[targetField];
+    return i18n.t(`ai.targetField.${overrides[targetField]}`);
   }
 
   if (isConceptFieldKey(targetField)) return conceptFieldConfigs[targetField].label;
@@ -501,57 +501,57 @@ function isSceneEditorFieldKey(value: string): value is SceneEditorFieldKey {
   return ["draftScene", "continueScene", "rewriteSelection", "expandSelection"].includes(value);
 }
 
-function actionLabelFor(action: string): string {
-  const labels: Record<string, string> = {
-    generate_working_title: "Tytuł roboczy",
-    generate_title: "Tytuł",
-    generate_premise: "Premisa",
-    generate_protagonist_summary: "Bohater",
-    generate_protagonist_goal: "Cel bohatera",
-    expand_premise: "Rozwinięcie koncepcji",
-    generate_logline: "Logline",
-    generate_expanded_premise: "Rozszerzona premisa",
-    generate_central_conflict: "Konflikt centralny",
-    generate_antagonist_force: "Siła antagonistyczna",
-    generate_stakes: "Stawka",
-    generate_setting_sketch: "Szkic świata",
-    generate_ending_direction: "Kierunek zakończenia",
-    suggest_genre: "Gatunek",
-    suggest_subgenre: "Podgatunek",
-    suggest_target_audience: "Grupa docelowa",
-    suggest_tone: "Ton",
-    suggest_point_of_view: "Punkt widzenia",
-    suggest_target_word_count: "Docelowa liczba słów",
-    suggest_themes: "Motywy",
-    suggest_unwanted_themes: "Niechciane motywy",
-    generate_alternative_titles: "Alternatywne tytuły",
-    generate_style_guide: "Style guide",
-    generate_cover_image: "Okładka",
-    suggest_story_structure: "Struktura opowieści",
-    generate_acts: "Akty",
-    generate_act_field: "Pole aktu",
-    generate_beat_sheet: "Beat sheet",
-    generate_beat_field: "Beat",
-    generate_plot_threads: "Wątki fabularne",
-    generate_chapter_plan: "Plan rozdziałów",
-    generate_chapter_field: "Rozdział",
-    generate_scene_field: "Scena",
-    generate_thread_chapter_field: "Opis wątku w rozdziale",
-    suggest_chapter_relations: "Relacje rozdziału",
-    find_plan_gaps: "Luki w planie",
-    generate_character_field: "Postać",
-    generate_character_relation_field: "Relacja postaci",
-    generate_character_memory_field: "Wspomnienie postaci",
-    generate_character_image: "Obraz postaci",
-    generate_world_element_field: "Element świata",
-    generate_world_rule_field: "Reguła świata",
-    generate_world_rule_analysis: "Analiza reguły świata",
-    draft_scene: "Szkic sceny",
-    continue_scene: "Kontynuacja sceny",
-    rewrite_selection: "Przepisanie zaznaczenia",
-    expand_selection: "Rozwinięcie zaznaczenia",
-    analyze_scene_story_bible_opportunities: "Analiza sceny"
-  };
+const ACTION_LABEL_KEYS = new Set([
+  "generate_working_title",
+  "generate_title",
+  "generate_premise",
+  "generate_protagonist_summary",
+  "generate_protagonist_goal",
+  "expand_premise",
+  "generate_logline",
+  "generate_expanded_premise",
+  "generate_central_conflict",
+  "generate_antagonist_force",
+  "generate_stakes",
+  "generate_setting_sketch",
+  "generate_ending_direction",
+  "suggest_genre",
+  "suggest_subgenre",
+  "suggest_target_audience",
+  "suggest_tone",
+  "suggest_point_of_view",
+  "suggest_target_word_count",
+  "suggest_themes",
+  "suggest_unwanted_themes",
+  "generate_alternative_titles",
+  "generate_style_guide",
+  "generate_cover_image",
+  "suggest_story_structure",
+  "generate_acts",
+  "generate_act_field",
+  "generate_beat_sheet",
+  "generate_beat_field",
+  "generate_plot_threads",
+  "generate_chapter_plan",
+  "generate_chapter_field",
+  "generate_scene_field",
+  "generate_thread_chapter_field",
+  "suggest_chapter_relations",
+  "find_plan_gaps",
+  "generate_character_field",
+  "generate_character_relation_field",
+  "generate_character_memory_field",
+  "generate_character_image",
+  "generate_world_element_field",
+  "generate_world_rule_field",
+  "generate_world_rule_analysis",
+  "draft_scene",
+  "continue_scene",
+  "rewrite_selection",
+  "expand_selection",
+  "analyze_scene_story_bible_opportunities"
+]);
 
-  return labels[action] ?? action;
+function actionLabelFor(action: string): string {
+  return ACTION_LABEL_KEYS.has(action) ? i18n.t(`ai.action.${action}`) : action;
 }
