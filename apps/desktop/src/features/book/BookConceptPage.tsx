@@ -41,7 +41,6 @@ import { CoverImageLightbox } from "../ai/CoverImageLightbox";
 import {
   buildConceptFieldPromptPackage,
   conceptFieldConfigs,
-  conceptFieldMaxResponseCharacters,
   conceptPromptContextSource,
   ConceptFieldKey,
   renderPromptPackage
@@ -1478,10 +1477,6 @@ function validateConceptForm(
 ): string {
   if (form.targetWordCount.trim() && parseOptionalPositiveInt(form.targetWordCount) === null) {
     return t("book.validationWordCount");
-  }
-
-  if (form.premise.length > conceptFieldMaxResponseCharacters.premise) {
-    return t("book.validationPremiseTooLong");
   }
 
   return "";
