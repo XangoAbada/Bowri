@@ -18,6 +18,7 @@ import "./styles/features/shell.css";
 import "./styles/features/dashboard.css";
 import "./styles/features/concept.css";
 import "./styles/features/brainstorm.css";
+import "./styles/features/story-bible.css";
 
 declare module "@tanstack/react-router" {
   interface Register {
