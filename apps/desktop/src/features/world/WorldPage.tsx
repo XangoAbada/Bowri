@@ -66,7 +66,8 @@ type WorldPageProps = {
   projectId: string;
 };
 
-type WorldTab = "profile" | "rules" | "links" | "visuals";
+type WorldMode = "elements" | "rules";
+type WorldTab = "profile" | "links" | "visuals";
 type WorldSidebarItem =
   | {
       kind: "element";
@@ -104,11 +105,15 @@ const worldElementTypeValues = [
   "other"
 ];
 
-const worldTabs: Array<{ key: WorldTab; icon: typeof Globe2 }> = [
+const elementTabs: Array<{ key: WorldTab; icon: typeof Globe2 }> = [
   { key: "profile", icon: Globe2 },
-  { key: "rules", icon: BookOpen },
   { key: "links", icon: GitBranch },
   { key: "visuals", icon: Boxes }
+];
+
+const ruleTabs: Array<{ key: WorldTab; icon: typeof Globe2 }> = [
+  { key: "profile", icon: BookOpen },
+  { key: "links", icon: GitBranch }
 ];
 
 type ElementFieldItem = {
@@ -155,7 +160,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-  const [linkFocus, setLinkFocus] = useState<"element" | "rule">("element");
+  const [mode, setMode] = useState<WorldMode>("elements");
   const [activeTab, setActiveTab] = useState<WorldTab>("profile");
   const [elementDraft, setElementDraft] = useState<UpsertWorldElementInput>(() => emptyElementInput(projectId, 0));
   const [ruleDraft, setRuleDraft] = useState<UpsertWorldRuleInput>(() => emptyRuleInput(projectId, 0));
@@ -251,7 +256,13 @@ export function WorldPage({ projectId }: WorldPageProps) {
 
   useEffect(() => {
     setTypeFilter("all");
-  }, [activeTab]);
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === "rules" && activeTab === "visuals") {
+      setActiveTab("profile");
+    }
+  }, [mode, activeTab]);
 
   const sidebarItems = useMemo<WorldSidebarItem[]>(() => {
     const query = search.trim().toLocaleLowerCase("pl-PL");
@@ -270,18 +281,11 @@ export function WorldPage({ projectId }: WorldPageProps) {
       meta: t("world.list.ruleMeta"),
       description: rule.description || t("world.list.noRuleDescription")
     }));
-    const source =
-      activeTab === "rules"
-        ? ruleItems
-        : activeTab === "links"
-          ? [...elementItems, ...ruleItems]
-          : elementItems;
+    const source = mode === "rules" ? ruleItems : elementItems;
 
     return source.filter((item) => {
       const matchesType =
-        activeTab === "links"
-          ? typeFilter === "all" || item.kind === typeFilter
-          : item.kind === "rule" || typeFilter === "all" || item.elementType === typeFilter;
+        item.kind === "rule" || typeFilter === "all" || item.elementType === typeFilter;
       const matchesSearch =
         !query ||
         [item.label, item.meta, item.description]
@@ -290,7 +294,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
           .includes(query);
       return matchesType && matchesSearch;
     });
-  }, [activeTab, search, typeFilter, world.elements, world.rules, t]);
+  }, [mode, search, typeFilter, world.elements, world.rules, t]);
 
   const invalidateWorld = async () => {
     await queryClient.invalidateQueries({ queryKey: ["world-workspace", projectId] });
@@ -366,8 +370,8 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   function startNewElement() {
+    setMode("elements");
     setSelectedElementId(newWorldElementDraftId);
-    setLinkFocus("element");
     setActiveTab("profile");
     setElementDraft(emptyElementInput(projectId, world.elements.length));
     setMessage("");
@@ -375,16 +379,16 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   function startNewRule() {
+    setMode("rules");
     setSelectedRuleId(newWorldRuleDraftId);
-    setLinkFocus("rule");
-    setActiveTab("rules");
+    setActiveTab("profile");
     setRuleDraft(emptyRuleInput(projectId, world.rules.length));
     setMessage("");
     setErrorMessage("");
   }
 
   function openDefaultRelationPicker() {
-    if (linkFocus === "rule" && selectedRule) {
+    if (mode === "rules" && selectedRule) {
       setPicker({ target: "rule", kind: "elements" });
       return;
     }
@@ -403,13 +407,8 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   function runHeaderCreateAction() {
-    if (activeTab === "rules") {
+    if (mode === "rules") {
       startNewRule();
-      return;
-    }
-
-    if (activeTab === "links") {
-      openDefaultRelationPicker();
       return;
     }
 
@@ -417,19 +416,11 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   function headerCreateLabel(): string {
-    if (activeTab === "rules") {
-      return t("world.create.newRule");
-    }
-
-    if (activeTab === "links") {
-      return t("world.create.newLink");
-    }
-
-    return t("world.create.newElement");
+    return mode === "rules" ? t("world.create.newRule") : t("world.create.newElement");
   }
 
   function editorHeaderIcon() {
-    if (activeTab === "rules" || (activeTab === "links" && linkFocus === "rule")) {
+    if (mode === "rules") {
       return <BookOpen size={32} />;
     }
 
@@ -437,19 +428,19 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   function editorHeaderEyebrow(): string {
-    if (activeTab === "rules") {
-      return t("world.editorHeader.worldRule");
+    if (mode === "rules") {
+      return activeTab === "links" ? t("world.editorHeader.ruleLinks") : t("world.editorHeader.worldRule");
     }
 
     if (activeTab === "links") {
-      return linkFocus === "rule" ? t("world.editorHeader.ruleLinks") : t("world.editorHeader.elementLinks");
+      return t("world.editorHeader.elementLinks");
     }
 
     return selectedElement ? t("world.editorHeader.worldElement") : t("world.editorHeader.newElement");
   }
 
   function editorHeaderTitle(): string {
-    if (activeTab === "rules" || (activeTab === "links" && linkFocus === "rule")) {
+    if (mode === "rules") {
       return ruleDraft.name || t("world.editorHeader.unnamed");
     }
 
@@ -457,15 +448,13 @@ export function WorldPage({ projectId }: WorldPageProps) {
   }
 
   function editorHeaderDescription(): string {
-    if (activeTab === "rules") {
-      return ruleDraft.description || t("world.editorHeader.rulePlaceholder");
+    if (mode === "rules") {
+      return activeTab === "links"
+        ? ruleDraft.description || t("world.editorHeader.ruleLinksPlaceholder")
+        : ruleDraft.description || t("world.editorHeader.rulePlaceholder");
     }
 
     if (activeTab === "links") {
-      if (linkFocus === "rule") {
-        return ruleDraft.description || t("world.editorHeader.ruleLinksPlaceholder");
-      }
-
       return elementDraft.summary || t("world.editorHeader.elementLinksPlaceholder");
     }
 
@@ -611,6 +600,15 @@ export function WorldPage({ projectId }: WorldPageProps) {
         pane={
           <>
             <div className="bible-toolbar">
+              <Segmented
+                ariaLabel={t("world.list.modeAriaLabel")}
+                items={[
+                  { id: "elements", label: t("world.list.segmentElements") },
+                  { id: "rules", label: t("world.list.segmentRules") }
+                ]}
+                value={mode}
+                onChange={setMode}
+              />
               <input
                 className="ui-input"
                 value={search}
@@ -618,18 +616,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 placeholder={t("world.list.searchPlaceholder")}
                 aria-label={t("world.list.searchAriaLabel")}
               />
-              {activeTab === "rules" ? null : activeTab === "links" ? (
-                <Segmented
-                  ariaLabel={t("world.list.filterAriaLabel")}
-                  items={[
-                    { id: "all", label: t("world.list.segmentAll") },
-                    { id: "element", label: t("world.list.segmentElements") },
-                    { id: "rule", label: t("world.list.segmentRules") }
-                  ]}
-                  value={typeFilter}
-                  onChange={setTypeFilter}
-                />
-              ) : (
+              {mode === "elements" ? (
                 <select
                   className="ui-input"
                   value={typeFilter}
@@ -642,7 +629,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                     <option value={value} key={value}>{typeLabel(t, value)}</option>
                   ))}
                 </select>
-              )}
+              ) : null}
             </div>
             <div className="bible-list">
               {sidebarItems.map((item) => (
@@ -650,23 +637,17 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   type="button"
                   key={`${item.kind}:${item.id}`}
                   className={
-                    (item.kind === "element" && item.id === selectedElementId && (activeTab !== "links" || linkFocus === "element")) ||
-                    (item.kind === "rule" && item.id === selectedRuleId && (activeTab !== "links" || linkFocus === "rule"))
+                    item.id === (mode === "rules" ? selectedRuleId : selectedElementId)
                       ? "bible-item active"
                       : "bible-item"
                   }
                   onClick={() => {
                     if (item.kind === "element") {
                       setSelectedElementId(item.id);
-                      setLinkFocus("element");
-                      if (activeTab === "rules") {
-                        setActiveTab("profile");
-                      }
                       return;
                     }
 
                     setSelectedRuleId(item.id);
-                    setLinkFocus("rule");
                   }}
                 >
                   <span className="t">{item.label}</span>
@@ -693,13 +674,13 @@ export function WorldPage({ projectId }: WorldPageProps) {
               <p className="muted-text">{editorHeaderDescription()}</p>
             </div>
             <div className="button-row">
-              {activeTab !== "rules" && selectedElement ? (
+              {mode === "elements" && selectedElement ? (
                 <Button variant="danger" onClick={() => deleteElementMutation.mutate(selectedElement.id)}>
                   <Trash2 size={15} aria-hidden />
                   {t("world.editor.delete")}
                 </Button>
               ) : null}
-              {activeTab === "rules" && selectedRule ? (
+              {mode === "rules" && selectedRule ? (
                 <Button variant="danger" onClick={() => deleteRuleMutation.mutate(selectedRule.id)}>
                   <Trash2 size={15} aria-hidden />
                   {t("world.editor.delete")}
@@ -710,7 +691,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
 
           <Tabs
             ariaLabel={t("world.editor.sectionsAriaLabel")}
-            items={worldTabs.map(({ key, icon: Icon }) => ({
+            items={(mode === "rules" ? ruleTabs : elementTabs).map(({ key, icon: Icon }) => ({
               id: key,
               label: (
                 <>
@@ -723,7 +704,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
             onChange={setActiveTab}
           />
 
-          {activeTab === "profile" ? (
+          {mode === "elements" && activeTab === "profile" ? (
             <form className="bible-form" onSubmit={saveElement}>
               <Field label={t("world.profile.elementType")}>
                 <select
@@ -773,7 +754,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
             </form>
           ) : null}
 
-          {activeTab === "rules" ? (
+          {mode === "rules" && activeTab === "profile" ? (
             <form className="bible-form" onSubmit={saveRule}>
               <div className="bible-section-heading">
                 <h4><BookOpen size={17} aria-hidden /> {ruleDraft.name || t("world.rules.newRule")}</h4>
@@ -824,15 +805,15 @@ export function WorldPage({ projectId }: WorldPageProps) {
               world={world}
               plan={plan}
               characters={characters}
-              selectedElement={linkFocus === "element" ? selectedElement : null}
-              selectedRule={linkFocus === "rule" ? selectedRule : null}
+              selectedElement={mode === "elements" ? selectedElement : null}
+              selectedRule={mode === "rules" ? selectedRule : null}
               onOpenPicker={setPicker}
               onUpdateElement={updateElementRelations}
               onUpdateRule={updateRuleRelations}
             />
           ) : null}
 
-          {activeTab === "visuals" ? (
+          {mode === "elements" && activeTab === "visuals" ? (
             <form className="bible-form" onSubmit={saveElement}>
               <div className="bible-field-grid">
                 <WorldAiField

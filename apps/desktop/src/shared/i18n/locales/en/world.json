@@ -59,6 +59,7 @@
       "searchAriaLabel": "Search world",
       "filterAriaLabel": "Filter world list",
       "filterTitle": "Filter world list",
+      "modeAriaLabel": "World data type",
       "segmentAll": "All",
       "segmentElements": "Elements",
       "segmentRules": "Rules",
