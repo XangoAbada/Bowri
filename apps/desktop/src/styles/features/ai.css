@@ -315,6 +315,12 @@
   gap: 12px;
 }
 
+@media (max-width: 1240px) {
+  .separator-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .separator-editor {
   display: grid;
   gap: 11px;
