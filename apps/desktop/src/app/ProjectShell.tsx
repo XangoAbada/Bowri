@@ -1,11 +1,24 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import {
+  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   CircleDot,
+  Globe2,
   History,
+  Inbox,
+  Lightbulb,
+  ListTree,
+  PackageOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  PenLine,
   Search,
-  Settings
+  SearchCheck,
+  Settings,
+  Sparkles,
+  Users
 } from "lucide-react";
 import {
   CSSProperties,
@@ -37,6 +50,9 @@ import { formatPln, formatUsd, totalCostOf } from "../features/ai/pricing";
 import { AiProposalPanel } from "../features/ai/AiProposalPanel";
 import { AiPromptContextPanel } from "../features/ai/AiPromptContextPanel";
 import { useCodexSettingsStore } from "../features/ai/codexSettingsStore";
+import { useProposalStore } from "../features/ai/proposalStore";
+import { coverImageSource } from "../shared/api/assets";
+import { ThemeToggle } from "../shared/ui";
 import {
   projectLogReturnHref,
   useProjectNavigationStore
@@ -110,6 +126,16 @@ export function ProjectShell({
   );
   const setContextPanelWidth = useCodexSettingsStore(
     (state) => state.setContextPanelWidth
+  );
+  const contextPanelOpen = useCodexSettingsStore(
+    (state) => state.contextPanelOpen
+  );
+  const setContextPanelOpen = useCodexSettingsStore(
+    (state) => state.setContextPanelOpen
+  );
+  const proposalCount = useProposalStore(
+    (state) =>
+      state.proposals.filter((proposal) => proposal.projectId === projectId).length
   );
   const rememberLogReturnLocation = useProjectNavigationStore(
     (state) => state.rememberLogReturnLocation
@@ -223,12 +249,15 @@ export function ProjectShell({
     setReasoningEffort(reasoningLevels[index]?.value ?? "medium");
   }
 
+  const coverSrc = coverImageSource(projectQuery.data?.book.coverImagePath);
+
   return (
     <div
       className="project-shell"
+      data-rail={contextPanelOpen ? "open" : "closed"}
       style={
         {
-          "--context-panel-width": `${contextPanelWidth}px`
+          "--context-panel-width": contextPanelOpen ? `${contextPanelWidth}px` : "52px"
         } as CSSProperties
       }
     >
@@ -239,45 +268,70 @@ export function ProjectShell({
           </span>
         </Link>
 
-        <div className="sidebar-project">
-          <strong>{title}</strong>
-        </div>
+        <Link className="sidebar-project-card" to="/">
+          {coverSrc ? (
+            <img className="sidebar-project-cover" src={coverSrc} alt="" />
+          ) : (
+            <span className="sidebar-project-cover sidebar-project-cover-fallback" aria-hidden>
+              {title.slice(0, 1)}
+            </span>
+          )}
+          <span className="sidebar-project-meta">
+            <strong>{title}</strong>
+            <span className="sidebar-project-back">
+              <ArrowLeft size={11} aria-hidden />
+              {t("shell.back")}
+            </span>
+          </span>
+        </Link>
 
         <nav className="sidebar-nav" aria-label={t("shell.nav.stagesLabel")}>
           {(
             [
-              ["brainstorm", "01", t("shell.nav.brainstorm")],
-              ["concept", "02", t("shell.nav.concept")],
-              ["plan", "03", t("shell.nav.plan")],
-              ["characters", "04", t("shell.nav.characters")],
-              ["world", "05", t("shell.nav.world")],
-              ["editor", "06", t("shell.nav.editor")],
-              ["editing", "07", t("shell.nav.editing")],
-              ["export", "08", t("shell.nav.export")]
+              ["brainstorm", "01", t("shell.nav.brainstorm"), Lightbulb],
+              ["concept", "02", t("shell.nav.concept"), Sparkles],
+              ["plan", "03", t("shell.nav.plan"), ListTree],
+              ["characters", "04", t("shell.nav.characters"), Users],
+              ["world", "05", t("shell.nav.world"), Globe2],
+              ["editor", "06", t("shell.nav.editor"), PenLine],
+              ["editing", "07", t("shell.nav.editing"), SearchCheck],
+              ["export", "08", t("shell.nav.export"), PackageOpen]
             ] as const
-          ).map(([section, num, label]) => (
+          ).map(([section, num, label, Icon]) => (
             <Link
               key={section}
               to={`/projects/$projectId/${section}`}
               params={{ projectId }}
               className={activeSection === section ? "nav-item active" : "nav-item"}
             >
+              {activeSection === section ? (
+                <motion.span
+                  className="nav-pill"
+                  layoutId="nav-pill"
+                  transition={{ type: "spring", stiffness: 480, damping: 42 }}
+                  aria-hidden
+                />
+              ) : null}
+              <Icon size={15} className="nav-icon" aria-hidden />
+              <span className="nav-label">{label}</span>
               <span className="nav-num" aria-hidden>
                 {num}
               </span>
-              {label}
             </Link>
           ))}
         </nav>
 
         <div className="sidebar-bottom-nav">
-          <Link
-            to="/settings"
-            className={activeSection === "ai" ? "nav-item active" : "nav-item"}
-          >
-            <Settings size={18} />
-            {t("shell.nav.settings")}
-          </Link>
+          <div className="sidebar-bottom-row">
+            <Link
+              to="/settings"
+              className={activeSection === "ai" ? "nav-item active" : "nav-item"}
+            >
+              <Settings size={15} className="nav-icon" aria-hidden />
+              <span className="nav-label">{t("shell.nav.settings")}</span>
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
@@ -288,11 +342,34 @@ export function ProjectShell({
             <h1>{title}</h1>
           </div>
           <ProjectSearch projectId={projectId} />
+          <button
+            type="button"
+            className="rail-toggle"
+            aria-expanded={contextPanelOpen}
+            title={contextPanelOpen ? t("shell.rail.collapse") : t("shell.rail.expand")}
+            aria-label={contextPanelOpen ? t("shell.rail.collapse") : t("shell.rail.expand")}
+            onClick={() => setContextPanelOpen(!contextPanelOpen)}
+          >
+            {contextPanelOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+            {!contextPanelOpen && proposalCount > 0 ? (
+              <span className="rail-badge">{proposalCount}</span>
+            ) : null}
+          </button>
         </header>
 
-        <main className="workspace-main">{children}</main>
+        <main className="workspace-main">
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children}
+          </motion.div>
+        </main>
       </div>
 
+      {contextPanelOpen ? (
       <aside className="context-panel global-context-panel" aria-label={t("shell.panel.projectLabel")}>
         <button
           type="button"
@@ -420,6 +497,13 @@ export function ProjectShell({
           </details>
         </div>
         <AiPromptContextPanel />
+        <div className="context-inbox-header">
+          <Inbox size={15} aria-hidden />
+          <span>{t("shell.rail.inbox")}</span>
+          {proposalCount > 0 ? (
+            <span className="context-inbox-count">{proposalCount}</span>
+          ) : null}
+        </div>
         <AiProposalPanel projectId={projectId} />
         <div className="context-panel-footer">
           <button
@@ -437,6 +521,42 @@ export function ProjectShell({
           </button>
         </div>
       </aside>
+      ) : (
+      <aside className="context-panel global-context-panel context-panel-collapsed" aria-label={t("shell.panel.projectLabel")}>
+        <button
+          type="button"
+          className="collapsed-rail-action ui-tip"
+          data-tip={t("shell.rail.expand")}
+          aria-label={t("shell.rail.expand")}
+          onClick={() => setContextPanelOpen(true)}
+        >
+          <PanelRightOpen size={17} />
+        </button>
+        <button
+          type="button"
+          className="collapsed-rail-action ui-tip"
+          data-tip={t("shell.rail.inbox")}
+          aria-label={t("shell.rail.inbox")}
+          onClick={() => setContextPanelOpen(true)}
+        >
+          <Inbox size={17} />
+          {proposalCount > 0 ? <span className="rail-badge">{proposalCount}</span> : null}
+        </button>
+        <button
+          type="button"
+          className={
+            activeSection === "aiLog"
+              ? "collapsed-rail-action ui-tip active"
+              : "collapsed-rail-action ui-tip"
+          }
+          data-tip={t("shell.aiLog.label")}
+          aria-label={t("shell.aiLog.label")}
+          onClick={toggleAiLog}
+        >
+          <History size={17} />
+        </button>
+      </aside>
+      )}
     </div>
   );
 }

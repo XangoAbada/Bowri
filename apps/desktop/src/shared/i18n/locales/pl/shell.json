@@ -63,6 +63,11 @@
       "untitled": "Bez tytułu"
     },
     "back": "Wróć do projektów",
+    "rail": {
+      "collapse": "Zwiń panel AI",
+      "expand": "Rozwiń panel AI",
+      "inbox": "Skrzynka propozycji"
+    },
     "theme": {
       "light": "Przełącz na jasny motyw",
       "dark": "Przełącz na ciemny motyw",

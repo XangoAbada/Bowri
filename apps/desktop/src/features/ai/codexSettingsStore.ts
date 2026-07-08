@@ -12,7 +12,8 @@ const STORAGE_KEYS = {
   model: "storyforge2.codex.model",
   reasoningEffort: "storyforge2.codex.reasoningEffort",
   timeoutSeconds: "storyforge2.codex.timeoutSeconds",
-  contextPanelWidth: "storyforge2.layout.contextPanelWidth"
+  contextPanelWidth: "storyforge2.layout.contextPanelWidth",
+  contextPanelOpen: "storyforge2.layout.contextPanelOpen"
 };
 
 type CodexSettingsState = {
@@ -21,11 +22,13 @@ type CodexSettingsState = {
   reasoningEffort: ReasoningEffort;
   timeoutSeconds: number;
   contextPanelWidth: number;
+  contextPanelOpen: boolean;
   setCodexPath: (path: string) => void;
   setModel: (model: string) => void;
   setReasoningEffort: (effort: ReasoningEffort) => void;
   setTimeoutSeconds: (seconds: number) => void;
   setContextPanelWidth: (width: number) => void;
+  setContextPanelOpen: (open: boolean) => void;
 };
 
 export const useCodexSettingsStore = create<CodexSettingsState>((set) => ({
@@ -43,6 +46,7 @@ export const useCodexSettingsStore = create<CodexSettingsState>((set) => ({
     STORAGE_KEYS.contextPanelWidth,
     DEFAULT_CONTEXT_PANEL_WIDTH
   ),
+  contextPanelOpen: readString(STORAGE_KEYS.contextPanelOpen, "true") !== "false",
   setCodexPath: (codexPath) => {
     writeString(STORAGE_KEYS.codexPath, codexPath);
     set({ codexPath });
@@ -62,6 +66,10 @@ export const useCodexSettingsStore = create<CodexSettingsState>((set) => ({
   setContextPanelWidth: (contextPanelWidth) => {
     writeString(STORAGE_KEYS.contextPanelWidth, String(contextPanelWidth));
     set({ contextPanelWidth });
+  },
+  setContextPanelOpen: (contextPanelOpen) => {
+    writeString(STORAGE_KEYS.contextPanelOpen, String(contextPanelOpen));
+    set({ contextPanelOpen });
   }
 }));
 

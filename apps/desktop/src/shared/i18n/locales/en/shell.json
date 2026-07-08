@@ -63,6 +63,11 @@
       "untitled": "Untitled"
     },
     "back": "Back to projects",
+    "rail": {
+      "collapse": "Collapse the AI panel",
+      "expand": "Expand the AI panel",
+      "inbox": "Proposal inbox"
+    },
     "theme": {
       "light": "Switch to light theme",
       "dark": "Switch to dark theme",

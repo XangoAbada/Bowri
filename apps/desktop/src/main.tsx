@@ -14,6 +14,7 @@ import "@fontsource-variable/source-serif-4";
 import "./styles/tokens.css";
 import "./styles/components.css";
 import "./styles.css";
+import "./styles/features/shell.css";
 
 declare module "@tanstack/react-router" {
   interface Register {
