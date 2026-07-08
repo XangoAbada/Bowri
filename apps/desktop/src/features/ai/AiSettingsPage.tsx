@@ -25,7 +25,8 @@ import type {
 } from "../../shared/api/types";
 import { DEFAULT_AI_SETTINGS, REASONING_LEVELS } from "../../shared/api/types";
 import { setUiLanguage, UI_LANGUAGES } from "../../shared/i18n";
-import { Button, Field, StatusPill } from "../../shared/ui";
+import { Button, Field, Segmented, StatusPill } from "../../shared/ui";
+import { useThemeStore, type ThemePreference } from "../../app/themeStore";
 import { CodexStatusPanel } from "./CodexStatusPanel";
 import { useCodexSettingsStore } from "./codexSettingsStore";
 import {
@@ -143,6 +144,10 @@ export function AiSettingsPage() {
             </option>
           ))}
         </select>
+      </Field>
+
+      <Field label={t("shell.theme.label")} className="field-label-narrow">
+        <ThemePreferenceControl />
       </Field>
 
       <div className="settings-panel provider-panel">
@@ -552,4 +557,22 @@ function SubscriptionPill({
     );
   }
   return <StatusPill tone="muted">{t("aiSettings.pillNeedsLogin")}</StatusPill>;
+}
+
+function ThemePreferenceControl() {
+  const { t } = useTranslation();
+  const preference = useThemeStore((state) => state.preference);
+  const setPreference = useThemeStore((state) => state.setPreference);
+  return (
+    <Segmented
+      ariaLabel={t("shell.theme.label")}
+      value={preference}
+      onChange={(value) => setPreference(value as ThemePreference)}
+      items={[
+        { id: "light", label: t("shell.theme.optionLight") },
+        { id: "dark", label: t("shell.theme.optionDark") },
+        { id: "system", label: t("shell.theme.optionSystem") }
+      ]}
+    />
+  );
 }

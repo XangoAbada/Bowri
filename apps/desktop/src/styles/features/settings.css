@@ -1,0 +1,60 @@
+/* Strona ustawień AI (poza shellem projektu) */
+.settings-route {
+  min-height: 100vh;
+  padding: var(--s6) var(--s5) var(--s7);
+}
+
+.settings-route-inner {
+  display: grid;
+  gap: var(--s4);
+  width: min(920px, 100%);
+  margin: 0 auto;
+}
+
+.settings-route-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.settings-route-back:hover {
+  color: var(--accent-deep);
+}
+
+
+.section-title-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-title-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.content-panel {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.empty-state {
+  display: grid;
+  gap: 7px;
+  padding: 22px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-soft);
+}
+

@@ -1,0 +1,64 @@
+/* Metadane wpisu logu jako rząd chipów. */
+.ai-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.ai-log-response-fields,
+.ai-log-nested-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-log-response-fields > div,
+.ai-log-nested-fields > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.ai-log-response-fields dt,
+.ai-log-nested-fields dt {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-log-response-fields dd,
+.ai-log-nested-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-log-response-fields ul,
+.ai-log-nested-fields ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ai-log-prompt {
+  display: grid;
+  gap: 7px;
+}
+
+.ai-log-prompt pre,
+.ai-log-text-response {
+  max-height: 420px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+

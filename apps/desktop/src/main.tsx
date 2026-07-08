@@ -21,6 +21,11 @@ import "./styles/features/brainstorm.css";
 import "./styles/features/story-bible.css";
 import "./styles/features/plan.css";
 import "./styles/features/editor.css";
+import "./styles/features/editing.css";
+import "./styles/features/export.css";
+import "./styles/features/settings.css";
+import "./styles/features/ai.css";
+import "./styles/features/ailog.css";
 
 declare module "@tanstack/react-router" {
   interface Register {
