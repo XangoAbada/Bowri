@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -33,14 +34,26 @@ export function CoverImageLightbox({ image, onClose }: CoverImageLightboxProps) 
   }
 
   const lightbox = (
-    <div className="cover-lightbox" role="dialog" aria-modal="true">
+    <motion.div
+      className="cover-lightbox"
+      role="dialog"
+      aria-modal="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
+    >
       <button
         type="button"
         className="cover-lightbox-backdrop"
         onClick={onClose}
         aria-label={t("ai.lightbox.close")}
       />
-      <div className="cover-lightbox-content">
+      <motion.div
+        className="cover-lightbox-content"
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+      >
         <button
           type="button"
           className="icon-button cover-lightbox-close"
@@ -51,8 +64,8 @@ export function CoverImageLightbox({ image, onClose }: CoverImageLightboxProps) 
           <X size={18} />
         </button>
         <img src={image.src} alt={image.alt} />
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 
   if (typeof document === "undefined") {

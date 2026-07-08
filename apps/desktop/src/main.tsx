@@ -16,6 +16,8 @@ import "./styles/components.css";
 import "./styles.css";
 import "./styles/features/shell.css";
 import "./styles/features/dashboard.css";
+import "./styles/features/concept.css";
+import "./styles/features/brainstorm.css";
 
 declare module "@tanstack/react-router" {
   interface Register {
