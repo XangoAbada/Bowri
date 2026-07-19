@@ -34,16 +34,16 @@ describe("parseProposalResult", () => {
       JSON.stringify({
         version: 1,
         kind: "character_field_suggestion",
-        field: "strengthsJson",
-        summary: "Siły postaci",
-        value: ["Silna wola", "Empatia"],
+        field: "aliasesJson",
+        summary: "Aliasy postaci",
+        value: ["Wilk", "Stary"],
         warnings: []
       }),
-      "strengthsJson",
+      "aliasesJson",
       "generate_character_field"
     );
 
-    expect(parsed.textValue).toBe(JSON.stringify(["Silna wola", "Empatia"]));
+    expect(parsed.textValue).toBe(JSON.stringify(["Wilk", "Stary"]));
   });
 
   it("round-trips an empty character *Json field as [] instead of losing content", () => {
@@ -123,15 +123,16 @@ describe("parseProposalResult", () => {
         aliases: ["Matka"],
         role: "nieobecna matka",
         shortDescription: "Centralna nieobecność w historii.",
-        externalGoal: "Ukryć długi.",
-        internalNeed: "Odzyskać kontrolę.",
-        wound: "Wstyd po upadku rodziny.",
-        falseBelief: "Miłość wymaga milczenia.",
+        temperament: "Zdystansowana, twarda dla siebie.",
+        likesDislikes: "Lubi porządek, nie znosi litości.",
+        innerWorld: "Pragnie kontroli, boi się bliskości.",
+        worldview: "Wierzy, że miłość wymaga milczenia.",
         secret: "Zostawiła list.",
-        strengths: ["determinacja"],
-        weaknesses: ["unikanie rozmów"],
         voiceNotes: "Lakoniczna.",
-        arcSummary: "Wpływa na decyzje córki po śmierci.",
+        mannerisms: "Splata dłonie, gdy kłamie.",
+        origin: "Podupadły ród kupiecki.",
+        family: "Wychowana przez surowego ojca.",
+        background: "Upadek rodziny po długach.",
         knowledgeNotes: "Wie o bankowym liście.",
         visualPrompt: "Zmęczona kobieta w płaszczu."
       },
@@ -162,8 +163,9 @@ describe("parseProposalResult", () => {
       orderIndex: 3
     });
     expect(input.aliasesJson).toBe(JSON.stringify(["Matka"]));
-    expect(input.strengthsJson).toBe(JSON.stringify(["determinacja"]));
-    expect(input.weaknessesJson).toBe(JSON.stringify(["unikanie rozmów"]));
+    expect(input.temperament).toBe("Zdystansowana, twarda dla siebie.");
+    expect(input.background).toBe("Upadek rodziny po długach.");
+    expect(input.worldview).toBe("Wierzy, że miłość wymaga milczenia.");
   });
 
   it("builds a character relation target only when audit candidates point to two existing characters", () => {

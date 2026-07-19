@@ -22,15 +22,16 @@ export type CharacterFieldKey =
   | "role"
   | "shortDescription"
   | "appearance"
-  | "externalGoal"
-  | "internalNeed"
-  | "wound"
-  | "falseBelief"
+  | "temperament"
+  | "likesDislikes"
+  | "innerWorld"
+  | "worldview"
   | "secret"
-  | "strengthsJson"
-  | "weaknessesJson"
   | "voiceNotes"
-  | "arcSummary"
+  | "mannerisms"
+  | "origin"
+  | "family"
+  | "background"
   | "knowledgeNotes"
   | "visualPrompt"
   | "relationDescription"
@@ -129,25 +130,26 @@ export type CharacterPromptPackage = {
 };
 
 export const characterFieldConfigs: Record<CharacterFieldKey, CharacterFieldConfig> = {
-  characterProfile: field("characterProfile", "Pełny profil postaci", "generate_character_field", "character", "Wygeneruj kompletny tekstowy profil jednej nowej postaci do powieści. Nie generuj obrazu ani ścieżki obrazu. Uwzględnij rodzaj postaci: może to być człowiek, zwierzę, ożywiony przedmiot, istota albo inny byt pasujący do książki."),
+  characterProfile: field("characterProfile", "Pełny profil postaci", "generate_character_field", "character", "Wygeneruj kompletny opisowy profil jednej nowej postaci do powieści: sedno, wygląd, temperament, upodobania, wewnętrzny świat (pragnienia i lęki), światopogląd, sekret, mowę, manieryzmy, pochodzenie, rodzinę, przeszłość i wiedzę. Opisuj osobę — nie narzucaj z góry celów fabularnych ani łuku przemiany; niech wynikają z tego, kim postać jest. Uwzględnij rodzaj postaci: człowiek, zwierzę, ożywiony przedmiot, istota albo inny byt pasujący do książki. Nie generuj obrazu ani ścieżki obrazu."),
   characterRelation: field("characterRelation", "Pełna relacja", "generate_character_relation_field", "relation", "Wygeneruj kompletny szkic relacji między wskazanymi postaciami: typ, opis, historię, konflikt, opinię, zaufanie, sekret i zmianę w czasie. Nie twórz nowych postaci."),
   characterMemory: field("characterMemory", "Pełne wspomnienie", "generate_character_memory_field", "memory", "Wygeneruj kompletne wspomnienie dla wskazanej postaci: tytuł, opis, szczegóły, typ, temat, emocję i ważność. Nie twórz obrazu ani nowych postaci."),
   characterType: field("characterType", "Rodzaj postaci", "generate_character_field", "character", "Wygeneruj tylko rodzaj postaci: człowiek, zwierzę, istota, ożywiony przedmiot albo inny precyzyjny typ."),
   name: field("name", "Imię / nazwa", "generate_character_field", "character", "Wygeneruj tylko imię lub nazwę postaci."),
   aliasesJson: field("aliasesJson", "Aliasy", "generate_character_field", "character", "Wygeneruj tylko listę aliasów postaci jako JSON array stringów."),
   role: field("role", "Rola fabularna", "generate_character_field", "character", "Wygeneruj tylko rolę fabularną postaci."),
-  shortDescription: field("shortDescription", "Krótki opis", "generate_character_field", "character", "Wygeneruj tylko krótki opis postaci przydatny podczas pisania powieści."),
-  appearance: field("appearance", "Wygląd", "generate_character_field", "character", "Wygeneruj tylko opis wyglądu postaci pisany pod prozę: sylwetka, twarz, charakterystyczne detale, mowa ciała. Bez języka promptów graficznych."),
-  externalGoal: field("externalGoal", "Cel zewnętrzny", "generate_character_field", "character", "Wygeneruj tylko zewnętrzny cel postaci."),
-  internalNeed: field("internalNeed", "Potrzeba wewnętrzna", "generate_character_field", "character", "Wygeneruj tylko wewnętrzną potrzebę postaci."),
-  wound: field("wound", "Rana", "generate_character_field", "character", "Wygeneruj tylko ranę psychologiczną lub fabularną postaci."),
-  falseBelief: field("falseBelief", "Fałszywe przekonanie", "generate_character_field", "character", "Wygeneruj tylko fałszywe przekonanie postaci."),
+  shortDescription: field("shortDescription", "Sedno", "generate_character_field", "character", "Wygeneruj tylko sedno postaci — jedno, najwyżej dwa zdania oddające, kim ta postać jest w istocie. To kotwica całego portretu."),
+  appearance: field("appearance", "Wygląd", "generate_character_field", "character", "Wygeneruj tylko opis wyglądu postaci pisany pod prozę: sylwetka, twarz, charakterystyczne detale, sposób ubierania się. Statyczny wygląd, bez języka promptów graficznych."),
+  temperament: field("temperament", "Temperament", "generate_character_field", "character", "Wygeneruj tylko temperament i charakter postaci: usposobienie, stosunek do ludzi, dominujące cechy oraz wewnętrzne sprzeczności. Pisz opisowo, pod prozę."),
+  likesDislikes: field("likesDislikes", "Upodobania", "generate_character_field", "character", "Wygeneruj tylko upodobania postaci: co lubi, czego nie znosi, gusta oraz drażniące ją drobiazgi. Konkretnie, pod dialog i reakcje."),
+  innerWorld: field("innerWorld", "Co nią kieruje", "generate_character_field", "character", "Wygeneruj tylko wewnętrzny świat postaci: jej pragnienia i lęki, pisane jako opis, a nie sloty fabularne. Nie narzucaj łuku przemiany."),
+  worldview: field("worldview", "Światopogląd", "generate_character_field", "character", "Wygeneruj tylko światopogląd postaci: nadrzędne wartości, przekonania o świecie, moralność, wiarę lub przesądy. To napędza jej wybory i mowę."),
   secret: field("secret", "Sekret", "generate_character_field", "character", "Wygeneruj tylko sekret postaci."),
-  strengthsJson: field("strengthsJson", "Siły", "generate_character_field", "character", "Wygeneruj tylko listę sił postaci jako JSON array stringów."),
-  weaknessesJson: field("weaknessesJson", "Słabości", "generate_character_field", "character", "Wygeneruj tylko listę słabości postaci jako JSON array stringów."),
-  voiceNotes: field("voiceNotes", "Głos postaci", "generate_character_field", "character", "Wygeneruj tylko notatki o sposobie mówienia i głosie postaci."),
-  arcSummary: field("arcSummary", "Łuk przemiany", "generate_character_field", "character", "Wygeneruj tylko streszczenie łuku przemiany postaci."),
-  knowledgeNotes: field("knowledgeNotes", "Wiedza postaci", "generate_character_field", "character", "Wygeneruj tylko notatki o wiedzy postaci, pomyłkach, domysłach i tajemnicach."),
+  voiceNotes: field("voiceNotes", "Mowa", "generate_character_field", "character", "Wygeneruj tylko sposób mówienia postaci: słownictwo, rytm, tiki językowe, dialekt, poziom formalności oraz to, czego nigdy nie powie."),
+  mannerisms: field("mannerisms", "Ruch i mowa ciała", "generate_character_field", "character", "Wygeneruj tylko mowę ciała i sposób poruszania się postaci: chód, gesty, postawę, nawyki nerwowe. Pod konkretne akcje w scenach."),
+  origin: field("origin", "Pochodzenie", "generate_character_field", "character", "Wygeneruj tylko pochodzenie postaci: region, kulturę, klasę lub status społeczny, świat, w którym dorastała, oraz jak ją to ukształtowało."),
+  family: field("family", "Rodzina", "generate_character_field", "character", "Wygeneruj tylko tło rodzinne postaci jako backstory: pochodzenie rodzinne, wychowanie, pozycję w rodzinie, relacje z rodzicami i rodzeństwem. Nie twórz powiązań z istniejącymi postaciami."),
+  background: field("background", "Przeszłość", "generate_character_field", "character", "Wygeneruj tylko przeszłość postaci: drogę życiową, zawód lub wyszkolenie oraz przełomowe doświadczenia, które ją ukształtowały."),
+  knowledgeNotes: field("knowledgeNotes", "Wiedza", "generate_character_field", "character", "Wygeneruj tylko notatki o wiedzy postaci: co wie, czego nie wie, w co błędnie wierzy i jakie tajemnice zna. Przydatne dla ciągłości."),
   visualPrompt: field("visualPrompt", "Prompt wizualny", "generate_character_field", "character", "Wygeneruj tylko prompt wizualny postaci, bez generowania obrazu."),
   relationDescription: field("relationDescription", "Opis relacji", "generate_character_relation_field", "relation", "Wygeneruj tylko opis relacji między dwiema postaciami."),
   relationHistory: field("relationHistory", "Historia relacji", "generate_character_relation_field", "relation", "Wygeneruj tylko historię relacji."),
@@ -553,15 +555,16 @@ function currentCharacterFieldValue(
     role: String(record.role ?? ""),
     shortDescription: String(record.shortDescription ?? ""),
     appearance: String(record.appearance ?? ""),
-    externalGoal: String(record.externalGoal ?? ""),
-    internalNeed: String(record.internalNeed ?? ""),
-    wound: String(record.wound ?? ""),
-    falseBelief: String(record.falseBelief ?? ""),
+    temperament: String(record.temperament ?? ""),
+    likesDislikes: String(record.likesDislikes ?? ""),
+    innerWorld: String(record.innerWorld ?? ""),
+    worldview: String(record.worldview ?? ""),
     secret: String(record.secret ?? ""),
-    strengthsJson: String(record.strengthsJson ?? ""),
-    weaknessesJson: String(record.weaknessesJson ?? ""),
     voiceNotes: String(record.voiceNotes ?? ""),
-    arcSummary: String(record.arcSummary ?? ""),
+    mannerisms: String(record.mannerisms ?? ""),
+    origin: String(record.origin ?? ""),
+    family: String(record.family ?? ""),
+    background: String(record.background ?? ""),
     knowledgeNotes: String(record.knowledgeNotes ?? ""),
     visualPrompt: String(record.visualPrompt ?? ""),
     relationDescription: String(record.description ?? ""),
@@ -605,15 +608,16 @@ function characterSuggestionSchema(fieldKey: CharacterFieldKey): unknown {
         role: "string",
         shortDescription: "string",
         appearance: "string",
-        externalGoal: "string",
-        internalNeed: "string",
-        wound: "string",
-        falseBelief: "string",
+        temperament: "string",
+        likesDislikes: "string",
+        innerWorld: "string",
+        worldview: "string",
         secret: "string",
-        strengths: ["string"],
-        weaknesses: ["string"],
         voiceNotes: "string",
-        arcSummary: "string",
+        mannerisms: "string",
+        origin: "string",
+        family: "string",
+        background: "string",
         knowledgeNotes: "string",
         visualPrompt: "string"
       },
@@ -674,8 +678,9 @@ function renderCharacterImagePrompt(book: Book, character?: Character): string {
     optionalLine("Book", [book.workingTitle, book.genre, book.tone].filter(Boolean).join(", ")),
     optionalLine("World and mood", compact(book.settingSketch || book.premise, 220)),
     optionalLine("Character", character ? compact(`${character.name}, ${character.characterType}, ${character.role}. ${character.shortDescription}`, 260) : ""),
-    optionalLine("Inner life", character ? compact([character.externalGoal, character.internalNeed, character.wound, character.falseBelief].filter(Boolean).join("; "), 240) : ""),
-    optionalLine("Voice and arc", character ? compact([character.voiceNotes, character.arcSummary].filter(Boolean).join("; "), 220) : ""),
+    optionalLine("Personality", character ? compact([character.temperament, character.likesDislikes, character.innerWorld, character.worldview].filter(Boolean).join("; "), 240) : ""),
+    optionalLine("Movement and bearing", character ? compact([character.mannerisms, character.voiceNotes].filter(Boolean).join("; "), 220) : ""),
+    optionalLine("Roots", character ? compact([character.origin, character.background].filter(Boolean).join("; "), 200) : ""),
     optionalLine("Visual prompt", character?.visualPrompt ?? ""),
     optionalLine("Design note", compact(book.styleGuide, 180))
   ].filter(Boolean).join("\n");

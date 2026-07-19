@@ -6604,7 +6604,7 @@ function sceneRelationOptions(
       return characters.characters.map((character) => ({
         id: character.id,
         label: character.name || "Postać bez imienia",
-        description: character.shortDescription || character.arcSummary || character.role || "Brak opisu postaci."
+        description: character.shortDescription || character.background || character.role || "Brak opisu postaci."
       }));
     case "threads":
       return plan.threads.map((thread) => ({

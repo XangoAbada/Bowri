@@ -128,35 +128,50 @@ const characterFieldGroups: Array<{
       { field: "name", key: "name" },
       { field: "aliasesJson", key: "aliasesJson", list: true },
       { field: "role", key: "role" },
-      { field: "shortDescription", key: "shortDescription", rows: 3 },
+      { field: "shortDescription", key: "shortDescription", rows: 2 }
+    ]
+  },
+  {
+    groupKey: "appearance",
+    fields: [
       { field: "appearance", key: "appearance", rows: 3 }
     ]
   },
   {
-    groupKey: "motivation",
+    groupKey: "character",
     fields: [
-      { field: "externalGoal", key: "externalGoal", rows: 2 },
-      { field: "internalNeed", key: "internalNeed", rows: 2 },
-      { field: "wound", key: "wound", rows: 2 },
-      { field: "falseBelief", key: "falseBelief", rows: 2 },
+      { field: "temperament", key: "temperament", rows: 3 },
+      { field: "likesDislikes", key: "likesDislikes", rows: 3 }
+    ]
+  },
+  {
+    groupKey: "drive",
+    fields: [
+      { field: "innerWorld", key: "innerWorld", rows: 3 },
+      { field: "worldview", key: "worldview", rows: 3 },
       { field: "secret", key: "secret", rows: 2 }
     ]
   },
   {
-    groupKey: "voice",
+    groupKey: "expression",
     fields: [
       { field: "voiceNotes", key: "voiceNotes", rows: 3 },
-      { field: "arcSummary", key: "arcSummary", rows: 3 },
-      { field: "knowledgeNotes", key: "knowledgeNotes", rows: 4 }
+      { field: "mannerisms", key: "mannerisms", rows: 3 }
     ]
   },
   {
-    groupKey: "advanced",
+    groupKey: "roots",
+    fields: [
+      { field: "origin", key: "origin", rows: 3 },
+      { field: "family", key: "family", rows: 3 },
+      { field: "background", key: "background", rows: 3 }
+    ]
+  },
+  {
+    groupKey: "knowledge",
     advanced: true,
     fields: [
-      { field: "strengthsJson", key: "strengthsJson", list: true },
-      { field: "weaknessesJson", key: "weaknessesJson", list: true },
-      { field: "visualPrompt", key: "visualPrompt", rows: 4 }
+      { field: "knowledgeNotes", key: "knowledgeNotes", rows: 4 }
     ]
   }
 ];
@@ -180,6 +195,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
   const [memoryLinkModal, setMemoryLinkModal] = useState<MemoryLinkModalState | null>(null);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [seed, setSeed] = useState("");
 
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
@@ -332,9 +348,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     characterMutation.mutate({
       ...draft,
       projectId,
-      aliasesJson: serializeListInput(draft.aliasesJson),
-      strengthsJson: serializeListInput(draft.strengthsJson),
-      weaknessesJson: serializeListInput(draft.weaknessesJson)
+      aliasesJson: serializeListInput(draft.aliasesJson)
     });
   }
 
@@ -356,6 +370,25 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
     setActiveTab("profile");
     setDraft(freshDraft);
     activateCharacterPromptContext("characterProfile", target);
+  }
+
+  // Ziarno → portret: seed autora trafia jako authorPriorityComment na target profilu,
+  // a potem od razu kolejkujemy generację całego profilu.
+  function generateFromSeed() {
+    const trimmed = seed.trim();
+    if (!trimmed) {
+      return;
+    }
+    const freshDraft = emptyCharacterInput(projectId, workspace.characters.length);
+    const target = draftCharacterPreview(freshDraft);
+    setSelectedCharacterId(newCharacterDraftId);
+    setActiveTab("profile");
+    setDraft(freshDraft);
+    activateCharacterPromptContext("characterProfile", target);
+    const targetId = characterPromptContextTargetId(projectId, "characterProfile", characterEntityId(target));
+    useAiPromptContextStore.getState().setAuthorPriorityComment(targetId, trimmed);
+    queueCharacterGeneration("characterProfile", target);
+    setSeed("");
   }
 
   function generateRelationForCharacter(character: Character) {
@@ -567,6 +600,27 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
 
           {activeTab === "profile" ? (
             <form id="character-profile-form" className="bible-group-stack" onSubmit={saveCharacter}>
+              {selectedCharacterId === newCharacterDraftId ? (
+                <section className="bible-group character-seed">
+                  <div className="bible-group-heading">
+                    <h4>{t("characters.seed.title")}</h4>
+                    <p>{t("characters.seed.description")}</p>
+                  </div>
+                  <div className="character-seed-row">
+                    <textarea
+                      value={seed}
+                      onChange={(event) => setSeed(event.target.value)}
+                      rows={2}
+                      placeholder={t("characters.seed.placeholder")}
+                      aria-label={t("characters.seed.title")}
+                    />
+                    <Button variant="ai" type="button" onClick={generateFromSeed} disabled={!seed.trim()}>
+                      <Sparkles size={16} aria-hidden />
+                      {t("characters.seed.generate")}
+                    </Button>
+                  </div>
+                </section>
+              ) : null}
               {characterFieldGroups.map((group) => {
                 const fieldGrid = (
                   <div className="bible-field-grid">
@@ -1266,15 +1320,16 @@ function emptyCharacterInput(projectId: string, orderIndex: number): UpsertChara
     role: "",
     shortDescription: "",
     appearance: "",
-    externalGoal: "",
-    internalNeed: "",
-    wound: "",
-    falseBelief: "",
+    temperament: "",
+    likesDislikes: "",
+    innerWorld: "",
+    worldview: "",
     secret: "",
-    strengthsJson: "[]",
-    weaknessesJson: "[]",
     voiceNotes: "",
-    arcSummary: "",
+    mannerisms: "",
+    origin: "",
+    family: "",
+    background: "",
     knowledgeNotes: "",
     visualPrompt: "",
     imageAssetId: null,
@@ -1293,15 +1348,16 @@ function characterToInput(character: Character): UpsertCharacterInput {
     role: character.role,
     shortDescription: character.shortDescription,
     appearance: character.appearance,
-    externalGoal: character.externalGoal,
-    internalNeed: character.internalNeed,
-    wound: character.wound,
-    falseBelief: character.falseBelief,
+    temperament: character.temperament,
+    likesDislikes: character.likesDislikes,
+    innerWorld: character.innerWorld,
+    worldview: character.worldview,
     secret: character.secret,
-    strengthsJson: character.strengthsJson,
-    weaknessesJson: character.weaknessesJson,
     voiceNotes: character.voiceNotes,
-    arcSummary: character.arcSummary,
+    mannerisms: character.mannerisms,
+    origin: character.origin,
+    family: character.family,
+    background: character.background,
     knowledgeNotes: character.knowledgeNotes,
     visualPrompt: character.visualPrompt,
     imageAssetId: character.imageAssetId,
@@ -1321,15 +1377,16 @@ function draftCharacterPreview(input: UpsertCharacterInput): Character {
     role: input.role,
     shortDescription: input.shortDescription,
     appearance: input.appearance,
-    externalGoal: input.externalGoal,
-    internalNeed: input.internalNeed,
-    wound: input.wound,
-    falseBelief: input.falseBelief,
+    temperament: input.temperament,
+    likesDislikes: input.likesDislikes,
+    innerWorld: input.innerWorld,
+    worldview: input.worldview,
     secret: input.secret,
-    strengthsJson: input.strengthsJson,
-    weaknessesJson: input.weaknessesJson,
     voiceNotes: input.voiceNotes,
-    arcSummary: input.arcSummary,
+    mannerisms: input.mannerisms,
+    origin: input.origin,
+    family: input.family,
+    background: input.background,
     knowledgeNotes: input.knowledgeNotes,
     visualPrompt: input.visualPrompt,
     imageAssetId: input.imageAssetId ?? null,
@@ -1366,15 +1423,16 @@ function applyCharacterProfileValue(input: UpsertCharacterInput, value: string):
       role: stringValue(character.role, input.role),
       shortDescription: stringValue(character.shortDescription, input.shortDescription),
       appearance: stringValue(character.appearance, input.appearance),
-      externalGoal: stringValue(character.externalGoal, input.externalGoal),
-      internalNeed: stringValue(character.internalNeed, input.internalNeed),
-      wound: stringValue(character.wound, input.wound),
-      falseBelief: stringValue(character.falseBelief, input.falseBelief),
+      temperament: stringValue(character.temperament, input.temperament),
+      likesDislikes: stringValue(character.likesDislikes, input.likesDislikes),
+      innerWorld: stringValue(character.innerWorld, input.innerWorld),
+      worldview: stringValue(character.worldview, input.worldview),
       secret: stringValue(character.secret, input.secret),
-      strengthsJson: arrayJsonValue(character.strengths, input.strengthsJson),
-      weaknessesJson: arrayJsonValue(character.weaknesses, input.weaknessesJson),
       voiceNotes: stringValue(character.voiceNotes, input.voiceNotes),
-      arcSummary: stringValue(character.arcSummary, input.arcSummary),
+      mannerisms: stringValue(character.mannerisms, input.mannerisms),
+      origin: stringValue(character.origin, input.origin),
+      family: stringValue(character.family, input.family),
+      background: stringValue(character.background, input.background),
       knowledgeNotes: stringValue(character.knowledgeNotes, input.knowledgeNotes),
       visualPrompt: stringValue(character.visualPrompt, input.visualPrompt)
     };

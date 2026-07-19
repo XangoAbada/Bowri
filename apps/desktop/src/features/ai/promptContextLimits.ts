@@ -164,19 +164,23 @@ export function compactCharacter(character: Character | null | undefined) {
         name: character.name,
         aliases: parseJsonList(character.aliasesJson),
         role: character.role,
-        description: character.shortDescription,
+        essence: character.shortDescription,
         appearance: character.appearance,
-        goal: character.externalGoal,
-        need: character.internalNeed,
-        wound: character.wound,
-        falseBelief: character.falseBelief,
+        temperament: character.temperament,
+        likesDislikes: character.likesDislikes,
+        innerWorld: character.innerWorld,
+        worldview: character.worldview,
         // Sekret postaci napędza podtekst — model ma go znać, ale inne postacie
         // (a czasem sama POV) mogą o nim nie wiedzieć; adnotacja zapobiega przeciekom.
         secret: character.secret
           ? `${character.secret} (sekret — inne postacie mogą o nim nie wiedzieć)`
           : "",
         voice: character.voiceNotes,
-        arc: character.arcSummary,
+        mannerisms: character.mannerisms,
+        origin: character.origin,
+        family: character.family,
+        background: character.background,
+        knowledge: character.knowledgeNotes,
         status: character.status
       }
     : null;

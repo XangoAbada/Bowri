@@ -38,21 +38,39 @@
     },
     "groups": {
       "identity": {
-        "title": "Identity",
-        "description": "Basic information that makes it easy to recognize the character's role in the novel."
+        "title": "Who they are",
+        "description": "Basic information that makes it easy to recognize the character in the novel."
       },
-      "motivation": {
-        "title": "Motivations and conflict",
-        "description": "Goals, needs and inner tensions that drive the character through the plot."
+      "appearance": {
+        "title": "How they look",
+        "description": "Static appearance written for prose: build, face, details, way of dressing."
       },
-      "voice": {
-        "title": "Voice, arc and knowledge",
-        "description": "Way of speaking, direction of transformation and notes needed while writing."
+      "character": {
+        "title": "What they are like",
+        "description": "Temperament, disposition and tastes — what makes this character themselves."
       },
-      "advanced": {
-        "title": "Advanced",
-        "description": "Helper fields — they don't go into scene-writing prompts. The visual prompt feeds the character image generation."
+      "drive": {
+        "title": "What drives them",
+        "description": "Desires, fears and worldview; a secret that fuels subtext."
+      },
+      "expression": {
+        "title": "How they speak and move",
+        "description": "Way of speaking, plus body language and how they move."
+      },
+      "roots": {
+        "title": "Roots",
+        "description": "Origin, family and past that shaped the character."
+      },
+      "knowledge": {
+        "title": "Knowledge",
+        "description": "What the character knows, doesn't know and wrongly believes — for continuity."
       }
+    },
+    "seed": {
+      "title": "Character seed",
+      "description": "Describe in one sentence who this character is. The AI will expand it into a full portrait.",
+      "placeholder": "e.g. a bitter lighthouse keeper, once an opera singer",
+      "generate": "Generate from seed"
     },
     "messages": {
       "characterSaved": "Character saved.",
@@ -186,18 +204,19 @@
       "name": "Name",
       "aliasesJson": "Aliases",
       "role": "Narrative role",
-      "shortDescription": "Short description",
+      "shortDescription": "Essence",
       "appearance": "Appearance",
-      "externalGoal": "External goal",
-      "internalNeed": "Internal need",
-      "wound": "Wound",
-      "falseBelief": "False belief",
+      "temperament": "Temperament",
+      "likesDislikes": "Tastes",
+      "innerWorld": "What drives them",
+      "worldview": "Worldview",
       "secret": "Secret",
-      "strengthsJson": "Strengths",
-      "weaknessesJson": "Weaknesses",
-      "voiceNotes": "Character voice",
-      "arcSummary": "Transformation arc",
-      "knowledgeNotes": "Character knowledge",
+      "voiceNotes": "Speech",
+      "mannerisms": "Movement and body language",
+      "origin": "Origin",
+      "family": "Family",
+      "background": "Past",
+      "knowledgeNotes": "Knowledge",
       "visualPrompt": "Visual prompt",
       "relationDescription": "Relation description",
       "relationHistory": "Relation history",

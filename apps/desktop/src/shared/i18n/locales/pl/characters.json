@@ -38,21 +38,39 @@
     },
     "groups": {
       "identity": {
-        "title": "Tożsamość",
-        "description": "Podstawowe informacje, po których łatwo rozpoznać rolę postaci w powieści."
+        "title": "Kim jest",
+        "description": "Podstawowe informacje, po których łatwo rozpoznać postać w powieści."
       },
-      "motivation": {
-        "title": "Motywacje i konflikt",
-        "description": "Cele, potrzeby i wewnętrzne napięcia, które prowadzą postać przez fabułę."
+      "appearance": {
+        "title": "Jak wygląda",
+        "description": "Statyczny wygląd pisany pod prozę: sylwetka, twarz, detale, sposób ubierania się."
       },
-      "voice": {
-        "title": "Głos, łuk i wiedza",
-        "description": "Sposób mówienia, kierunek przemiany i notatki potrzebne podczas pisania."
+      "character": {
+        "title": "Jaki jest",
+        "description": "Temperament, usposobienie i upodobania — to, co czyni tę postać sobą."
       },
-      "advanced": {
-        "title": "Zaawansowane",
-        "description": "Pola pomocnicze — nie trafiają do promptów pisania scen. Prompt wizualny zasila generowanie obrazu postaci."
+      "drive": {
+        "title": "Co nią kieruje",
+        "description": "Pragnienia, lęki i światopogląd; sekret napędzający podtekst."
+      },
+      "expression": {
+        "title": "Jak mówi i się porusza",
+        "description": "Sposób mówienia oraz mowa ciała i sposób poruszania się."
+      },
+      "roots": {
+        "title": "Korzenie",
+        "description": "Pochodzenie, rodzina i przeszłość, które ukształtowały postać."
+      },
+      "knowledge": {
+        "title": "Wiedza",
+        "description": "Co postać wie, czego nie wie i w co błędnie wierzy — dla ciągłości."
       }
+    },
+    "seed": {
+      "title": "Ziarno postaci",
+      "description": "Opisz jednym zdaniem, kim jest ta postać. AI rozwinie z tego cały portret.",
+      "placeholder": "np. zgorzkniały latarnik, dawniej śpiewak operowy",
+      "generate": "Generuj z ziarna"
     },
     "messages": {
       "characterSaved": "Zapisano postać.",
@@ -186,18 +204,19 @@
       "name": "Imię / nazwa",
       "aliasesJson": "Aliasy",
       "role": "Rola fabularna",
-      "shortDescription": "Krótki opis",
+      "shortDescription": "Sedno",
       "appearance": "Wygląd",
-      "externalGoal": "Cel zewnętrzny",
-      "internalNeed": "Potrzeba wewnętrzna",
-      "wound": "Rana",
-      "falseBelief": "Fałszywe przekonanie",
+      "temperament": "Temperament",
+      "likesDislikes": "Upodobania",
+      "innerWorld": "Co nią kieruje",
+      "worldview": "Światopogląd",
       "secret": "Sekret",
-      "strengthsJson": "Siły",
-      "weaknessesJson": "Słabości",
-      "voiceNotes": "Głos postaci",
-      "arcSummary": "Łuk przemiany",
-      "knowledgeNotes": "Wiedza postaci",
+      "voiceNotes": "Mowa",
+      "mannerisms": "Ruch i mowa ciała",
+      "origin": "Pochodzenie",
+      "family": "Rodzina",
+      "background": "Przeszłość",
+      "knowledgeNotes": "Wiedza",
       "visualPrompt": "Prompt wizualny",
       "relationDescription": "Opis relacji",
       "relationHistory": "Historia relacji",

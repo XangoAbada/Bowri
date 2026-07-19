@@ -64,10 +64,7 @@ function buildPromptPackage() {
           name: "Jan",
           role: "protagonista",
           shortDescription: "",
-          externalGoal: "",
-          internalNeed: "",
           voiceNotes: "",
-          arcSummary: "",
           status: "draft"
         },
         {
@@ -76,10 +73,7 @@ function buildPromptPackage() {
           name: "Tło Postać",
           role: "statysta",
           shortDescription: "",
-          externalGoal: "",
-          internalNeed: "",
           voiceNotes: "",
-          arcSummary: "",
           status: "draft"
         }
       ],

@@ -90,7 +90,7 @@ type PlanStoryBibleContext = {
     name: string;
     role: string;
     shortDescription: string;
-    arcSummary: string;
+    background: string;
     voiceNotes: string;
     knowledgeNotes: string;
   }>;
@@ -709,7 +709,7 @@ export function planStoryBibleContext(
       name: character.name,
       role: character.role,
       shortDescription: character.shortDescription,
-      arcSummary: character.arcSummary,
+      background: character.background,
       voiceNotes: character.voiceNotes,
       knowledgeNotes: character.knowledgeNotes
     })),

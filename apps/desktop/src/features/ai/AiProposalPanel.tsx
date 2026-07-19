@@ -2887,15 +2887,16 @@ export function characterProfileInputFromProposal(
     role: stringRecordValue(character.role, stringRecordValue(snapshot.role)),
     shortDescription: stringRecordValue(character.shortDescription, stringRecordValue(snapshot.shortDescription)),
     appearance: stringRecordValue(character.appearance, stringRecordValue(snapshot.appearance)),
-    externalGoal: stringRecordValue(character.externalGoal, stringRecordValue(snapshot.externalGoal)),
-    internalNeed: stringRecordValue(character.internalNeed, stringRecordValue(snapshot.internalNeed)),
-    wound: stringRecordValue(character.wound, stringRecordValue(snapshot.wound)),
-    falseBelief: stringRecordValue(character.falseBelief, stringRecordValue(snapshot.falseBelief)),
+    temperament: stringRecordValue(character.temperament, stringRecordValue(snapshot.temperament)),
+    likesDislikes: stringRecordValue(character.likesDislikes, stringRecordValue(snapshot.likesDislikes)),
+    innerWorld: stringRecordValue(character.innerWorld, stringRecordValue(snapshot.innerWorld)),
+    worldview: stringRecordValue(character.worldview, stringRecordValue(snapshot.worldview)),
     secret: stringRecordValue(character.secret, stringRecordValue(snapshot.secret)),
-    strengthsJson: arrayJsonRecordValue(character.strengths, stringRecordValue(snapshot.strengthsJson, "[]")),
-    weaknessesJson: arrayJsonRecordValue(character.weaknesses, stringRecordValue(snapshot.weaknessesJson, "[]")),
     voiceNotes: stringRecordValue(character.voiceNotes, stringRecordValue(snapshot.voiceNotes)),
-    arcSummary: stringRecordValue(character.arcSummary, stringRecordValue(snapshot.arcSummary)),
+    mannerisms: stringRecordValue(character.mannerisms, stringRecordValue(snapshot.mannerisms)),
+    origin: stringRecordValue(character.origin, stringRecordValue(snapshot.origin)),
+    family: stringRecordValue(character.family, stringRecordValue(snapshot.family)),
+    background: stringRecordValue(character.background, stringRecordValue(snapshot.background)),
     knowledgeNotes: stringRecordValue(character.knowledgeNotes, stringRecordValue(snapshot.knowledgeNotes)),
     visualPrompt: stringRecordValue(character.visualPrompt, stringRecordValue(snapshot.visualPrompt)),
     imageAssetId: stringRecordValue(snapshot.imageAssetId) || null,
@@ -2924,15 +2925,16 @@ async function characterFieldInputFromProposal(
     role: character.role,
     shortDescription: character.shortDescription,
     appearance: character.appearance,
-    externalGoal: character.externalGoal,
-    internalNeed: character.internalNeed,
-    wound: character.wound,
-    falseBelief: character.falseBelief,
+    temperament: character.temperament,
+    likesDislikes: character.likesDislikes,
+    innerWorld: character.innerWorld,
+    worldview: character.worldview,
     secret: character.secret,
-    strengthsJson: character.strengthsJson,
-    weaknessesJson: character.weaknessesJson,
     voiceNotes: character.voiceNotes,
-    arcSummary: character.arcSummary,
+    mannerisms: character.mannerisms,
+    origin: character.origin,
+    family: character.family,
+    background: character.background,
     knowledgeNotes: character.knowledgeNotes,
     visualPrompt: character.visualPrompt,
     imageAssetId: character.imageAssetId || null,
@@ -2941,7 +2943,7 @@ async function characterFieldInputFromProposal(
   };
   const value = proposal.editableValue.trim();
 
-  if (field === "aliasesJson" || field === "strengthsJson" || field === "weaknessesJson") {
+  if (field === "aliasesJson") {
     input[field] = normalizeJsonArrayString(value);
     return input;
   }
@@ -2962,17 +2964,17 @@ async function characterFieldInputFromProposal(
     case "appearance":
       input.appearance = value;
       break;
-    case "externalGoal":
-      input.externalGoal = value;
+    case "temperament":
+      input.temperament = value;
       break;
-    case "internalNeed":
-      input.internalNeed = value;
+    case "likesDislikes":
+      input.likesDislikes = value;
       break;
-    case "wound":
-      input.wound = value;
+    case "innerWorld":
+      input.innerWorld = value;
       break;
-    case "falseBelief":
-      input.falseBelief = value;
+    case "worldview":
+      input.worldview = value;
       break;
     case "secret":
       input.secret = value;
@@ -2980,8 +2982,17 @@ async function characterFieldInputFromProposal(
     case "voiceNotes":
       input.voiceNotes = value;
       break;
-    case "arcSummary":
-      input.arcSummary = value;
+    case "mannerisms":
+      input.mannerisms = value;
+      break;
+    case "origin":
+      input.origin = value;
+      break;
+    case "family":
+      input.family = value;
+      break;
+    case "background":
+      input.background = value;
       break;
     case "knowledgeNotes":
       input.knowledgeNotes = value;
@@ -3025,15 +3036,16 @@ function isCanonicalCharacterField(
   | "role"
   | "shortDescription"
   | "appearance"
-  | "externalGoal"
-  | "internalNeed"
-  | "wound"
-  | "falseBelief"
+  | "temperament"
+  | "likesDislikes"
+  | "innerWorld"
+  | "worldview"
   | "secret"
-  | "strengthsJson"
-  | "weaknessesJson"
   | "voiceNotes"
-  | "arcSummary"
+  | "mannerisms"
+  | "origin"
+  | "family"
+  | "background"
   | "knowledgeNotes"
   | "visualPrompt"
 > {
@@ -3044,15 +3056,16 @@ function isCanonicalCharacterField(
     "role",
     "shortDescription",
     "appearance",
-    "externalGoal",
-    "internalNeed",
-    "wound",
-    "falseBelief",
+    "temperament",
+    "likesDislikes",
+    "innerWorld",
+    "worldview",
     "secret",
-    "strengthsJson",
-    "weaknessesJson",
     "voiceNotes",
-    "arcSummary",
+    "mannerisms",
+    "origin",
+    "family",
+    "background",
     "knowledgeNotes",
     "visualPrompt"
   ].includes(field);

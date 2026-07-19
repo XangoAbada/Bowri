@@ -1285,7 +1285,7 @@ function sceneRelationOptions(
     return characters.characters.map((character) => ({
       id: character.id,
       label: character.name || t("scenes.characterNoName"),
-      description: character.shortDescription || character.arcSummary || character.role || t("scenes.noCharacterDescription")
+      description: character.shortDescription || character.background || character.role || t("scenes.noCharacterDescription")
     }));
   }
   if (kind === "threads") {
