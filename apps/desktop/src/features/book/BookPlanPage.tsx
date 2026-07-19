@@ -1715,6 +1715,8 @@ function StructureStep({
       action={
         <PlanAiActions
           field="storyStructure"
+          generateLabel={t("book.suggestStructure")}
+          generateTitle={t("book.generateStructureHint")}
           onGenerate={() => onGenerate("storyStructure")}
           onActivatePrompt={() => onActivatePrompt("storyStructure")}
         />
@@ -1858,6 +1860,8 @@ function ActsStep({
       action={
         <PlanAiActions
           field="acts"
+          generateLabel={t("book.draftActs")}
+          generateTitle={t("book.generateActsHint")}
           onGenerate={() => onGenerate("acts")}
           onActivatePrompt={() => onActivatePrompt("acts")}
         />
@@ -3015,6 +3019,8 @@ function ThreadsStep({
         <div className="thread-header-actions">
           <PlanAiActions
             field="plotThreads"
+            generateLabel={t("book.suggestThreads")}
+            generateTitle={t("book.generateThreadsHint")}
             onGenerate={() => onGenerate("plotThreads")}
             onActivatePrompt={() => onActivatePrompt("plotThreads")}
           />
