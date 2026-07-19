@@ -96,15 +96,11 @@
     },
     "profile": {
       "elementType": "Element type",
-      "advancedTitle": "Advanced",
-      "advancedDescription": "Details don't go into scene-writing prompts.",
       "saveElement": "Save element"
     },
     "rules": {
       "newRule": "New rule",
       "analyze": "Analyze",
-      "advancedTitle": "Advanced",
-      "advancedDescription": "Scene examples don't go into scene-writing prompts.",
       "saveRule": "Save rule"
     },
     "visuals": {

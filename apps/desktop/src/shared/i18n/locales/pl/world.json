@@ -96,15 +96,11 @@
     },
     "profile": {
       "elementType": "Typ elementu",
-      "advancedTitle": "Zaawansowane",
-      "advancedDescription": "Szczegóły nie trafiają do promptów pisania scen.",
       "saveElement": "Zapisz element"
     },
     "rules": {
       "newRule": "Nowa reguła",
       "analyze": "Analizuj",
-      "advancedTitle": "Zaawansowane",
-      "advancedDescription": "Przykłady ze scen nie trafiają do promptów pisania scen.",
       "saveRule": "Zapisz regułę"
     },
     "visuals": {

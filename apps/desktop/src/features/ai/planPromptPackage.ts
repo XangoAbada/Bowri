@@ -104,12 +104,19 @@ type PlanStoryBibleContext = {
     elementType: string;
     summary: string;
     details: string;
+    storyPurpose: string;
+    constraints: string;
   }>;
   worldRules: Array<{
     id: string;
     name: string;
     description: string;
+    scope: string;
+    cost: string;
+    limitation: string;
+    exceptions: string;
     violationConsequences: string;
+    sceneExamples: string;
   }>;
 };
 
@@ -762,13 +769,20 @@ export function planStoryBibleContext(
       name: element.name,
       elementType: element.elementType,
       summary: element.summary,
-      details: element.details
+      details: element.details,
+      storyPurpose: element.storyPurpose,
+      constraints: element.constraints
     })),
     worldRules: world.rules.map((rule) => ({
       id: rule.id,
       name: rule.name,
       description: rule.description,
-      violationConsequences: rule.violationConsequences
+      scope: rule.scope,
+      cost: rule.cost,
+      limitation: rule.limitation,
+      exceptions: rule.exceptions,
+      violationConsequences: rule.violationConsequences,
+      sceneExamples: rule.sceneExamples
     }))
   };
 }

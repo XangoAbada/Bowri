@@ -471,7 +471,8 @@ function compactElement(element: WorldElement) {
     name: element.name,
     summary: element.summary,
     storyPurpose: element.storyPurpose,
-    constraints: element.constraints
+    constraints: element.constraints,
+    details: element.details
   };
 }
 
@@ -484,7 +485,8 @@ function compactRule(rule: WorldRule) {
     cost: rule.cost,
     limitation: rule.limitation,
     exceptions: rule.exceptions,
-    violationConsequences: rule.violationConsequences
+    violationConsequences: rule.violationConsequences,
+    sceneExamples: rule.sceneExamples
   };
 }
 

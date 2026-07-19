@@ -14,7 +14,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip, Collapsible, EmptyState, Field, Modal, Segmented, Tabs, TwoPane } from "../../shared/ui";
+import { Button, Chip, EmptyState, Field, Modal, Segmented, Tabs, TwoPane } from "../../shared/ui";
 import {
   deleteWorldElement,
   deleteWorldRule,
@@ -121,7 +121,6 @@ type ElementFieldItem = {
   field: WorldFieldKey;
   key: keyof UpsertWorldElementInput;
   rows?: number;
-  advanced?: boolean;
 };
 
 const elementFields: ElementFieldItem[] = [
@@ -129,14 +128,13 @@ const elementFields: ElementFieldItem[] = [
   { field: "elementSummary", key: "summary", rows: 3 },
   { field: "elementStoryPurpose", key: "storyPurpose", rows: 3 },
   { field: "elementConstraints", key: "constraints", rows: 3 },
-  { field: "elementDetails", key: "details", rows: 5, advanced: true }
+  { field: "elementDetails", key: "details", rows: 5 }
 ];
 
 type RuleFieldItem = {
   field: WorldFieldKey;
   key: keyof UpsertWorldRuleInput;
   rows?: number;
-  advanced?: boolean;
 };
 
 const ruleFields: RuleFieldItem[] = [
@@ -147,7 +145,7 @@ const ruleFields: RuleFieldItem[] = [
   { field: "ruleLimitation", key: "limitation", rows: 2 },
   { field: "ruleExceptions", key: "exceptions", rows: 2 },
   { field: "ruleViolationConsequences", key: "violationConsequences", rows: 3 },
-  { field: "ruleSceneExamples", key: "sceneExamples", rows: 3, advanced: true }
+  { field: "ruleSceneExamples", key: "sceneExamples", rows: 3 }
 ];
 
 export function WorldPage({ projectId }: WorldPageProps) {
@@ -719,7 +717,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 </select>
               </Field>
               <div className="bible-field-grid">
-                {elementFields.filter((item) => !item.advanced).map((item) => (
+                {elementFields.map((item) => (
                   <WorldAiField
                     key={item.field}
                     field={item.field}
@@ -732,20 +730,6 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   />
                 ))}
               </div>
-              <Collapsible title={t("world.profile.advancedTitle")} description={t("world.profile.advancedDescription")}>
-                {elementFields.filter((item) => item.advanced).map((item) => (
-                  <WorldAiField
-                    key={item.field}
-                    field={item.field}
-                    value={String(elementDraft[item.key] ?? "")}
-                    rows={item.rows}
-                    target={elementDraftPreview(elementDraft)}
-                    onChange={(value) => setElementDraft({ ...elementDraft, [item.key]: value })}
-                    onGenerate={activateWorldPromptContext}
-                    onActivate={activateWorldPromptContext}
-                  />
-                ))}
-              </Collapsible>
               <EditorFooter
                 message={message}
                 errorMessage={errorMessage}
@@ -765,7 +749,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                 </Button>
               </div>
               <div className="bible-field-grid">
-                {ruleFields.filter((item) => !item.advanced).map((item) => (
+                {ruleFields.map((item) => (
                   <WorldAiField
                     key={item.field}
                     field={item.field}
@@ -778,20 +762,6 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   />
                 ))}
               </div>
-              <Collapsible title={t("world.rules.advancedTitle")} description={t("world.rules.advancedDescription")}>
-                {ruleFields.filter((item) => item.advanced).map((item) => (
-                  <WorldAiField
-                    key={item.field}
-                    field={item.field}
-                    value={String(ruleDraft[item.key] ?? "")}
-                    rows={item.rows}
-                    target={ruleDraftPreview(ruleDraft)}
-                    onChange={(value) => setRuleDraft({ ...ruleDraft, [item.key]: value })}
-                    onGenerate={activateWorldPromptContext}
-                    onActivate={activateWorldPromptContext}
-                  />
-                ))}
-              </Collapsible>
               <EditorFooter
                 message={message}
                 errorMessage={errorMessage}
