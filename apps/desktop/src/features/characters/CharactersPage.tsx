@@ -18,6 +18,7 @@ import type { TFunction } from "i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, Collapsible, EmptyState, Field, Modal, StatusPill, Tabs, TwoPane } from "../../shared/ui";
 import { coverImageSource } from "../../shared/api/assets";
+import { CoverImageLightbox } from "../ai/CoverImageLightbox";
 import {
   deleteCharacter,
   deleteCharacterMemory,
@@ -197,6 +198,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [seed, setSeed] = useState("");
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
 
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
@@ -554,9 +556,25 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
       >
         <main className="bible-editor">
           <div className="bible-editor-heading">
-            <div className="bible-avatar">
-              {selectedImage ? <img src={coverImageSource(selectedImage.filePath)} alt="" /> : <UserRound size={34} />}
-            </div>
+            {selectedImage ? (
+              <button
+                type="button"
+                className="bible-avatar image-zoom-button"
+                onClick={() =>
+                  setPreviewImage({
+                    src: coverImageSource(selectedImage.filePath),
+                    alt: t("characters.image.alt", { name: draft.name || selectedCharacter?.name || "" })
+                  })
+                }
+                title={t("book.coverOpenFullPreview")}
+              >
+                <img src={coverImageSource(selectedImage.filePath)} alt="" />
+              </button>
+            ) : (
+              <div className="bible-avatar">
+                <UserRound size={34} />
+              </div>
+            )}
             <div className="bible-editor-heading-body">
               <p className="eyebrow">{selectedCharacter ? t("characters.editor.profileEyebrow") : t("characters.editor.newEyebrow")}</p>
               <h3>{draft.name || t("characters.editor.unnamed")}</h3>
@@ -690,6 +708,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
               character={selectedCharacter}
               image={selectedImage}
               onGenerate={() => selectedCharacter && activateCharacterPromptContext("characterImage", selectedCharacter)}
+              onPreview={setPreviewImage}
             />
           ) : null}
 
@@ -745,6 +764,8 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
           onActivate={activateCharacterPromptContext}
         />
       ) : null}
+
+      <CoverImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
     </section>
   );
 }
@@ -1034,10 +1055,11 @@ function MemoriesSection({ character, workspace, onCreate, onGenerate, onEdit, o
   );
 }
 
-function CharacterImageSection({ character, image, onGenerate }: {
+function CharacterImageSection({ character, image, onGenerate, onPreview }: {
   character: Character | null;
   image: VisualAsset | null;
   onGenerate: () => void;
+  onPreview: (image: { src: string; alt: string }) => void;
 }) {
   const { t } = useTranslation();
   if (!character) {
@@ -1045,9 +1067,20 @@ function CharacterImageSection({ character, image, onGenerate }: {
   }
   return (
     <section className="character-image-section">
-      <div className="character-image-preview">
-        {image ? <img src={coverImageSource(image.filePath)} alt={t("characters.image.alt", { name: character.name })} /> : <UserRound size={54} />}
-      </div>
+      {image ? (
+        <button
+          type="button"
+          className="character-image-preview image-zoom-button"
+          onClick={() => onPreview({ src: coverImageSource(image.filePath), alt: t("characters.image.alt", { name: character.name }) })}
+          title={t("book.coverOpenFullPreview")}
+        >
+          <img src={coverImageSource(image.filePath)} alt={t("characters.image.alt", { name: character.name })} />
+        </button>
+      ) : (
+        <div className="character-image-preview">
+          <UserRound size={54} />
+        </div>
+      )}
       <div>
         <p className="eyebrow">{t("characters.image.eyebrow")}</p>
         <h3>{character.name}</h3>
