@@ -89,6 +89,8 @@
     "paragraph": "Paragraph",
     "undo": "Undo",
     "redo": "Redo",
+    "editorWidthWide": "Widen column",
+    "editorWidthNarrow": "Narrow column",
     "variantLabel": "Variant: {{date}}",
     "aiVariants": "AI variants",
     "snapshotSourceBeforeAi": "before AI",

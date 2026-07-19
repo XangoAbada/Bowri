@@ -109,12 +109,17 @@
 
 /* --- środek: rękopis jak kartka papieru --- */
 .manuscript-wrap {
+  --manuscript-width: 660px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--s4);
   min-width: 0;
   padding-bottom: var(--s6);
+}
+
+.manuscript-wrap[data-width="wide"] {
+  --manuscript-width: 820px;
 }
 
 .ms-toolbar {
@@ -147,7 +152,7 @@
 .manuscript {
   position: relative;
   width: 100%;
-  max-width: 660px;
+  max-width: var(--manuscript-width);
   padding: 64px 72px;
   border: 1px solid var(--border);
   border-radius: 2px;
@@ -236,7 +241,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  max-width: 660px;
+  max-width: var(--manuscript-width);
 }
 
 /* popover AI dla zaznaczenia */
@@ -272,7 +277,7 @@
   display: grid;
   gap: var(--s3);
   width: 100%;
-  max-width: 660px;
+  max-width: var(--manuscript-width);
   padding: var(--s4);
   border: 1px solid var(--ai-border);
   border-radius: var(--radius);
@@ -383,7 +388,7 @@
   align-items: center;
   gap: var(--s3);
   width: 100%;
-  max-width: 660px;
+  max-width: var(--manuscript-width);
 }
 
 .scene-autosave {

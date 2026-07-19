@@ -1,7 +1,7 @@
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { FileText, List, PenLine, Pilcrow, Plus, Redo2, Save, Sparkles, Star, Undo2 } from "lucide-react";
+import { FileText, List, PenLine, Pilcrow, Plus, Redo2, Save, Sparkles, Star, StretchHorizontal, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -130,6 +130,15 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
   const [variants, setVariants] = useState<SceneVariant[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [snapshotPreview, setSnapshotPreview] = useState<{ id: string; text: string } | null>(null);
+  const [editorWidth, setEditorWidth] = useState<"narrow" | "wide">(
+    () => (localStorage.getItem("storyforge2.ui.editorWidth") === "wide" ? "wide" : "narrow")
+  );
+  const toggleEditorWidth = () =>
+    setEditorWidth((current) => {
+      const next = current === "wide" ? "narrow" : "wide";
+      localStorage.setItem("storyforge2.ui.editorWidth", next);
+      return next;
+    });
   const lastSavedSignature = useRef("");
   const critiqueApplyHandlerRef = useRef<(finding: SceneCritiqueReportFinding) => boolean>(
     () => false
@@ -863,10 +872,10 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
         </Button>
       </aside>
 
-      <main className="manuscript-wrap">
+      <main className="manuscript-wrap" data-width={editorWidth}>
         {draft && selectedScene ? (
           <>
-            <EditorToolbar editor={editor} />
+            <EditorToolbar editor={editor} width={editorWidth} onToggleWidth={toggleEditorWidth} />
 
             {selectionText ? (
               <div className="scene-selection-popover" role="toolbar" aria-label={t("scenes.aiForSelection")}>
@@ -1118,8 +1127,17 @@ export function SceneEditorPage({ projectId }: SceneEditorPageProps) {
   );
 }
 
-function EditorToolbar({ editor }: { editor: Editor | null }) {
+function EditorToolbar({
+  editor,
+  width,
+  onToggleWidth
+}: {
+  editor: Editor | null;
+  width: "narrow" | "wide";
+  onToggleWidth: () => void;
+}) {
   const { t } = useTranslation();
+  const widthLabel = width === "wide" ? t("scenes.editorWidthNarrow") : t("scenes.editorWidthWide");
   return (
     <div className="ms-toolbar" role="toolbar" aria-label={t("scenes.formatToolbarAria")}>
       <Button
@@ -1164,6 +1182,16 @@ function EditorToolbar({ editor }: { editor: Editor | null }) {
       </Button>
       <Button variant="icon" onClick={() => editor?.chain().focus().redo().run()} title={t("scenes.redo")} aria-label={t("scenes.redo")}>
         <Redo2 size={15} />
+      </Button>
+      <span className="sep" aria-hidden />
+      <Button
+        variant="icon"
+        className={width === "wide" ? "active" : ""}
+        onClick={onToggleWidth}
+        title={widthLabel}
+        aria-label={widthLabel}
+      >
+        <StretchHorizontal size={15} />
       </Button>
     </div>
   );

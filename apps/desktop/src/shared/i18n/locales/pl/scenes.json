@@ -89,6 +89,8 @@
     "paragraph": "Akapit",
     "undo": "Cofnij",
     "redo": "Ponów",
+    "editorWidthWide": "Poszerz kolumnę",
+    "editorWidthNarrow": "Zwęź kolumnę",
     "variantLabel": "Wariant: {{date}}",
     "aiVariants": "Warianty AI",
     "snapshotSourceBeforeAi": "przed AI",
