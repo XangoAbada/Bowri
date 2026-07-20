@@ -162,6 +162,8 @@
     "generateFieldAiTitle": "Generuj {{field}} z AI",
     "generating": "Generuje",
     "queued": "W kolejce",
+    "generateWholeScene": "Uzupełnij pola z AI",
+    "generateWholeSceneHint": "Wygeneruj jednym wywołaniem AI spójną treść wszystkich pól tekstowych sceny i zapisz ją od razu.",
     "addFieldToContext": "Dodaj pole do aktywnego kontekstu promptu.",
     "addFieldToContextAria": "Dodaj {{field}} do kontekstu promptu",
     "unlinkRelation": "Odepnij relację: {{label}}",

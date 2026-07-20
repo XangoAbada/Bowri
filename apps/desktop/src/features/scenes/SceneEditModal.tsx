@@ -136,6 +136,8 @@ export function SceneEditModal({
   const [relationPicker, setRelationPicker] = useState<SceneRelationKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [linkThreadsToChapter, setLinkThreadsToChapter] = useState(false);
+  const [generatingWhole, setGeneratingWhole] = useState(false);
+  const proposals = useProposalStore((store) => store.proposals);
 
   useEffect(() => {
     if (!state) {
@@ -270,6 +272,26 @@ export function SceneEditModal({
     onGenerate(field, entity, { ...draft, id: entity.id });
   }
 
+  const draftStatus = pendingProposalStatus(proposals, {
+    field: "sceneDraft",
+    scope: "bookPlan",
+    targetEntityId: scene?.id ?? draft.id
+  });
+  const draftRunning = generatingWhole || draftStatus === "running";
+  const draftQueued = draftStatus === "queued";
+
+  async function generateWholeScene() {
+    setGeneratingWhole(true);
+    try {
+      const entity = await ensureSceneSavedEntity();
+      if (entity) {
+        onGenerate("sceneDraft", entity, { ...draft, id: entity.id });
+      }
+    } finally {
+      setGeneratingWhole(false);
+    }
+  }
+
   if (!state) {
     return null;
   }
@@ -307,6 +329,28 @@ export function SceneEditModal({
       }
     >
       <form id="scene-edit-form" className="chapter-edit-form scene-edit-form" onSubmit={submit}>
+        <div className="plan-record-ai-toolbar">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void generateWholeScene()}
+            disabled={isSaving || draftRunning || draftQueued}
+            title={t("scenes.generateWholeSceneHint")}
+          >
+            {draftRunning ? (
+              <Loader2 size={15} className="spin-icon" />
+            ) : draftQueued ? (
+              <Clock3 size={15} />
+            ) : (
+              <Sparkles size={15} />
+            )}
+            {draftRunning
+              ? t("scenes.generating")
+              : draftQueued
+                ? t("scenes.queued")
+                : t("scenes.generateWholeScene")}
+          </button>
+        </div>
         <div className="chapter-edit-metrics" aria-label={t("scenes.modalMetricsAria")}>
               <span className="chapter-edit-metric">
                 <BookOpen size={16} />

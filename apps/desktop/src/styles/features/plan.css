@@ -698,6 +698,13 @@
   margin-bottom: 12px;
 }
 
+/* Własna powłoka modala (wątek/beat) ma body bez paddingu — toolbar
+   potrzebuje własnego odstępu, inaczej przycisk wchodzi pod nagłówek. */
+.chapter-edit-body .plan-record-ai-toolbar {
+  padding: 16px 24px 0;
+  margin-bottom: 0;
+}
+
 .relation-picker {
   display: flex;
   flex-wrap: wrap;
