@@ -308,6 +308,22 @@ export function parseBrainstormChatResult(rawOutput: string): NormalizedBrainsto
 }
 
 /**
+ * Sugestie zapisane przy wiadomości. Jedno źródło prawdy dla widoku brainstormu,
+ * panelu propozycji i logu AI — kolumna trzyma surowy JSON, więc uszkodzony wpis
+ * traktujemy jako brak sugestii zamiast wywracać render.
+ */
+export function parseBrainstormSuggestions(
+  message: BrainstormMessage
+): BrainstormSuggestion[] {
+  try {
+    const parsed = JSON.parse(message.suggestionsJson);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Odrzuca sugestie, których tytuł pokrywa się z istniejącą encją lub
  * wcześniejszą sugestią sesji — pas bezpieczeństwa obok reguły w prompcie.
  */

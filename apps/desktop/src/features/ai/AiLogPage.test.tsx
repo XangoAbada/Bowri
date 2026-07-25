@@ -18,7 +18,10 @@ vi.mock("../../shared/api/commands", () => ({
   listAiRuns: vi.fn(),
   getAiSettings: vi.fn(async () =>
     (await import("../../shared/api/types")).DEFAULT_AI_SETTINGS
-  )
+  ),
+  listBrainstormMessages: vi.fn(async () => []),
+  markAiProposalAccepted: vi.fn(async () => undefined),
+  updateBrainstormMessageSuggestions: vi.fn()
 }));
 
 function renderLogPage() {

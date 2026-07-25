@@ -154,7 +154,17 @@
       "apply": "Zastosuj i zaakceptuj",
       "applying": "Zapisuję",
       "applyError": "Nie udało się zastosować propozycji z logu AI.",
-      "terminated": "Generacja została przerwana przez zamknięcie aplikacji."
+      "terminated": "Generacja została przerwana przez zamknięcie aplikacji.",
+      "suggestionsHeading": "Sugestie z burzy mózgów",
+      "suggestionApplied": "Zastosowana",
+      "suggestionDismissed": "Odrzucona",
+      "suggestionPending": "W panelu",
+      "restoreSuggestion": "Przywróć do panelu",
+      "restoreSuggestionTitle": "Przywróć tę sugestię do skrzynki propozycji w panelu AI",
+      "alreadyInPanel": "Już w panelu",
+      "suggestionRestored": "Sugestia wróciła do skrzynki propozycji.",
+      "suggestionRestoreError": "Nie udało się przywrócić sugestii.",
+      "sessionMissing": "Sesja burzy mózgów została usunięta — sugestii nie da się już przywrócić."
     },
     "generationStatus": {
       "queued": "W kolejce",

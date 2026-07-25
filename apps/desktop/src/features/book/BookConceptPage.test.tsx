@@ -678,7 +678,7 @@ describe("BookConceptPage AI flow", () => {
     useProjectNavigationStore
       .getState()
       .setProjectViewState("project-1", "conceptStage", "readerVoice");
-    const proposalId = useProposalStore.getState().enqueueProposal({
+    const { id: proposalId } = useProposalStore.getState().enqueueProposal({
       projectId: "project-1",
       bookId: "book-1",
       field: "genre",
@@ -705,7 +705,7 @@ describe("BookConceptPage AI flow", () => {
     useProjectNavigationStore
       .getState()
       .setProjectViewState("project-1", "conceptStage", "cover");
-    const proposalId = useProposalStore.getState().enqueueProposal({
+    const { id: proposalId } = useProposalStore.getState().enqueueProposal({
       scope: "bookCover",
       projectId: "project-1",
       bookId: "book-1",

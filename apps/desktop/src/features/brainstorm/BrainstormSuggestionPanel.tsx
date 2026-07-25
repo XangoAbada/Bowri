@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
-import { Button, Modal } from "../../shared/ui";
+import { Button, Modal, toast } from "../../shared/ui";
 import {
   getBookPlan,
   getCharacterWorkspace,
@@ -17,11 +17,15 @@ import type {
   BrainstormSuggestion,
   BrainstormSuggestionStatus
 } from "../../shared/api/types";
-import { isBrainstormConceptField } from "../ai/brainstormPromptPackage";
+import {
+  isBrainstormConceptField,
+  parseBrainstormSuggestions
+} from "../ai/brainstormPromptPackage";
 import { useBrainstormSessionStore } from "./brainstormSessionStore";
-import { useProposalStore } from "../ai/proposalStore";
+import { useProposalStore, type EnqueueProposalResult } from "../ai/proposalStore";
 import {
   characterDraftFromDiscovery,
+  plotThreadDraftFromSuggestion,
   worldElementDraftFromDiscovery,
   worldRuleDraftFromDiscovery
 } from "../ai/discoveryDrafts";
@@ -54,7 +58,7 @@ export function usePendingBrainstormSuggestions(): PendingBrainstormSuggestion[]
     () =>
       (messagesQuery.data ?? [])
         .flatMap((message) =>
-          parseSuggestions(message).map((suggestion) => ({
+          parseBrainstormSuggestions(message).map((suggestion) => ({
             ...suggestion,
             messageId: message.id
           }))
@@ -125,7 +129,7 @@ export function BrainstormSuggestionPanel({
     if (!message) {
       return;
     }
-    const next = parseSuggestions(message).map((suggestion) =>
+    const next = parseBrainstormSuggestions(message).map((suggestion) =>
       suggestion.id === suggestionId ? { ...suggestion, status } : suggestion
     );
     await updateBrainstormMessageSuggestions(messageId, JSON.stringify(next));
@@ -173,6 +177,7 @@ export function BrainstormSuggestionPanel({
       createdAt: new Date().toISOString()
     });
 
+    let result: EnqueueProposalResult;
     if (suggestion.kind === "character") {
       const promptPackage = buildCharacterPromptPackage(
         project,
@@ -181,7 +186,7 @@ export function BrainstormSuggestionPanel({
         "characterProfile",
         characterDraftFromDiscovery(discoveryFor("character"))
       );
-      enqueueProposal({
+      result = enqueueProposal({
         scope: "characters",
         projectId,
         bookId: book.id,
@@ -203,7 +208,7 @@ export function BrainstormSuggestionPanel({
           ? worldElementDraftFromDiscovery(discoveryFor("worldElement"))
           : worldRuleDraftFromDiscovery(discoveryFor("worldRule"))
       );
-      enqueueProposal({
+      result = enqueueProposal({
         scope: "world",
         projectId,
         bookId: book.id,
@@ -214,9 +219,18 @@ export function BrainstormSuggestionPanel({
         prompt: renderWorldPromptPackage(promptPackage)
       });
     } else if (suggestion.kind === "plotThread") {
-      const promptPackage = buildPlanPromptPackage(project, book, plan, "plotThreads");
+      // Szkic wątku niesie unikalne id sugestii jako cel propozycji. Bez niego
+      // wszystkie wątki z jednej sesji mają identyczny klucz dedupu w
+      // proposalStore i tylko pierwszy trafiał do kolejki.
+      const promptPackage = buildPlanPromptPackage(
+        project,
+        book,
+        plan,
+        "plotThreads",
+        plotThreadDraftFromSuggestion(suggestion, book.id)
+      );
       promptPackage.userInstruction = `Zaproponuj dokładnie jeden wątek fabularny o roboczej nazwie "${suggestion.title}". Uzasadnienie z burzy mózgów: ${suggestion.reason} Proponowana treść: ${suggestion.value} Nie generuj struktury, aktów, beatów ani rozdziałów.`;
-      enqueueProposal({
+      result = enqueueProposal({
         scope: "bookPlan",
         projectId,
         bookId: book.id,
@@ -230,7 +244,13 @@ export function BrainstormSuggestionPanel({
       return;
     }
 
-    void setSuggestionStatus(suggestion.messageId, suggestion.id, "applied");
+    // Sugestię zużywamy tylko wtedy, gdy faktycznie coś dołożyliśmy do kolejki —
+    // inaczej zniknęłaby z panelu, mimo że nic nie wystartowało.
+    if (result.created) {
+      void setSuggestionStatus(suggestion.messageId, suggestion.id, "applied");
+    } else {
+      toast.info(t("brainstorm.alreadyQueued"));
+    }
   }
 
   const conceptPreviewField =
@@ -341,16 +361,7 @@ export function BrainstormSuggestionPanel({
   );
 }
 
-function parseSuggestions(message: BrainstormMessage): BrainstormSuggestion[] {
-  try {
-    const parsed = JSON.parse(message.suggestionsJson);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function suggestionKindLabel(
+export function suggestionKindLabel(
   suggestion: BrainstormSuggestion,
   t: (key: string, options?: Record<string, unknown>) => string
 ): string {

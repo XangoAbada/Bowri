@@ -35,6 +35,7 @@
     "apply": "Zastosuj",
     "generate": "Generuj",
     "generateTitle": "Dodaj pełną propozycję do kolejki AI",
+    "alreadyQueued": "Ta propozycja już czeka w kolejce AI.",
     "dismiss": "Odrzuć",
     "conceptFieldModalTitle": "Pole koncepcji: {{label}}",
     "append": "Dopisz",

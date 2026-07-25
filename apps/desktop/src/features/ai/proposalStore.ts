@@ -168,10 +168,17 @@ type ProposalProgress = Partial<
   >
 >;
 
+/**
+ * `created: false` oznacza, że snapshot trafił w oczekującą propozycję o tym samym
+ * celu i nic nie zostało dodane. Wywołujący musi to sprawdzić, zanim uzna źródłową
+ * sugestię za zużytą — inaczej znika ona z UI, mimo że nic nie wystartowało.
+ */
+export type EnqueueProposalResult = { id: string; created: boolean };
+
 type ProposalState = {
   proposals: ActiveAiProposal[];
   activeProposal: ActiveAiProposal | null;
-  enqueueProposal: (snapshot: AiPromptSnapshot) => string;
+  enqueueProposal: (snapshot: AiPromptSnapshot) => EnqueueProposalResult;
   startProposal: (snapshot: AiPromptSnapshot) => void;
   startQueuedProposal: (id: string) => void;
   finishProposal: (id: string, result: ProposalResult) => void;
@@ -193,7 +200,7 @@ export const useProposalStore = create<ProposalState>((set) => ({
   enqueueProposal: (snapshot) => {
     const existing = findActiveDuplicate(useProposalStore.getState().proposals, snapshot);
     if (existing) {
-      return existing.id;
+      return { id: existing.id, created: false };
     }
 
     const now = new Date().toISOString();
@@ -212,7 +219,7 @@ export const useProposalStore = create<ProposalState>((set) => ({
 
     set((state) => syncActive({ proposals: [...state.proposals, proposal] }));
     persistProposalSnapshot(proposal);
-    return proposal.id;
+    return { id: proposal.id, created: true };
   },
   startProposal: (snapshot) => {
     const now = new Date().toISOString();

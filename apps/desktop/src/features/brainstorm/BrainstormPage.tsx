@@ -19,13 +19,13 @@ import {
   renameBrainstormSession,
   runCodexPrompt
 } from "../../shared/api/commands";
-import type { BrainstormMessage, BrainstormSuggestion } from "../../shared/api/types";
 import { costOf, formatCostLabel, sumCosts, type CostBreakdown } from "../ai/pricing";
 import {
   buildBrainstormChatPromptPackage,
   dedupeBrainstormSuggestions,
   hasBrainstormMaterial,
   parseBrainstormChatResult,
+  parseBrainstormSuggestions,
   renderBrainstormChatPromptPackage
 } from "../ai/brainstormPromptPackage";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
@@ -189,7 +189,7 @@ export function BrainstormPage({
   // ich nie dublowało (druga linia obrony obok dedupu po stronie parsera).
   const existingTitles = useMemo(() => {
     const titles = messages.flatMap((message) =>
-      parseSuggestions(message).map((suggestion) => suggestion.title)
+      parseBrainstormSuggestions(message).map((suggestion) => suggestion.title)
     );
     const characters = characterQuery.data?.characters.map((item) => item.name) ?? [];
     const elements = worldQuery.data?.elements.map((item) => item.name) ?? [];
@@ -805,13 +805,4 @@ function renderInlineMarkdown(
     }
     return <span key={index}>{segment.text}</span>;
   });
-}
-
-function parseSuggestions(message: BrainstormMessage): BrainstormSuggestion[] {
-  try {
-    const parsed = JSON.parse(message.suggestionsJson);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }

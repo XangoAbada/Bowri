@@ -1,4 +1,4 @@
-import type { Character, WorldElement, WorldRule } from "../../shared/api/types";
+import type { Character, PlotThread, WorldElement, WorldRule } from "../../shared/api/types";
 import type { SceneDiscovery } from "./sceneDiscoveryStore";
 
 // Buduje szkic encji z odkrycia (analiza sceny lub burza mózgów) — wypełnia
@@ -50,6 +50,29 @@ export function worldElementDraftFromDiscovery(discovery: SceneDiscovery): World
     constraints: "",
     visualPrompt: "",
     imageAssetId: null,
+    status: "draft",
+    orderIndex: 0,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+// Wątek nie jest kandydatem Story Bible (SceneDiscovery["kind"] go nie zna), więc
+// szkic budujemy wprost z sugestii burzy mózgów. Kluczowe jest unikalne id: bez
+// niego wszystkie sugestie wątków mają identyczny cel propozycji i dedup w
+// proposalStore sklejałby je w jedną pozycję kolejki.
+export function plotThreadDraftFromSuggestion(
+  suggestion: { id: string; title: string; value: string },
+  bookId: string
+): PlotThread {
+  const now = new Date().toISOString();
+  return {
+    id: `brainstorm-thread:${suggestion.id}`,
+    bookId,
+    name: suggestion.title,
+    description: suggestion.value,
+    resolution: "",
+    color: "",
     status: "draft",
     orderIndex: 0,
     createdAt: now,

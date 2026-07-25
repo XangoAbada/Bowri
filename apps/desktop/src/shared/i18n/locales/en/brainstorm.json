@@ -35,6 +35,7 @@
     "apply": "Apply",
     "generate": "Generate",
     "generateTitle": "Add the full proposal to the AI queue",
+    "alreadyQueued": "This proposal is already waiting in the AI queue.",
     "dismiss": "Dismiss",
     "conceptFieldModalTitle": "Concept field: {{label}}",
     "append": "Append",

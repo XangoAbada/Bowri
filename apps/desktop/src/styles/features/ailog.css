@@ -62,3 +62,57 @@
   white-space: pre-wrap;
 }
 
+.ai-log-suggestions {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-log-suggestions > h4 {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ai-log-suggestion-card {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.ai-log-suggestion-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-log-suggestion-card h5 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ai-log-suggestion-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-log-suggestion-card small {
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.ai-log-suggestion-card button {
+  margin-top: 2px;
+}
+
+.ai-log-suggestions-empty {
+  margin: 0;
+}
+

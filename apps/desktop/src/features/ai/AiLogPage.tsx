@@ -1,15 +1,24 @@
-import { Check, FileJson, History, Loader2 } from "lucide-react";
+import { Check, FileJson, History, Loader2, Undo2 } from "lucide-react";
 import { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "../../shared/i18n";
-import { Button, Chip, StatusPill } from "../../shared/ui";
+import { Button, Chip, StatusPill, toast } from "../../shared/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getAiSettings,
   listAiRuns,
-  markAiProposalAccepted
+  listBrainstormMessages,
+  markAiProposalAccepted,
+  updateBrainstormMessageSuggestions
 } from "../../shared/api/commands";
-import type { AiLogEntry } from "../../shared/api/types";
+import type {
+  AiLogEntry,
+  BrainstormMessage,
+  BrainstormSuggestion
+} from "../../shared/api/types";
+import { parseBrainstormSuggestions } from "./brainstormPromptPackage";
+import { suggestionKindLabel } from "../brainstorm/BrainstormSuggestionPanel";
+import { useBrainstormSessionStore } from "../brainstorm/brainstormSessionStore";
 import { costOf, formatCostLabel, imageCostOf } from "./pricing";
 import { formatLocalDateTime } from "../../shared/date";
 import { applyAiProposal } from "./AiProposalPanel";
@@ -211,6 +220,7 @@ function AiLogEntryDetails({
             <p className="warning-text">{entry.errorMessage}</p>
           ) : null}
           <ReadableResponse rawOutput={entry.rawOutput} />
+          <BrainstormLogSuggestions entry={entry} />
           {canApply && proposal ? (
             <Button
               variant="primary"
@@ -257,6 +267,171 @@ function ReadableResponse({ rawOutput }: { rawOutput?: string | null }) {
       ))}
     </dl>
   );
+}
+
+/**
+ * Sugestie burzy mózgów z możliwością cofnięcia decyzji. Czytamy je z wiadomości
+ * sesji, a nie z rawOutput: identyfikatory sugestii powstają dopiero przy zapisie
+ * wiadomości, a część propozycji odsiewa dedup — w surowej odpowiedzi nie ma więc
+ * niczego, czym dałoby się zaadresować pojedynczą sugestię.
+ */
+function BrainstormLogSuggestions({ entry }: { entry: AiLogEntry }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const setActiveSessionId = useBrainstormSessionStore((state) => state.setActiveSessionId);
+  // targetEntityId niosą też inne pakiety promptów (sceny, rozdziały), więc id
+  // sesji czytamy dopiero po sprawdzeniu akcji — inaczej odpytywalibyśmy bazę
+  // o wiadomości dla identyfikatorów, które sesjami nie są.
+  const sessionId = entry.action === "brainstorm_chat" ? brainstormSessionIdOf(entry) : null;
+
+  // Ten sam klucz co widok brainstormu i panel propozycji — wpisy jednej sesji
+  // dzielą jedno zapytanie, a przywrócenie odświeża wszystkie naraz.
+  const messagesQuery = useQuery({
+    queryKey: ["brainstorm-messages", sessionId],
+    queryFn: () => listBrainstormMessages(sessionId ?? ""),
+    enabled: Boolean(sessionId),
+    retry: 0
+  });
+
+  const message = messagesQuery.data?.find((item) => item.aiRunId === entry.id) ?? null;
+  const suggestions = message ? parseBrainstormSuggestions(message) : [];
+
+  const restoreMutation = useMutation({
+    mutationFn: async ({
+      message: target,
+      suggestionId
+    }: {
+      message: BrainstormMessage;
+      suggestionId: string;
+    }) => {
+      const next = parseBrainstormSuggestions(target).map((suggestion) =>
+        suggestion.id === suggestionId
+          ? { ...suggestion, status: "pending" as const }
+          : suggestion
+      );
+      await updateBrainstormMessageSuggestions(target.id, JSON.stringify(next));
+      return target.sessionId;
+    },
+    onSuccess: async (restoredSessionId) => {
+      // Panel propozycji w prawym sidebarze renderuje sugestie aktywnej sesji, a
+      // wyjście z widoku brainstormu ją czyści. Bez tego przywrócona sugestia
+      // byłaby niewidoczna aż do powrotu na widok brainstormu.
+      setActiveSessionId(restoredSessionId);
+      await queryClient.invalidateQueries({
+        queryKey: ["brainstorm-messages", restoredSessionId]
+      });
+      toast.success(t("ai.log.suggestionRestored"));
+    },
+    onError: () => {
+      toast.error(t("ai.log.suggestionRestoreError"));
+    }
+  });
+
+  if (!sessionId) {
+    return null;
+  }
+
+  if (messagesQuery.isLoading) {
+    return null;
+  }
+
+  if (!message) {
+    return (
+      <p className="muted-text ai-log-suggestions-empty">{t("ai.log.sessionMissing")}</p>
+    );
+  }
+
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="ai-log-suggestions">
+      <h4>{t("ai.log.suggestionsHeading")}</h4>
+      {suggestions.map((suggestion) => {
+        const isPending = suggestion.status === "pending";
+        const restoring =
+          restoreMutation.isPending &&
+          restoreMutation.variables?.suggestionId === suggestion.id;
+
+        return (
+          <article className="ai-log-suggestion-card" key={suggestion.id}>
+            <div className="ai-log-suggestion-head">
+              <span className="scene-discovery-kind">{suggestionKindLabel(suggestion, t)}</span>
+              <StatusPill tone={suggestionStatusTone(suggestion.status)}>
+                {suggestionStatusLabel(suggestion.status)}
+              </StatusPill>
+            </div>
+            <h5>{suggestion.title}</h5>
+            <p>{suggestion.value}</p>
+            {suggestion.reason ? <small>{suggestion.reason}</small> : null}
+            <Button
+              variant="secondary"
+              size="sm"
+              busy={restoring}
+              disabled={isPending || restoreMutation.isPending}
+              title={
+                isPending ? t("ai.log.alreadyInPanel") : t("ai.log.restoreSuggestionTitle")
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                restoreMutation.mutate({ message, suggestionId: suggestion.id });
+              }}
+            >
+              {restoring ? null : <Undo2 size={14} aria-hidden />}
+              {isPending ? t("ai.log.alreadyInPanel") : t("ai.log.restoreSuggestion")}
+            </Button>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Pakiet promptu brainstormu niesie id sesji jako encję docelową. */
+function brainstormSessionIdOf(entry: AiLogEntry): string | null {
+  const promptPackage = entry.promptPackageJson;
+  if (!promptPackage || typeof promptPackage !== "object" || !("context" in promptPackage)) {
+    return null;
+  }
+
+  const context = promptPackage.context;
+  if (
+    !context ||
+    typeof context !== "object" ||
+    !("targetEntityId" in context) ||
+    typeof context.targetEntityId !== "string"
+  ) {
+    return null;
+  }
+
+  return context.targetEntityId || null;
+}
+
+function suggestionStatusLabel(status: BrainstormSuggestion["status"]): string {
+  if (status === "applied") {
+    return i18n.t("ai.log.suggestionApplied");
+  }
+
+  if (status === "dismissed") {
+    return i18n.t("ai.log.suggestionDismissed");
+  }
+
+  return i18n.t("ai.log.suggestionPending");
+}
+
+function suggestionStatusTone(
+  status: BrainstormSuggestion["status"]
+): "success" | "danger" | "muted" {
+  if (status === "applied") {
+    return "success";
+  }
+
+  if (status === "dismissed") {
+    return "danger";
+  }
+
+  return "muted";
 }
 
 function applyErrorMessage(error: unknown): string {

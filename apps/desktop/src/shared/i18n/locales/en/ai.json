@@ -154,7 +154,17 @@
       "apply": "Apply and accept",
       "applying": "Saving",
       "applyError": "Could not apply the proposal from the AI log.",
-      "terminated": "Generation was interrupted by closing the application."
+      "terminated": "Generation was interrupted by closing the application.",
+      "suggestionsHeading": "Brainstorm suggestions",
+      "suggestionApplied": "Applied",
+      "suggestionDismissed": "Dismissed",
+      "suggestionPending": "In panel",
+      "restoreSuggestion": "Restore to panel",
+      "restoreSuggestionTitle": "Restore this suggestion to the proposal inbox in the AI panel",
+      "alreadyInPanel": "Already in panel",
+      "suggestionRestored": "The suggestion is back in the proposal inbox.",
+      "suggestionRestoreError": "Could not restore the suggestion.",
+      "sessionMissing": "The brainstorm session was deleted — its suggestions can no longer be restored."
     },
     "generationStatus": {
       "queued": "Queued",
