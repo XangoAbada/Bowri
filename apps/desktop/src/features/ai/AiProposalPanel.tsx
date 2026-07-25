@@ -2349,12 +2349,17 @@ function useAiQueueRunner() {
 
           if (result.aiRun.status !== "success") {
             if (result.aiRun.status === "cancelled") {
-              cancelProposal(proposalId, result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
+              cancelProposal(
+                proposalId,
+                result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }),
+                result.aiRun.id
+              );
               return;
             }
             throw new QueueRunError(
               result.aiRun.errorMessage || i18n.t("ai.errors.coverFailed"),
-              result.aiRun.rawOutput ?? ""
+              result.aiRun.rawOutput ?? "",
+              result.aiRun.id
             );
           }
 
@@ -2416,12 +2421,17 @@ function useAiQueueRunner() {
 
           if (result.aiRun.status !== "success") {
             if (result.aiRun.status === "cancelled") {
-              cancelProposal(proposalId, result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
+              cancelProposal(
+                proposalId,
+                result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }),
+                result.aiRun.id
+              );
               return;
             }
             throw new QueueRunError(
               result.aiRun.errorMessage || i18n.t("ai.errors.characterImageFailed"),
-              result.aiRun.rawOutput ?? ""
+              result.aiRun.rawOutput ?? "",
+              result.aiRun.id
             );
           }
 
@@ -2489,12 +2499,17 @@ function useAiQueueRunner() {
 
           if (result.aiRun.status !== "success") {
             if (result.aiRun.status === "cancelled") {
-              cancelProposal(proposalId, result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
+              cancelProposal(
+                proposalId,
+                result.aiRun.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }),
+                result.aiRun.id
+              );
               return;
             }
             throw new QueueRunError(
               result.aiRun.errorMessage || i18n.t("ai.errors.exportArtworkFailed"),
-              result.aiRun.rawOutput ?? ""
+              result.aiRun.rawOutput ?? "",
+              result.aiRun.id
             );
           }
 
@@ -2542,12 +2557,17 @@ function useAiQueueRunner() {
 
         if (result.status !== "success" || !result.rawOutput) {
           if (result.status === "cancelled") {
-            cancelProposal(proposalId, result.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }));
+            cancelProposal(
+              proposalId,
+              result.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }),
+              result.id
+            );
             return;
           }
           throw new QueueRunError(
             result.errorMessage || i18n.t("ai.errors.providerNoResult", { provider: providerInfo.providerLabel }),
-            result.rawOutput ?? ""
+            result.rawOutput ?? "",
+            result.id
           );
         }
 
@@ -2626,7 +2646,8 @@ function useAiQueueRunner() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const rawOutput = error instanceof QueueRunError ? error.rawOutput : "";
-        failProposal(proposalId, message, rawOutput);
+        const aiRunId = error instanceof QueueRunError ? error.aiRunId : undefined;
+        failProposal(proposalId, message, rawOutput, aiRunId);
       }
     }
 
@@ -3876,10 +3897,13 @@ function statusRank(status: ActiveAiProposal["status"]): number {
 
 class QueueRunError extends Error {
   rawOutput: string;
+  /** Przebieg, który zawiódł — dzięki niemu log AI dostaje snapshot żądania do ponowienia. */
+  aiRunId?: string;
 
-  constructor(message: string, rawOutput = "") {
+  constructor(message: string, rawOutput = "", aiRunId?: string) {
     super(message);
     this.name = "QueueRunError";
     this.rawOutput = rawOutput;
+    this.aiRunId = aiRunId;
   }
 }

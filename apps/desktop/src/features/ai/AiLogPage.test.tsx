@@ -19,9 +19,14 @@ vi.mock("../../shared/api/commands", () => ({
   getAiSettings: vi.fn(async () =>
     (await import("../../shared/api/types")).DEFAULT_AI_SETTINGS
   ),
+  getProject: vi.fn(async () => ({
+    project: { id: "project-1" },
+    book: { id: "book-1" }
+  })),
   listBrainstormMessages: vi.fn(async () => []),
   markAiProposalAccepted: vi.fn(async () => undefined),
-  updateBrainstormMessageSuggestions: vi.fn()
+  updateBrainstormMessageSuggestions: vi.fn(),
+  upsertAiProposalSnapshot: vi.fn(async () => undefined)
 }));
 
 function renderLogPage() {

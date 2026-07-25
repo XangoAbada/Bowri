@@ -1,4 +1,4 @@
-import { Check, FileJson, History, Loader2, Undo2 } from "lucide-react";
+import { Check, FileJson, History, Loader2, RotateCcw, Undo2 } from "lucide-react";
 import { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "../../shared/i18n";
@@ -6,10 +6,12 @@ import { Button, Chip, StatusPill, toast } from "../../shared/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getAiSettings,
+  getProject,
   listAiRuns,
   listBrainstormMessages,
   markAiProposalAccepted,
-  updateBrainstormMessageSuggestions
+  updateBrainstormMessageSuggestions,
+  upsertAiProposalSnapshot
 } from "../../shared/api/commands";
 import type {
   AiLogEntry,
@@ -29,7 +31,13 @@ import { worldFieldConfigs, WorldFieldKey } from "./worldPromptPackage";
 import { sceneEditorFieldLabel, SceneEditorFieldKey } from "./sceneEditorPromptPackage";
 import { SCENE_STORY_BIBLE_AUDIT_FIELD } from "./sceneStoryBibleAuditPromptPackage";
 import { extractJsonCandidate } from "./titleSuggestions";
-import { useProposalStore, type ActiveAiProposal } from "./proposalStore";
+import { useProposalStore, type AiPromptSnapshot } from "./proposalStore";
+import {
+  promptSnapshotFromLogEntry,
+  proposalFromLogEntry,
+  snapshotForRetry,
+  type LogEntryProposal
+} from "./aiLogReplay";
 
 type AiLogPageProps = {
   projectId: string;
@@ -43,13 +51,34 @@ export function AiLogPage({ projectId }: AiLogPageProps) {
     queryFn: () => listAiRuns(projectId),
     retry: 0
   });
+  // Pakiety promptów koncepcji nie niosą identyfikatora książki — projekt ma dokładnie
+  // jedną, więc bierzemy ją stąd jako uzupełnienie przy odtwarzaniu propozycji z logu.
+  const projectQuery = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => getProject(projectId),
+    retry: 0
+  });
+  const fallbackBookId = projectQuery.data?.book.id ?? "";
   const clearProposal = useProposalStore((state) => state.clearProposal);
+  const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
   const applyMutation = useMutation({
-    mutationFn: async (proposal: ActiveAiProposal) => {
+    mutationFn: async ({ proposal, source }: LogEntryProposal) => {
       await applyAiProposal(proposal);
+      if (source === "reconstructed") {
+        // Bez rekordu w bazie decyzja nie miałaby czego oznaczyć, a log dalej pokazywałby
+        // wpis jako niezaakceptowany.
+        await upsertAiProposalSnapshot({
+          id: proposal.id,
+          aiRunId: proposal.aiRunId ?? null,
+          projectId: proposal.projectId,
+          proposalType: proposal.scope ?? "bookConcept",
+          payloadJson: proposal,
+          status: proposal.status
+        });
+      }
       await markAiProposalAccepted(proposal.id);
     },
-    onSuccess: async (_payload, proposal) => {
+    onSuccess: async (_payload, { proposal }) => {
       clearProposal(proposal.id);
       await queryClient.invalidateQueries({ queryKey: ["ai-runs", projectId] });
       await queryClient.invalidateQueries({ queryKey: ["ai-run-usage-totals", projectId] });
@@ -104,13 +133,27 @@ export function AiLogPage({ projectId }: AiLogPageProps) {
           <AiLogEntryDetails
             entry={entry}
             key={entry.id}
-            applying={applyMutation.isPending && applyMutation.variables?.aiRunId === entry.id}
+            fallbackBookId={fallbackBookId}
+            applying={
+              applyMutation.isPending &&
+              applyMutation.variables?.proposal.aiRunId === entry.id
+            }
             applyErrorMessage={
-              applyMutation.isError && applyMutation.variables?.aiRunId === entry.id
+              applyMutation.isError &&
+              applyMutation.variables?.proposal.aiRunId === entry.id
                 ? applyErrorMessage(applyMutation.error)
                 : ""
             }
             onApply={(proposal) => applyMutation.mutate(proposal)}
+            onRetry={(snapshot) => {
+              const { created } = enqueueProposal(snapshotForRetry(snapshot));
+              if (created) {
+                toast.success(t("ai.log.retryQueued"));
+                return;
+              }
+
+              toast.info(t("ai.log.retryAlreadyQueued"));
+            }}
           />
         ))}
       </div>
@@ -138,14 +181,18 @@ function entryCostLabel(entry: AiLogEntry, plnPerUsd: number): string {
 
 function AiLogEntryDetails({
   entry,
+  fallbackBookId,
   applying,
   applyErrorMessage,
-  onApply
+  onApply,
+  onRetry
 }: {
   entry: AiLogEntry;
+  fallbackBookId: string;
   applying: boolean;
   applyErrorMessage: string;
-  onApply: (proposal: ActiveAiProposal) => void;
+  onApply: (proposal: LogEntryProposal) => void;
+  onRetry: (snapshot: AiPromptSnapshot) => void;
 }) {
   const { t } = useTranslation();
   const aiSettingsQuery = useQuery({
@@ -155,11 +202,16 @@ function AiLogEntryDetails({
   const plnPerUsd = aiSettingsQuery.data?.plnPerUsd ?? 4;
   const totalTokens = entry.inputTokens + entry.outputTokens;
   const summary = requestSummary(entry);
-  const proposal = proposalFromLogEntry(entry);
+  const logProposal = proposalFromLogEntry(entry, fallbackBookId);
+  // Przebiegu, który wciąż trwa, nie ponawiamy — jego propozycja jest w panelu po prawej.
+  const retrySnapshot =
+    entry.status === "queued" || entry.status === "running"
+      ? null
+      : promptSnapshotFromLogEntry(entry, fallbackBookId);
   const canApply =
     entry.status === "success" &&
     entry.decisionStatus !== "accepted" &&
-    Boolean(proposal);
+    Boolean(logProposal);
 
   return (
     <details className="ai-log-entry ui-card">
@@ -221,18 +273,35 @@ function AiLogEntryDetails({
           ) : null}
           <ReadableResponse rawOutput={entry.rawOutput} />
           <BrainstormLogSuggestions entry={entry} />
-          {canApply && proposal ? (
-            <Button
-              variant="primary"
-              busy={applying}
-              onClick={(event) => {
-                event.stopPropagation();
-                onApply(proposal);
-              }}
-            >
-              {applying ? null : <Check size={15} />}
-              {applying ? t("ai.log.applying") : t("ai.log.apply")}
-            </Button>
+          {(canApply && logProposal) || retrySnapshot ? (
+            <div className="ai-log-entry-actions">
+              {canApply && logProposal ? (
+                <Button
+                  variant="primary"
+                  busy={applying}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onApply(logProposal);
+                  }}
+                >
+                  {applying ? null : <Check size={15} />}
+                  {applying ? t("ai.log.applying") : t("ai.log.apply")}
+                </Button>
+              ) : null}
+              {retrySnapshot ? (
+                <Button
+                  variant="secondary"
+                  title={t("ai.log.retryTitle")}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRetry(retrySnapshot);
+                  }}
+                >
+                  <RotateCcw size={15} aria-hidden />
+                  {t("ai.log.retry")}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
           {applyErrorMessage ? (
             <p className="warning-text">{applyErrorMessage}</p>
@@ -437,33 +506,6 @@ function suggestionStatusTone(
 function applyErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || "");
   return message || i18n.t("ai.log.applyError");
-}
-
-function proposalFromLogEntry(entry: AiLogEntry): ActiveAiProposal | null {
-  if (!entry.proposalSnapshot || typeof entry.proposalSnapshot !== "object") {
-    return null;
-  }
-
-  const proposal = entry.proposalSnapshot as ActiveAiProposal;
-  if (
-    !proposal.id ||
-    !proposal.projectId ||
-    !proposal.bookId ||
-    !proposal.field ||
-    !proposal.action ||
-    !proposal.promptPackageId ||
-    !proposal.promptPackageJson ||
-    !proposal.prompt
-  ) {
-    return null;
-  }
-
-  return {
-    ...proposal,
-    aiRunId: entry.id,
-    rawOutput: proposal.rawOutput || entry.rawOutput || "",
-    status: "success"
-  };
 }
 
 function generationStatusLabel(status: string): string {

@@ -390,6 +390,13 @@
   justify-self: start;
 }
 
+.ai-log-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
 .ai-log-readable-block h3 {
   font-size: 15px;
 }

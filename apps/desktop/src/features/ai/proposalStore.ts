@@ -182,8 +182,13 @@ type ProposalState = {
   startProposal: (snapshot: AiPromptSnapshot) => void;
   startQueuedProposal: (id: string) => void;
   finishProposal: (id: string, result: ProposalResult) => void;
-  failProposal: (id: string, errorMessage: string, rawOutput?: string) => void;
-  cancelProposal: (id: string, errorMessage?: string) => void;
+  failProposal: (
+    id: string,
+    errorMessage: string,
+    rawOutput?: string,
+    aiRunId?: string
+  ) => void;
+  cancelProposal: (id: string, errorMessage?: string, aiRunId?: string) => void;
   updateProposalProgress: (id: string, progress: ProposalProgress) => void;
   retryProposal: (id: string) => void;
   setEditableValue: (id: string, value: string) => void;
@@ -276,7 +281,7 @@ export const useProposalStore = create<ProposalState>((set) => ({
     );
     persistProposalSnapshot(updated);
   },
-  failProposal: (id, errorMessage, rawOutput = "") => {
+  failProposal: (id, errorMessage, rawOutput = "", aiRunId) => {
     let updated: ActiveAiProposal | undefined;
     set((state) =>
       syncActive({
@@ -285,6 +290,7 @@ export const useProposalStore = create<ProposalState>((set) => ({
             ? (updated = {
                 ...proposal,
                 status: "error",
+                aiRunId: aiRunId ?? proposal.aiRunId,
                 rawOutput,
                 errorMessage,
                 updatedAt: new Date().toISOString()
@@ -295,7 +301,7 @@ export const useProposalStore = create<ProposalState>((set) => ({
     );
     persistProposalSnapshot(updated);
   },
-  cancelProposal: (id, errorMessage = "Generowanie zostało przerwane.") => {
+  cancelProposal: (id, errorMessage = "Generowanie zostało przerwane.", aiRunId) => {
     let updated: ActiveAiProposal | undefined;
     set((state) =>
       syncActive({
@@ -304,6 +310,7 @@ export const useProposalStore = create<ProposalState>((set) => ({
             ? (updated = {
                 ...proposal,
                 status: "cancelled",
+                aiRunId: aiRunId ?? proposal.aiRunId,
                 errorMessage,
                 updatedAt: new Date().toISOString()
               })
