@@ -6,6 +6,7 @@ import { CLAUDE_CLI_MODEL_MAP } from "./pricing";
 
 const CLAUDE_MODEL_LABELS: Record<string, string> = {
   "claude-fable-5": "Fable 5",
+  "claude-opus-5": "Opus 5",
   "claude-opus-4-8": "Opus 4.8",
   "claude-opus-4-7": "Opus 4.7",
   "claude-sonnet-5": "Sonnet 5",
@@ -15,6 +16,7 @@ const CLAUDE_MODEL_LABELS: Record<string, string> = {
 
 const ANTHROPIC_MODEL_LABELS: Record<string, string> = {
   "claude-sonnet-5": "Claude Sonnet 5",
+  "claude-opus-5": "Claude Opus 5",
   "claude-opus-4-8": "Claude Opus 4.8",
   "claude-haiku-4-5": "Claude Haiku 4.5"
 };
@@ -30,7 +32,8 @@ export function normalizeClaudeModel(value: string): string {
 /** Katalogi modeli współdzielone przez ustawienia AI i panel modelu (topbar). */
 export const CLAUDE_MODELS: Array<{ value: string; label: string }> = [
   { value: "claude-fable-5", label: "Claude Fable 5 (najmocniejszy)" },
-  { value: "claude-opus-4-8", label: "Claude Opus 4.8 (zalecany)" },
+  { value: "claude-opus-5", label: "Claude Opus 5 (zalecany)" },
+  { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
   { value: "claude-opus-4-7", label: "Claude Opus 4.7 (1M kontekst)" },
   { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
@@ -41,6 +44,7 @@ export const OPENAI_TEXT_MODELS = ["gpt-5.5", "gpt-5", "gpt-4.1"];
 
 export const ANTHROPIC_MODELS: Array<{ value: string; label: string }> = [
   { value: "claude-sonnet-5", label: "Claude Sonnet 5 (zalecany)" },
+  { value: "claude-opus-5", label: "Claude Opus 5" },
   { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
   { value: "claude-haiku-4-5", label: "Claude Haiku 4.5" }
 ];

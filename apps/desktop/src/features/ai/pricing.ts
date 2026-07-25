@@ -24,6 +24,7 @@ export type CostBreakdown = {
 // Założenie: modele Anthropic o tej samej nazwie rodziny mają tę samą cenę,
 // więc starsze wersje dziedziczą stawki po aktualnym modelu rodziny.
 const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
+  "claude-opus-5": { inputPer1M: 5, outputPer1M: 25, cacheReadPer1M: 0.5, cacheWritePer1M: 6.25 },
   "claude-opus-4-8": { inputPer1M: 5, outputPer1M: 25, cacheReadPer1M: 0.5, cacheWritePer1M: 6.25 },
   "claude-opus-4-7": { inputPer1M: 5, outputPer1M: 25, cacheReadPer1M: 0.5, cacheWritePer1M: 6.25 },
   "claude-sonnet-5": { inputPer1M: 2, outputPer1M: 10, cacheReadPer1M: 0.2, cacheWritePer1M: 2.5 },
@@ -35,7 +36,7 @@ const ANTHROPIC_PRICING: Record<string, ModelPricing> = {
 // Claude CLI ("sonnet"/"opus"/"haiku") → kanoniczne ID modelu API.
 // Współdzielone z textProviderInfo do normalizacji starych, zapisanych aliasów.
 export const CLAUDE_CLI_MODEL_MAP: Record<string, string> = {
-  opus: "claude-opus-4-8",
+  opus: "claude-opus-5",
   sonnet: "claude-sonnet-5",
   haiku: "claude-haiku-4-5"
 };

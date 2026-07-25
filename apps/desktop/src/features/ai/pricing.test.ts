@@ -24,6 +24,12 @@ describe("costOf", () => {
     expect(cost.usd).toBeCloseTo(12, 6); // 2 + 10 (cena wprowadzająca do 2026-08-31)
   });
 
+  it("prices Anthropic Opus 5 at 1M/1M input/output", () => {
+    const cost = costOf(oneMillion, "anthropic-api", "claude-opus-5");
+    expect(cost.hasPricing).toBe(true);
+    expect(cost.usd).toBeCloseTo(30, 6); // 5 + 25
+  });
+
   it("prices Anthropic Opus 4.8 at 1M/1M input/output", () => {
     const cost = costOf(oneMillion, "anthropic-api", "claude-opus-4-8");
     expect(cost.usd).toBeCloseTo(30, 6); // 5 + 25
