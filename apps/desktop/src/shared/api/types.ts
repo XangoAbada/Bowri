@@ -597,10 +597,29 @@ export type BrainstormSuggestionKind =
 
 export type BrainstormSuggestionStatus = "pending" | "applied" | "dismissed";
 
+/** Czy sugestia tworzy nowy wpis, czy uzupełnia pole istniejącej encji. */
+export type BrainstormSuggestionMode = "create" | "update";
+
 export type BrainstormSuggestion = {
   id: string;
+  /**
+   * Stabilny klucz sesji, którym posługuje się AI przy wzbogacaniu sugestii.
+   * Derywowany z rodzaju i tytułu — `id` jest losowe i zmienia się co turę.
+   */
+  key: string;
+  /** 1 przy pierwszym pojawieniu, +1 przy każdym wzbogaceniu przez AI. */
+  revision: number;
+  /** ISO ostatniej rewizji przez AI; brak = sugestia nigdy nie była wzbogacana. */
+  updatedByAiAt?: string;
+  mode: BrainstormSuggestionMode;
   kind: BrainstormSuggestionKind;
   conceptField?: string;
+  /** Cel aktualizacji (mode="update", kind inny niż conceptField). */
+  targetEntityId?: string;
+  /** Pole encji do aktualizacji — klucz z whitelisty brainstormEntityTargets. */
+  targetField?: string;
+  /** Podpowiedź AI, jak wstawić treść; autor i tak potwierdza w modalu. */
+  updateMode?: "append" | "replace";
   title: string;
   value: string;
   reason: string;
@@ -886,6 +905,8 @@ export type AiSettings = {
   comfyuiWorkflowJson: string;
   plnPerUsd: number;
   aiResponseLanguage: string;
+  /** Ręczny limit tokenów kontekstu wejściowego; 0 = wylicz z okna modelu. */
+  contextWindowOverride: number;
 };
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
@@ -902,7 +923,8 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   comfyuiBaseUrl: "http://127.0.0.1:8188",
   comfyuiWorkflowJson: "",
   plnPerUsd: 4.0,
-  aiResponseLanguage: ""
+  aiResponseLanguage: "",
+  contextWindowOverride: 0
 };
 
 export type CodexModelReasoningLevel = {

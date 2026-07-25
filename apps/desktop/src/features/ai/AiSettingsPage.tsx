@@ -32,9 +32,11 @@ import { useCodexSettingsStore } from "./codexSettingsStore";
 import {
   ANTHROPIC_MODELS,
   CLAUDE_MODELS,
+  describeTextProvider,
   normalizeClaudeModel,
   OPENAI_TEXT_MODELS
 } from "./textProviderInfo";
+import { automaticBudgetTokens } from "./contextWindows";
 
 const TEXT_PROVIDER_IDS: TextProviderId[] = [
   "codex-cli",
@@ -64,6 +66,7 @@ export function AiSettingsPage() {
   const setReasoningEffort = useCodexSettingsStore(
     (state) => state.setReasoningEffort
   );
+  const codexModel = useCodexSettingsStore((state) => state.model);
 
   const settingsQuery = useQuery({
     queryKey: ["ai-settings"],
@@ -117,6 +120,15 @@ export function AiSettingsPage() {
       : draft.textProvider === "anthropic-api" && !draft.anthropicApiKey.trim()
         ? t("aiSettings.missingAnthropicKey")
         : null;
+
+  // Podpowiedź „ile wyjdzie automatycznie" musi patrzeć na dostawcę i model
+  // z BIEŻĄCEGO szkicu, a nie z zapisanych ustawień — inaczej przełączenie
+  // dostawcy pokazywałoby liczbę sprzed zapisu.
+  const draftProvider = describeTextProvider(draft);
+  const automaticContextTokens = automaticBudgetTokens(
+    draftProvider.providerId,
+    draftProvider.isCodex ? codexModel : draftProvider.model
+  );
 
   const codexAvailable = codexCliQuery.data?.available === true;
   const codexLoggedIn = codexLoginQuery.data?.authLikelyReady === true;
@@ -505,6 +517,27 @@ export function AiSettingsPage() {
           title={t("aiSettings.plnRateTitle")}
         />
       </Field>
+
+      <Field
+        label={t("aiSettings.contextWindowOverride")}
+        className="field-label-narrow"
+      >
+        <input
+          type="number"
+          min={0}
+          step={1000}
+          value={draft.contextWindowOverride}
+          onChange={(event) =>
+            update("contextWindowOverride", Math.max(0, Number(event.target.value)))
+          }
+          title={t("aiSettings.contextWindowOverrideTitle")}
+        />
+      </Field>
+      <p className="help-text">
+        {t("aiSettings.contextWindowOverrideHelp", {
+          tokens: automaticContextTokens.toLocaleString("pl-PL")
+        })}
+      </p>
 
       {missingKeyWarning ? (
         <p className="warning-text">{missingKeyWarning}</p>

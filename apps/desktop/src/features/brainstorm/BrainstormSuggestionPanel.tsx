@@ -15,11 +15,27 @@ import {
 import type {
   BrainstormMessage,
   BrainstormSuggestion,
-  BrainstormSuggestionStatus
+  BrainstormSuggestionStatus,
+  Character,
+  PlotThread,
+  WorldElement,
+  WorldRule
 } from "../../shared/api/types";
 import {
+  BRAINSTORM_ENTITY_FIELDS,
+  isBrainstormEntityKind,
+  type BrainstormEntityKind
+} from "../ai/brainstormEntityTargets";
+import { stringField } from "../ai/entityFieldUpdate";
+import {
+  BrainstormEntityUpdateModal,
+  type EntityUpdateCandidate
+} from "./BrainstormEntityUpdateModal";
+import {
+  collectSessionSuggestions,
   isBrainstormConceptField,
-  parseBrainstormSuggestions
+  parseBrainstormSuggestions,
+  type SessionSuggestion
 } from "../ai/brainstormPromptPackage";
 import { useBrainstormSessionStore } from "./brainstormSessionStore";
 import { useProposalStore, type EnqueueProposalResult } from "../ai/proposalStore";
@@ -38,7 +54,7 @@ import { buildWorldPromptPackage, renderWorldPromptPackage } from "../ai/worldPr
 import { buildPlanPromptPackage, renderPlanPromptPackage } from "../ai/planPromptPackage";
 import { conceptFieldConfigs } from "../ai/promptPackage";
 
-export type PendingBrainstormSuggestion = BrainstormSuggestion & { messageId: string };
+export type PendingBrainstormSuggestion = SessionSuggestion;
 
 /**
  * Nierozstrzygnięte sugestie aktywnej sesji brainstormingu. Współdzieli klucz
@@ -56,15 +72,15 @@ export function usePendingBrainstormSuggestions(): PendingBrainstormSuggestion[]
 
   return useMemo(
     () =>
-      (messagesQuery.data ?? [])
-        .flatMap((message) =>
-          parseBrainstormSuggestions(message).map((suggestion) => ({
-            ...suggestion,
-            messageId: message.id
-          }))
-        )
+      collectSessionSuggestions(messagesQuery.data ?? [])
         .filter((suggestion) => suggestion.status === "pending")
-        .reverse(),
+        // Świeżo wzbogacona sugestia sprzed kilku tur ma być na górze razem z
+        // nowościami — stąd sort po dacie rewizji, a nie zwykłe odwrócenie listy.
+        .sort((a, b) =>
+          (b.updatedByAiAt ?? b.messageCreatedAt).localeCompare(
+            a.updatedByAiAt ?? a.messageCreatedAt
+          )
+        ),
     [messagesQuery.data]
   );
 }
@@ -80,7 +96,9 @@ export function BrainstormSuggestionPanel({
   const queryClient = useQueryClient();
   const sessionId = useBrainstormSessionStore((state) => state.activeSessionId);
   const enqueueProposal = useProposalStore((state) => state.enqueueProposal);
+  const isTurnInFlight = useBrainstormSessionStore((state) => state.isTurnInFlight);
   const [conceptPreview, setConceptPreview] = useState<PendingBrainstormSuggestion | null>(null);
+  const [entityUpdate, setEntityUpdate] = useState<PendingBrainstormSuggestion | null>(null);
 
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
@@ -253,6 +271,44 @@ export function BrainstormSuggestionPanel({
     }
   }
 
+  /** Kandydaci do aktualizacji wraz z bieżącą treścią pól z whitelisty. */
+  function entityCandidates(kind: BrainstormEntityKind): EntityUpdateCandidate[] {
+    const entities: Array<Character | WorldElement | WorldRule | PlotThread> =
+      kind === "character"
+        ? (characterQuery.data?.characters ?? [])
+        : kind === "worldElement"
+          ? (worldQuery.data?.elements ?? [])
+          : kind === "worldRule"
+            ? (worldQuery.data?.rules ?? [])
+            : (planQuery.data?.threads ?? []);
+
+    return entities.map((entity) => ({
+      id: entity.id,
+      name: entity.name,
+      fields: Object.fromEntries(
+        BRAINSTORM_ENTITY_FIELDS[kind].map((target) => [
+          target.key,
+          stringField(entity, target.key)
+        ])
+      )
+    }));
+  }
+
+  async function refreshAfterEntityUpdate(kind: BrainstormEntityKind) {
+    if (kind === "character") {
+      await queryClient.invalidateQueries({ queryKey: ["character-workspace", projectId] });
+    } else if (kind === "worldElement" || kind === "worldRule") {
+      await queryClient.invalidateQueries({ queryKey: ["world-workspace", projectId] });
+    } else {
+      await queryClient.invalidateQueries({ queryKey: ["book-plan", bookId] });
+    }
+    // Zapis encji dotyka też projektu (updated_at, liczniki w nagłówku).
+    await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+  }
+
+  const entityUpdateKind =
+    entityUpdate && isBrainstormEntityKind(entityUpdate.kind) ? entityUpdate.kind : null;
+
   const conceptPreviewField =
     conceptPreview && isBrainstormConceptField(conceptPreview.conceptField)
       ? conceptPreview.conceptField
@@ -272,22 +328,51 @@ export function BrainstormSuggestionPanel({
         <article className="scene-discovery-card" key={suggestion.id}>
           <div>
             <span className="scene-discovery-kind">{suggestionKindLabel(suggestion, t)}</span>
+            {suggestion.revision > 1 ? (
+              <span
+                className="brainstorm-revision-pill"
+                title={t("brainstorm.revisedTitle", { revision: suggestion.revision })}
+              >
+                {t("brainstorm.revisedBadge", { revision: suggestion.revision })}
+              </span>
+            ) : null}
             <h3>{suggestion.title}</h3>
             <p>{suggestion.value}</p>
             <small>{suggestion.reason}</small>
           </div>
           <div className="scene-discovery-actions">
             {suggestion.kind === "conceptField" ? (
-              <Button variant="ai" size="sm" onClick={() => setConceptPreview(suggestion)}>
+              <Button
+                variant="ai"
+                size="sm"
+                disabled={isTurnInFlight}
+                title={isTurnInFlight ? t("brainstorm.turnInFlight") : undefined}
+                onClick={() => setConceptPreview(suggestion)}
+              >
                 <Sparkles size={14} aria-hidden />
                 {t("brainstorm.apply")}
+              </Button>
+            ) : suggestion.mode === "update" ? (
+              // Aktualizacja istniejącej encji zapisuje się od razu — bez
+              // kolejki propozycji i bez kolejnego wywołania modelu.
+              <Button
+                variant="ai"
+                size="sm"
+                disabled={!contextReady || isTurnInFlight}
+                title={
+                  isTurnInFlight ? t("brainstorm.turnInFlight") : t("brainstorm.updateEntityTitle")
+                }
+                onClick={() => setEntityUpdate(suggestion)}
+              >
+                <Sparkles size={14} aria-hidden />
+                {t("brainstorm.updateEntity")}
               </Button>
             ) : (
               <Button
                 variant="ai"
                 size="sm"
-                disabled={!contextReady}
-                title={t("brainstorm.generateTitle")}
+                disabled={!contextReady || isTurnInFlight}
+                title={isTurnInFlight ? t("brainstorm.turnInFlight") : t("brainstorm.generateTitle")}
                 onClick={() => queueEntitySuggestion(suggestion)}
               >
                 <Sparkles size={14} aria-hidden />
@@ -297,6 +382,8 @@ export function BrainstormSuggestionPanel({
             <Button
               variant="ghost"
               size="sm"
+              disabled={isTurnInFlight}
+              title={isTurnInFlight ? t("brainstorm.turnInFlight") : undefined}
               onClick={() =>
                 void setSuggestionStatus(suggestion.messageId, suggestion.id, "dismissed")
               }
@@ -357,6 +444,27 @@ export function BrainstormSuggestionPanel({
           </div>
         </Modal>
       ) : null}
+
+      {entityUpdate && entityUpdateKind && bookId ? (
+        <BrainstormEntityUpdateModal
+          projectId={projectId}
+          bookId={bookId}
+          kind={entityUpdateKind}
+          suggestion={entityUpdate}
+          candidates={entityCandidates(entityUpdateKind)}
+          onClose={() => setEntityUpdate(null)}
+          onDismiss={() =>
+            void setSuggestionStatus(entityUpdate.messageId, entityUpdate.id, "dismissed").then(() =>
+              setEntityUpdate(null)
+            )
+          }
+          onApplied={async () => {
+            await refreshAfterEntityUpdate(entityUpdateKind);
+            await setSuggestionStatus(entityUpdate.messageId, entityUpdate.id, "applied");
+            setEntityUpdate(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -372,8 +480,17 @@ export function suggestionKindLabel(
         })
       : t("brainstorm.kindConcept");
   }
-  if (suggestion.kind === "character") return t("brainstorm.kindCharacter");
-  if (suggestion.kind === "worldElement") return t("brainstorm.kindWorldElement");
-  if (suggestion.kind === "worldRule") return t("brainstorm.kindWorldRule");
-  return t("brainstorm.kindPlotThread");
+  const base =
+    suggestion.kind === "character"
+      ? t("brainstorm.kindCharacter")
+      : suggestion.kind === "worldElement"
+        ? t("brainstorm.kindWorldElement")
+        : suggestion.kind === "worldRule"
+          ? t("brainstorm.kindWorldRule")
+          : t("brainstorm.kindPlotThread");
+  // Log AI używa tej samej funkcji, więc rozróżnienie „nowy wpis vs uzupełnienie"
+  // pojawia się także tam.
+  return suggestion.mode === "update"
+    ? `${base} · ${t("brainstorm.kindUpdateSuffix")}`
+    : base;
 }

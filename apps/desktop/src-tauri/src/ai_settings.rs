@@ -32,6 +32,8 @@ pub struct AiSettings {
     pub pln_per_usd: f64,
     /// Wolny string: język, w którym AI ma odpowiadać (np. "angielski"). Pusty = domyślnie polski.
     pub ai_response_language: String,
+    /// Ręczny limit tokenów kontekstu wejściowego (dziś: brainstorming). 0 = wylicz z okna modelu.
+    pub context_window_override: u64,
 }
 
 impl Default for AiSettings {
@@ -51,6 +53,7 @@ impl Default for AiSettings {
             comfyui_workflow_json: String::new(),
             pln_per_usd: 4.0,
             ai_response_language: String::new(),
+            context_window_override: 0,
         }
     }
 }

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Lightbulb, Pencil, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 import { Button, Chip, EmptyState, Field, Modal, TwoPane, confirmDialog } from "../../shared/ui";
+import type { BrainstormMessage, BrainstormSuggestion } from "../../shared/api/types";
 import {
   appendBrainstormMessage,
   createBrainstormSession,
@@ -17,17 +18,22 @@ import {
   listBrainstormMessages,
   listBrainstormSessions,
   renameBrainstormSession,
-  runCodexPrompt
+  runCodexPrompt,
+  updateBrainstormMessageSuggestions
 } from "../../shared/api/commands";
 import { costOf, formatCostLabel, sumCosts, type CostBreakdown } from "../ai/pricing";
 import {
   buildBrainstormChatPromptPackage,
-  dedupeBrainstormSuggestions,
+  collectSessionSuggestions,
   hasBrainstormMaterial,
+  mergeBrainstormSuggestions,
   parseBrainstormChatResult,
   parseBrainstormSuggestions,
-  renderBrainstormChatPromptPackage
+  planBrainstormContext,
+  renderBrainstormChatPromptPackage,
+  type BrainstormContextPlan
 } from "../ai/brainstormPromptPackage";
+import { resolveContextBudget } from "../ai/contextWindows";
 import { useCodexSettingsStore } from "../ai/codexSettingsStore";
 import { useBrainstormSessionStore } from "./brainstormSessionStore";
 import { useTextProviderInfo } from "../ai/textProviderInfo";
@@ -55,6 +61,7 @@ export function BrainstormPage({
   const model = useCodexSettingsStore((state) => state.model);
   const reasoningEffort = useCodexSettingsStore((state) => state.reasoningEffort);
   const setStoreSessionId = useBrainstormSessionStore((state) => state.setActiveSessionId);
+  const setTurnInFlight = useBrainstormSessionStore((state) => state.setTurnInFlight);
   const providerInfo = useTextProviderInfo();
 
   const projectQuery = useQuery({
@@ -175,6 +182,9 @@ export function BrainstormPage({
   }, []);
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Tytuły sugestii, których merge nie przyjął (odrzucone wcześniej przez autora
+  // albo wyczerpany limit rewizji) — inaczej znikałyby bez śladu.
+  const [skippedNotice, setSkippedNotice] = useState<string[] | null>(null);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
 
@@ -185,18 +195,85 @@ export function BrainstormPage({
     }
   }, [messages.length, isSending]);
 
-  // Nazwy istniejących sugestii i encji — przekazywane do promptu, żeby AI
-  // ich nie dublowało (druga linia obrony obok dedupu po stronie parsera).
-  const existingTitles = useMemo(() => {
-    const titles = messages.flatMap((message) =>
-      parseBrainstormSuggestions(message).map((suggestion) => suggestion.title)
-    );
-    const characters = characterQuery.data?.characters.map((item) => item.name) ?? [];
-    const elements = worldQuery.data?.elements.map((item) => item.name) ?? [];
-    const rules = worldQuery.data?.rules.map((item) => item.name) ?? [];
-    const threads = planQuery.data?.threads.map((item) => item.name) ?? [];
-    return [...titles, ...characters, ...elements, ...rules, ...threads];
-  }, [messages, characterQuery.data, worldQuery.data, planQuery.data]);
+  const sessionSuggestions = useMemo(
+    () => collectSessionSuggestions(messages),
+    [messages]
+  );
+  // Czekające sugestie AI może wzbogacać (adresuje je kluczem), więc NIE mogą
+  // trafić na listę "nie duplikuj" — inaczej reguła promptu zakazywałaby
+  // modelowi wracać do własnej sugestii z nowym szczegółem.
+  const activeSuggestions = useMemo(
+    () => sessionSuggestions.filter((suggestion) => suggestion.status === "pending"),
+    [sessionSuggestions]
+  );
+  // Zastosowane i odrzucone to decyzje autora — tych nie wskrzeszamy.
+  const resolvedSuggestionTitles = useMemo(
+    () =>
+      sessionSuggestions
+        .filter((suggestion) => suggestion.status !== "pending")
+        .map((suggestion) => suggestion.title),
+    [sessionSuggestions]
+  );
+
+  // Budżet wejścia dla aktywnego dostawcy: Codex bierze model z panelu w topbarze,
+  // pozostali z zapisanych ustawień AI.
+  const contextBudget = useMemo(
+    () =>
+      resolveContextBudget(
+        aiSettingsQuery.data,
+        providerInfo.providerId,
+        providerInfo.isCodex ? model : providerInfo.model
+      ),
+    [aiSettingsQuery.data, providerInfo.providerId, providerInfo.isCodex, providerInfo.model, model]
+  );
+
+  const planContextFor = useCallback(
+    (history: BrainstormMessage[], userMessage: string): BrainstormContextPlan | null => {
+      const project = projectQuery.data;
+      const characters = characterQuery.data;
+      const world = worldQuery.data;
+      const session = activeSession;
+      if (!project || !characters || !world || !session) {
+        return null;
+      }
+      return planBrainstormContext(
+        {
+          project: project.project,
+          book: project.book,
+          plan: planQuery.data ?? null,
+          characters,
+          world,
+          session,
+          messages: history,
+          userMessage,
+          activeSuggestions,
+          resolvedSuggestionTitles
+        },
+        contextBudget
+      );
+    },
+    [
+      projectQuery.data,
+      planQuery.data,
+      characterQuery.data,
+      worldQuery.data,
+      activeSession,
+      activeSuggestions,
+      resolvedSuggestionTitles,
+      contextBudget
+    ]
+  );
+
+  // Podgląd dla widoku: cała dotychczasowa rozmowa, bez treści composera —
+  // przeliczanie przy każdym wciśniętym klawiszu byłoby zbyt drogie.
+  const contextPlan = useMemo(
+    () => planContextFor(messages, ""),
+    [planContextFor, messages]
+  );
+  const outOfContextIds = useMemo(
+    () => new Set(contextPlan?.excludedMessageIds ?? []),
+    [contextPlan]
+  );
 
   const contextReady = Boolean(
     projectQuery.data && planQuery.data && characterQuery.data && worldQuery.data
@@ -308,6 +385,53 @@ export function BrainstormPage({
   }
 
   /**
+   * Zapisuje wzbogacone sugestie w wiadomościach, w których już żyją.
+   * Sekwencyjnie i po ŚWIEŻYM odczycie: `updateBrainstormMessageSuggestions`
+   * nadpisuje całą tablicę jednej wiadomości, więc równoległe zapisy gubiłyby
+   * zmiany. Sugestie, o których losie autor zdążył zdecydować w trakcie tury,
+   * zostawiamy w spokoju.
+   */
+  async function applySuggestionRevisions(
+    sessionId: string,
+    revisions: Array<{ messageId: string; suggestion: BrainstormSuggestion }>
+  ) {
+    if (revisions.length === 0) {
+      return;
+    }
+    const fresh = await queryClient.fetchQuery({
+      queryKey: ["brainstorm-messages", sessionId],
+      queryFn: () => listBrainstormMessages(sessionId)
+    });
+
+    const byMessage = new Map<string, BrainstormSuggestion[]>();
+    for (const revision of revisions) {
+      const current = byMessage.get(revision.messageId) ?? [];
+      current.push(revision.suggestion);
+      byMessage.set(revision.messageId, current);
+    }
+
+    for (const [messageId, updated] of byMessage) {
+      const message = fresh.find((item) => item.id === messageId);
+      if (!message) {
+        continue;
+      }
+      const replacements = new Map(updated.map((suggestion) => [suggestion.id, suggestion]));
+      let changed = false;
+      const next = parseBrainstormSuggestions(message).map((suggestion) => {
+        const replacement = replacements.get(suggestion.id);
+        if (!replacement || suggestion.status !== "pending") {
+          return suggestion;
+        }
+        changed = true;
+        return replacement;
+      });
+      if (changed) {
+        await updateBrainstormMessageSuggestions(messageId, JSON.stringify(next));
+      }
+    }
+  }
+
+  /**
    * Dogenerowuje odpowiedź AI do ostatniej wiadomości autora zapisanej w bazie.
    * Wołane po wysłaniu nowej wiadomości oraz z przycisku "Ponów" po błędzie.
    */
@@ -322,7 +446,9 @@ export function BrainstormPage({
     }
 
     setIsSending(true);
+    setTurnInFlight(true);
     setSendError(null);
+    setSkippedNotice(null);
     try {
       const currentMessages = await queryClient.fetchQuery({
         queryKey: ["brainstorm-messages", session.id],
@@ -333,7 +459,9 @@ export function BrainstormPage({
         return;
       }
 
-      const promptPackage = buildBrainstormChatPromptPackage({
+      // Plan liczymy dla ŚWIEŻO odczytanej historii, nie dla memo widoku — między
+      // renderem a wysyłką doszła co najmniej wiadomość autora.
+      const promptInput = {
         project: project.project,
         book: project.book,
         plan,
@@ -342,7 +470,12 @@ export function BrainstormPage({
         session,
         messages: currentMessages.slice(0, -1),
         userMessage: last.content,
-        existingSuggestionTitles: existingTitles
+        activeSuggestions,
+        resolvedSuggestionTitles
+      };
+      const promptPackage = buildBrainstormChatPromptPackage({
+        ...promptInput,
+        contextPlan: planBrainstormContext(promptInput, contextBudget)
       });
       const result = await runCodexPrompt({
         projectId,
@@ -363,20 +496,36 @@ export function BrainstormPage({
       }
 
       const parsed = parseBrainstormChatResult(result.rawOutput);
-      const suggestions = dedupeBrainstormSuggestions(parsed.suggestions, existingTitles);
+      const entityNames = [
+        ...characters.characters.map((item) => item.name),
+        ...world.elements.map((item) => item.name),
+        ...world.rules.map((item) => item.name),
+        ...plan.threads.map((item) => item.name)
+      ];
+      const merge = mergeBrainstormSuggestions(parsed.suggestions, {
+        active: activeSuggestions,
+        blockedTitles: [...entityNames, ...resolvedSuggestionTitles]
+      });
+
+      // Najpierw wiadomość: to ona wiąże aiRunId z kosztem i wpisem w logu AI.
       await appendBrainstormMessage({
         sessionId: session.id,
         projectId,
         role: "assistant",
         content: parsed.reply,
-        suggestionsJson: JSON.stringify(suggestions),
+        suggestionsJson: JSON.stringify(merge.created),
         aiRunId: result.id,
         stateSummary: parsed.stateSummary || null
       });
+      await applySuggestionRevisions(session.id, merge.revisions);
+      if (merge.skipped.length) {
+        setSkippedNotice(merge.skipped.map((item) => item.title));
+      }
     } catch (error) {
       setSendError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsSending(false);
+      setTurnInFlight(false);
       await queryClient.invalidateQueries({ queryKey: ["brainstorm-messages", session.id] });
       await queryClient.invalidateQueries({ queryKey: ["brainstorm-sessions", projectId] });
       // Odśwież koszt od razu: chip sesji tu oraz licznik projektu w górnym pasku.
@@ -472,6 +621,7 @@ export function BrainstormPage({
                     })}
                   </span>
                 ) : null}
+                {contextPlan ? <BrainstormContextMeter plan={contextPlan} /> : null}
               </div>
               <div className="button-row">
                 <Button variant="ghost" size="sm" onClick={() => setRenameDraft(activeSession.name)}>
@@ -513,10 +663,20 @@ export function BrainstormPage({
               {messages.map((message) => (
                 <article
                   key={message.id}
-                  className={`brainstorm-message ${message.role === "user" ? "user" : "assistant"}`}
+                  className={`brainstorm-message ${message.role === "user" ? "user" : "assistant"}${
+                    outOfContextIds.has(message.id) ? " is-out-of-context" : ""
+                  }`}
                 >
                   <span className="brainstorm-message-author">
                     {message.role === "user" ? t("brainstorm.authorUser") : t("brainstorm.authorAi")}
+                    {outOfContextIds.has(message.id) ? (
+                      <span
+                        className="brainstorm-out-of-context-note"
+                        title={t("brainstorm.outOfContextTitle")}
+                      >
+                        {t("brainstorm.outOfContextNote")}
+                      </span>
+                    ) : null}
                   </span>
                   {message.role === "assistant" ? (
                     <BrainstormMarkdown
@@ -557,6 +717,19 @@ export function BrainstormPage({
                     {t("brainstorm.retry")}
                   </Button>
                 ) : null}
+              </div>
+            ) : null}
+
+            {skippedNotice?.length ? (
+              <div className="brainstorm-skipped-notice">
+                <p>
+                  {t("brainstorm.skippedSuggestions", {
+                    titles: skippedNotice.join(", ")
+                  })}
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => setSkippedNotice(null)}>
+                  {t("brainstorm.dismissNotice")}
+                </Button>
               </div>
             ) : null}
 
@@ -651,6 +824,50 @@ export function BrainstormPage({
         </Modal>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Zużycie okna kontekstu sesji. Liczby są szacunkiem (chars/4, ten sam
+ * przelicznik co backend), stąd „~" przy wartościach w tooltipie.
+ */
+function BrainstormContextMeter({ plan }: { plan: BrainstormContextPlan }) {
+  const { t } = useTranslation();
+  const percentUsed = plan.budgetTokens
+    ? Math.min(100, Math.round((plan.usedTokens / plan.budgetTokens) * 100))
+    : 0;
+  const tone =
+    percentUsed >= 95 ? " is-critical" : percentUsed >= 80 ? " is-warning" : "";
+
+  return (
+    <div
+      className={`brainstorm-context-meter${tone}`}
+      title={t(
+        plan.source === "fallback"
+          ? "brainstorm.contextMeterTitleUnknown"
+          : "brainstorm.contextMeterTitle",
+        {
+          used: plan.usedTokens.toLocaleString("pl-PL"),
+          budget: plan.budgetTokens.toLocaleString("pl-PL"),
+          window: plan.windowTokens.toLocaleString("pl-PL"),
+          omitted: plan.excludedMessageIds.length
+        }
+      )}
+    >
+      <div
+        className="brainstorm-context-bar"
+        role="progressbar"
+        aria-valuenow={percentUsed}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={t("brainstorm.contextMeterAria")}
+      >
+        <span style={{ width: `${percentUsed}%` }} />
+      </div>
+      <span className="brainstorm-context-label">
+        {t("brainstorm.contextRemaining", { percent: 100 - percentUsed })}
+      </span>
+    </div>
   );
 }
 

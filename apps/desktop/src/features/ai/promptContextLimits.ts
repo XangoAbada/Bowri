@@ -19,6 +19,19 @@ const MAX_FIELD_CHARS = 600;
 // wcześniej spriorytetyzowane przez prioritizeEntities wchodzą pierwsze.
 const STORY_BIBLE_CHAR_BUDGET = 24_000;
 
+// Burza mózgów pracuje nad całą historią naraz i jest jedynym miejscem, gdzie
+// urwana biblia realnie boli (AI proponuje encje, które już istnieją). Budżet
+// ~30k tokenów; resztę okna zjada rozmowa, którą pakuje planBrainstormContext.
+export const BRAINSTORM_STORY_BIBLE_CHAR_BUDGET = 120_000;
+
+export const BRAINSTORM_SECTION_LIMITS: Record<string, number> = {
+  characters: 200,
+  relations: 300,
+  memories: 300,
+  worldElements: 200,
+  worldRules: 200
+};
+
 // Pola, których nie wolno ucinać do MAX_FIELD_CHARS — niosą kontrakt stylu
 // i wiedzy, a ich ogon bywa ważniejszy niż początek (np. zakazy w styleGuide).
 const FULL_LENGTH_KEYS = new Set([
@@ -60,15 +73,18 @@ export function truncateStringsDeep(value: unknown): unknown {
  * pretty-print) oszczędza ~30% tokenów.
  */
 export function renderCappedStoryBible(
-  storyBible: Record<string, unknown>
+  storyBible: Record<string, unknown>,
+  options?: { charBudget?: number; sectionLimits?: Record<string, number> }
 ): string {
+  const charBudget = options?.charBudget ?? STORY_BIBLE_CHAR_BUDGET;
+  const sectionLimits = options?.sectionLimits ?? DEFAULT_SECTION_LIMITS;
   const capped: Record<string, unknown> = {};
   const omissions: string[] = [];
   let usedChars = 0;
 
   for (const [key, value] of Object.entries(storyBible)) {
     if (Array.isArray(value)) {
-      const limit = DEFAULT_SECTION_LIMITS[key] ?? FALLBACK_SECTION_LIMIT;
+      const limit = sectionLimits[key] ?? FALLBACK_SECTION_LIMIT;
       // Dwustopniowe cięcie: stały limit wpisów per sekcja, a potem wspólny
       // budżet znaków — sekcja dostaje tyle wpisów, ile mieści się w reszcie
       // budżetu (zawsze co najmniej kilka, żeby żadna nie znikła w całości).
@@ -78,7 +94,7 @@ export function renderCappedStoryBible(
       for (const entry of withinSectionLimit) {
         const compactEntry = truncateStringsDeep(entry);
         const entryChars = JSON.stringify(compactEntry)?.length ?? 0;
-        if (packed.length >= 3 && usedChars + taken + entryChars > STORY_BIBLE_CHAR_BUDGET) {
+        if (packed.length >= 3 && usedChars + taken + entryChars > charBudget) {
           break;
         }
         packed.push(compactEntry);

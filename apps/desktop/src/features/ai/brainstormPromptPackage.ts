@@ -6,12 +6,25 @@ import type {
   BrainstormSession,
   BrainstormSuggestion,
   BrainstormSuggestionKind,
+  BrainstormSuggestionMode,
+  BrainstormSuggestionStatus,
   CharacterWorkspace,
   Project,
   WorldWorkspace
 } from "../../shared/api/types";
+import {
+  isBrainstormEntityField,
+  isBrainstormEntityKind,
+  renderEntityFieldWhitelist,
+  type BrainstormEntityKind
+} from "./brainstormEntityTargets";
 import { parseModelJson } from "./modelJson";
-import { renderCappedStoryBible } from "./promptContextLimits";
+import { estimateTokens } from "./contextWindows";
+import {
+  BRAINSTORM_SECTION_LIMITS,
+  BRAINSTORM_STORY_BIBLE_CHAR_BUDGET,
+  renderCappedStoryBible
+} from "./promptContextLimits";
 import type { ConceptFieldKey } from "./promptPackage";
 
 export const BRAINSTORM_CHAT_FIELD = "__brainstorm_chat__";
@@ -49,10 +62,29 @@ export function isBrainstormConceptField(value: unknown): value is BrainstormCon
   );
 }
 
+/**
+ * Sugestia prosto z odpowiedzi modelu — jeszcze bez id, klucza i statusu.
+ * `op` rozstrzyga, czy powstaje nowy wpis, czy wzbogacamy istniejący.
+ */
+export type ParsedBrainstormSuggestion = {
+  op: "create" | "revise";
+  /** Klucz wskazany przez AI przy op="revise"; pusty, gdy go nie podało. */
+  suggestionKey: string;
+  kind: BrainstormSuggestionKind;
+  conceptField?: string;
+  mode: BrainstormSuggestionMode;
+  targetEntityId?: string;
+  targetField?: string;
+  updateMode?: "append" | "replace";
+  title: string;
+  value: string;
+  reason: string;
+};
+
 export type NormalizedBrainstormChat = {
   kind: "brainstorm_chat";
   reply: string;
-  suggestions: BrainstormSuggestion[];
+  suggestions: ParsedBrainstormSuggestion[];
   stateSummary: string;
 };
 
@@ -102,8 +134,20 @@ export type BrainstormChatPromptPackage = {
       plotThreads: BookPlan["threads"];
     };
     conversation: Array<{ role: "user" | "assistant"; content: string }>;
+    /** Ile starszych wiadomości nie zmieściło się w budżecie tokenów. */
+    omittedMessageCount: number;
     userMessage: string;
     existingNames: string[];
+    /** Sugestie czekające w panelu — AI może je wzbogacać zamiast dublować. */
+    activeSuggestions: Array<{
+      key: string;
+      kind: BrainstormSuggestionKind;
+      title: string;
+      value: string;
+      revision: number;
+    }>;
+    /** Id istniejących encji, w które AI może celować aktualizacją. */
+    entityIndex: Record<BrainstormEntityKind, Array<{ id: string; name: string }>>;
   };
   outputContract: {
     kind: "brainstorm_chat";
@@ -114,8 +158,57 @@ export type BrainstormChatPromptPackage = {
   };
 };
 
-const HISTORY_MESSAGE_LIMIT = 24;
-const HISTORY_MESSAGE_MAX_CHARS = 1200;
+// Twardy cap pojedynczej wiadomości — jedna patologicznie długa nie może zjeść
+// całego okna. Liczby wiadomości nie ograniczamy: o tym, ile się zmieści,
+// decyduje budżet tokenowy w planBrainstormContext.
+const HISTORY_MESSAGE_MAX_CHARS = 6_000;
+
+/** Przycięcie treści wiadomości — wspólne dla planera i renderu. */
+function capMessageContent(content: string): string {
+  return content.length > HISTORY_MESSAGE_MAX_CHARS
+    ? `${content.slice(0, HISTORY_MESSAGE_MAX_CHARS)}…`
+    : content;
+}
+
+/** Wiersz historii w prompcie — jedno źródło prawdy dla estymaty i renderu. */
+function formatConversationEntry(role: "user" | "assistant", content: string): string {
+  return `${role === "user" ? "Autor" : "AI"}: ${content}`;
+}
+
+export type BrainstormContextPlan = {
+  /** Wiadomości mieszczące się w budżecie, chronologicznie. */
+  includedMessageIds: string[];
+  /** Wiadomości poza oknem — widok wyszarza je na liście. */
+  excludedMessageIds: string[];
+  /** Prompt bez historii rozmowy (rola, reguły, koncepcja, story bible). */
+  baseTokens: number;
+  historyTokens: number;
+  usedTokens: number;
+  budgetTokens: number;
+  windowTokens: number;
+  source: "override" | "catalog" | "fallback";
+};
+
+export type BrainstormPromptInput = {
+  project: Project;
+  book: Book;
+  plan: BookPlan | null;
+  characters: CharacterWorkspace;
+  world: WorldWorkspace;
+  session: BrainstormSession;
+  /** Pełna historia sesji BEZ bieżącej wiadomości autora. */
+  messages: BrainstormMessage[];
+  userMessage: string;
+  /** Sugestie "pending" — kandydatki do wzbogacenia w tej turze. */
+  activeSuggestions: BrainstormSuggestion[];
+  /** Tytuły sugestii zastosowanych i odrzuconych — tych nie wskrzeszamy. */
+  resolvedSuggestionTitles: string[];
+  /** Brak planu = prompt bazowy bez historii (używany do estymaty). */
+  contextPlan?: BrainstormContextPlan;
+};
+
+/** Podgląd treści sugestii w prompcie — pełne wartości rozdmuchałyby kontekst. */
+const ACTIVE_SUGGESTION_PREVIEW_CHARS = 240;
 
 export function buildBrainstormChatPromptPackage({
   project,
@@ -126,31 +219,32 @@ export function buildBrainstormChatPromptPackage({
   session,
   messages,
   userMessage,
-  existingSuggestionTitles
-}: {
-  project: Project;
-  book: Book;
-  plan: BookPlan | null;
-  characters: CharacterWorkspace;
-  world: WorldWorkspace;
-  session: BrainstormSession;
-  messages: BrainstormMessage[];
-  userMessage: string;
-  existingSuggestionTitles: string[];
-}): BrainstormChatPromptPackage {
+  activeSuggestions,
+  resolvedSuggestionTitles,
+  contextPlan
+}: BrainstormPromptInput): BrainstormChatPromptPackage {
   const conceptFields = Object.fromEntries(
     BRAINSTORM_CONCEPT_FIELDS.map((field) => [field, stringValue(book[field])])
   ) as Record<BrainstormConceptField, string>;
 
+  // Sugestie CZEKAJĄCE celowo NIE trafiają tutaj — inaczej reguła "nie duplikuj"
+  // zakazywałaby modelowi wracać do własnej sugestii, żeby ją wzbogacić.
   const existingNames = [
     ...characters.characters.map((item) => item.name),
     ...world.elements.map((item) => item.name),
     ...world.rules.map((item) => item.name),
     ...(plan?.threads ?? []).map((item) => item.name),
-    ...existingSuggestionTitles
+    ...resolvedSuggestionTitles
   ].filter((name) => name.trim().length > 0);
 
   const hasExistingMaterial = hasBrainstormMaterial({ book, plan, characters, world });
+
+  // Bez planu (render bazowy do estymaty) historia jest pusta — koszt samego
+  // szkieletu promptu liczymy osobno od kosztu rozmowy.
+  const includedIds = contextPlan ? new Set(contextPlan.includedMessageIds) : null;
+  const includedMessages = includedIds
+    ? messages.filter((message) => includedIds.has(message.id))
+    : [];
 
   return {
     id: createPromptId("brainstorm_chat"),
@@ -174,15 +268,29 @@ export function buildBrainstormChatPromptPackage({
         worldRules: world.rules,
         plotThreads: plan?.threads ?? []
       },
-      conversation: messages.slice(-HISTORY_MESSAGE_LIMIT).map((message) => ({
+      conversation: includedMessages.map((message) => ({
         role: message.role,
-        content:
-          message.content.length > HISTORY_MESSAGE_MAX_CHARS
-            ? `${message.content.slice(0, HISTORY_MESSAGE_MAX_CHARS)}…`
-            : message.content
+        content: capMessageContent(message.content)
       })),
+      omittedMessageCount: contextPlan ? contextPlan.excludedMessageIds.length : 0,
       userMessage,
-      existingNames
+      existingNames,
+      activeSuggestions: activeSuggestions.map((suggestion) => ({
+        key: suggestion.key,
+        kind: suggestion.kind,
+        title: suggestion.title,
+        value:
+          suggestion.value.length > ACTIVE_SUGGESTION_PREVIEW_CHARS
+            ? `${suggestion.value.slice(0, ACTIVE_SUGGESTION_PREVIEW_CHARS)}…`
+            : suggestion.value,
+        revision: suggestion.revision
+      })),
+      entityIndex: {
+        character: characters.characters.map((item) => ({ id: item.id, name: item.name })),
+        worldElement: world.elements.map((item) => ({ id: item.id, name: item.name })),
+        worldRule: world.rules.map((item) => ({ id: item.id, name: item.name })),
+        plotThread: (plan?.threads ?? []).map((item) => ({ id: item.id, name: item.name }))
+      }
     },
     outputContract: {
       kind: "brainstorm_chat",
@@ -198,10 +306,16 @@ export function renderBrainstormChatPromptPackage(
   promptPackage: BrainstormChatPromptPackage
 ): string {
   const { context } = promptPackage;
+  const conversationEntries = context.conversation
+    .map((message) => formatConversationEntry(message.role, message.content))
+    .join("\n\n");
+  // Ucięta historia bez adnotacji uczy model, że rozmowa zaczyna się w środku;
+  // z adnotacją sięga po podsumowanie stanu zamiast zgadywać.
+  const omittedNote = context.omittedMessageCount
+    ? `(pominięto ${context.omittedMessageCount} wcześniejszych wiadomości — opieraj się na podsumowaniu stanu powyżej)\n\n`
+    : "";
   const conversationBlock = context.conversation.length
-    ? context.conversation
-        .map((message) => `${message.role === "user" ? "Autor" : "AI"}: ${message.content}`)
-        .join("\n\n")
+    ? `${omittedNote}${conversationEntries}`
     : "(początek rozmowy)";
 
   const materialStance = context.hasExistingMaterial
@@ -238,12 +352,18 @@ ${starterTechnique}
 - Sugestię dodawaj tylko, gdy w rozmowie padło konkretne ustalenie lub mocny pomysł — nie zaśmiecaj panelu luźnymi wariacjami.
 - Nie duplikuj encji ani sugestii wymienionych w sekcji "Istniejące nazwy".
 - Pole value sugestii to gotowa, zwięzła treść do wstawienia (nie meta-opis).
+- Wzbogacanie sugestii: gdy w rozmowie pojawia się nowy szczegół dotyczący sugestii z sekcji "Aktywne sugestie", zwróć ją ponownie z op="revise" i jej dokładnym suggestionKey. W polu value podaj PEŁNĄ, wzbogaconą treść (value zastępuje poprzednią, nie dokleja się do niej). Nie twórz drugiej sugestii o tym samym temacie.
+- Aktualizacja istniejących encji: gdy ustalenie dotyczy postaci, elementu świata, reguły albo wątku, który JUŻ istnieje (sekcja "Encje docelowe"), nie proponuj nowej encji — zwróć sugestię z target.entityId (dokładne id z tej sekcji) oraz target.field (klucz z sekcji "Pola encji do aktualizacji"). W value podaj gotową treść samego tego pola. Ustaw target.mode="append", gdy treść ma dopisać się do dotychczasowej, albo "replace", gdy ma ją zastąpić.
+- Nie zmyślaj identyfikatorów: jeśli nie ma pasującego id w sekcji "Encje docelowe", pomiń target i zaproponuj nową encję.
 
 # Pola koncepcji (obecne wartości — puste pola to białe plamy)
 ${JSON.stringify(context.conceptFields)}
 
 # Story bible
-${renderCappedStoryBible(context.storyBible)}
+${renderCappedStoryBible(context.storyBible, {
+  charBudget: BRAINSTORM_STORY_BIBLE_CHAR_BUDGET,
+  sectionLimits: BRAINSTORM_SECTION_LIMITS
+})}
 
 # Podsumowanie dotychczasowej rozmowy
 ${context.stateSummary || "(brak — świeża sesja)"}
@@ -257,6 +377,15 @@ ${context.userMessage}
 # Istniejące nazwy (nie duplikuj)
 ${context.existingNames.length ? JSON.stringify(context.existingNames) : "(brak)"}
 
+# Aktywne sugestie (czekają w panelu autora — możesz je wzbogacać zamiast dublować)
+${context.activeSuggestions.length ? JSON.stringify(context.activeSuggestions) : "(brak)"}
+
+# Encje docelowe (id do aktualizacji istniejących wpisów)
+${JSON.stringify(context.entityIndex)}
+
+# Pola encji do aktualizacji
+${renderEntityFieldWhitelist()}
+
 # Kontrakt wyjścia
 Zwróć JSON:
 {
@@ -265,8 +394,15 @@ Zwróć JSON:
   "reply": "konwersacyjna odpowiedź dla autora, zakończona 1-2 pytaniami pogłębiającymi; wybieralne opcje owijaj w [[etykieta]]",
   "suggestions": [
     {
+      "op": "create | revise (domyślnie create)",
+      "suggestionKey": "wymagane dla op=revise — dokładny key z sekcji 'Aktywne sugestie'",
       "kind": "conceptField | character | worldElement | worldRule | plotThread",
       "conceptField": "tylko dla kind=conceptField, np. premise",
+      "target": {
+        "entityId": "id z sekcji 'Encje docelowe' — tylko gdy uzupełniasz istniejącą encję",
+        "field": "klucz pola z sekcji 'Pola encji do aktualizacji'",
+        "mode": "append | replace"
+      },
       "title": "nazwa robocza sugestii",
       "value": "gotowa proponowana treść",
       "reason": "dlaczego warto (1-2 zdania)"
@@ -274,6 +410,54 @@ Zwróć JSON:
   ],
   "stateSummary": "opcjonalne aktualne podsumowanie stanu pomysłu (pomiń albo pusty string, gdy bez zmian)"
 }`;
+}
+
+/**
+ * Dzieli historię sesji na część mieszczącą się w budżecie tokenów i resztę.
+ * Jedno źródło prawdy: tego samego planu używa builder promptu (co wysyłamy)
+ * i widok czatu (co wyszarzamy) — inaczej pasek pokazywałby co innego, niż
+ * model faktycznie dostaje.
+ */
+export function planBrainstormContext(
+  input: BrainstormPromptInput,
+  budget: {
+    budgetTokens: number;
+    windowTokens: number;
+    source: "override" | "catalog" | "fallback";
+  }
+): BrainstormContextPlan {
+  const basePackage = buildBrainstormChatPromptPackage({ ...input, contextPlan: undefined });
+  const baseTokens = estimateTokens(renderBrainstormChatPromptPackage(basePackage));
+
+  const included: string[] = [];
+  let historyTokens = 0;
+  // Od najnowszej wstecz; zatrzymujemy się na pierwszej, która się nie mieści —
+  // dziura w środku rozmowy myli model bardziej niż krótsze okno.
+  for (let index = input.messages.length - 1; index >= 0; index -= 1) {
+    const message = input.messages[index];
+    const entry = formatConversationEntry(message.role, capMessageContent(message.content));
+    const entryTokens = estimateTokens(`${entry}\n\n`);
+    if (baseTokens + historyTokens + entryTokens > budget.budgetTokens) {
+      break;
+    }
+    historyTokens += entryTokens;
+    included.push(message.id);
+  }
+  included.reverse();
+
+  const includedSet = new Set(included);
+  return {
+    includedMessageIds: included,
+    excludedMessageIds: input.messages
+      .filter((message) => !includedSet.has(message.id))
+      .map((message) => message.id),
+    baseTokens,
+    historyTokens,
+    usedTokens: baseTokens + historyTokens,
+    budgetTokens: budget.budgetTokens,
+    windowTokens: budget.windowTokens,
+    source: budget.source
+  };
 }
 
 export function parseBrainstormChatResult(rawOutput: string): NormalizedBrainstormChat {
@@ -297,7 +481,7 @@ export function parseBrainstormChatResult(rawOutput: string): NormalizedBrainsto
   const rawSuggestions = Array.isArray(record.suggestions) ? record.suggestions : [];
   const suggestions = rawSuggestions
     .map(normalizeSuggestion)
-    .filter((suggestion): suggestion is BrainstormSuggestion => Boolean(suggestion));
+    .filter((suggestion): suggestion is ParsedBrainstormSuggestion => Boolean(suggestion));
 
   return {
     kind: "brainstorm_chat",
@@ -317,42 +501,251 @@ export function parseBrainstormSuggestions(
 ): BrainstormSuggestion[] {
   try {
     const parsed = JSON.parse(message.suggestionsJson);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed
+          .map(normalizePersistedSuggestion)
+          .filter((suggestion): suggestion is BrainstormSuggestion => Boolean(suggestion))
+      : [];
   } catch {
     return [];
   }
 }
 
 /**
- * Odrzuca sugestie, których tytuł pokrywa się z istniejącą encją lub
- * wcześniejszą sugestią sesji — pas bezpieczeństwa obok reguły w prompcie.
+ * Sugestia z bazy uzupełniona o pola dodane później (klucz, rewizja, tryb).
+ * Wpisy sprzed tej zmiany nie mają ich w JSON-ie — uzupełniamy przy KAŻDYM
+ * odczycie i nie zapisujemy wstecz, więc stare sesje migrują się leniwie,
+ * dopiero gdy autor albo AI faktycznie dotknie sugestii.
  */
-export function dedupeBrainstormSuggestions(
-  suggestions: BrainstormSuggestion[],
-  existingTitles: Iterable<string>
-): BrainstormSuggestion[] {
-  const seen = new Set<string>();
-  for (const title of existingTitles) {
-    seen.add(title.trim().toLowerCase());
+function normalizePersistedSuggestion(value: unknown): BrainstormSuggestion | null {
+  const record =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const id = stringValue(record.id);
+  const kind = normalizeKind(record.kind);
+  const title = stringValue(record.title);
+  const suggestionValue = stringValue(record.value);
+  if (!id || !kind || !title || !suggestionValue) {
+    return null;
   }
-  const result: BrainstormSuggestion[] = [];
-  for (const suggestion of suggestions) {
-    // Pola koncepcji dedupikujemy po polu, nie po tytule — dwie propozycje
-    // na to samo pole w jednej turze i tak są redundantne.
-    const key =
-      suggestion.kind === "conceptField"
-        ? `conceptField:${suggestion.conceptField}`
-        : suggestion.title.trim().toLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(suggestion);
-  }
-  return result;
+
+  const conceptField = stringValue(record.conceptField);
+  const revision = Number(record.revision);
+  const mode: BrainstormSuggestionMode = record.mode === "update" ? "update" : "create";
+  const updateMode = record.updateMode === "append" ? "append" : undefined;
+  const targetEntityId = mode === "update" ? stringValue(record.targetEntityId) : "";
+  const targetField = mode === "update" ? stringValue(record.targetField) : "";
+
+  return {
+    id,
+    key:
+      stringValue(record.key) ||
+      suggestionKey(kind, conceptField, title, {
+        entityId: targetEntityId,
+        field: targetField
+      }),
+    revision: Number.isFinite(revision) && revision > 0 ? Math.floor(revision) : 1,
+    updatedByAiAt: stringValue(record.updatedByAiAt) || undefined,
+    mode,
+    kind,
+    conceptField: kind === "conceptField" ? conceptField : undefined,
+    targetEntityId: mode === "update" ? stringValue(record.targetEntityId) || undefined : undefined,
+    targetField: mode === "update" ? stringValue(record.targetField) || undefined : undefined,
+    updateMode: mode === "update" ? (updateMode ?? "replace") : undefined,
+    title,
+    value: suggestionValue,
+    reason: stringValue(record.reason, "Wynika z rozmowy."),
+    status: normalizeStatus(record.status)
+  };
 }
 
-function normalizeSuggestion(value: unknown): BrainstormSuggestion | null {
+export type SessionSuggestion = BrainstormSuggestion & {
+  messageId: string;
+  messageCreatedAt: string;
+};
+
+/**
+ * Sugestie całej sesji z adresem wiadomości, w której są zapisane. Jedno
+ * źródło prawdy dla panelu propozycji, widoku brainstormu i budowy promptu.
+ */
+export function collectSessionSuggestions(
+  messages: BrainstormMessage[]
+): SessionSuggestion[] {
+  return messages.flatMap((message) =>
+    parseBrainstormSuggestions(message).map((suggestion) => ({
+      ...suggestion,
+      messageId: message.id,
+      messageCreatedAt: message.createdAt
+    }))
+  );
+}
+
+/** Ile razy AI może wzbogacić jedną sugestię, zanim uznamy to za pętlę. */
+const MAX_SUGGESTION_REVISION = 10;
+
+export type BrainstormSuggestionMerge = {
+  /** Nowe sugestie — zapisywane przy świeżej wiadomości asystenta. */
+  created: BrainstormSuggestion[];
+  /** Wzbogacone sugestie — nadpisywane w wiadomościach, w których już żyją. */
+  revisions: Array<{ messageId: string; suggestion: BrainstormSuggestion }>;
+  skipped: Array<{ title: string; reason: "blocked" | "revisionCap" }>;
+};
+
+/**
+ * Scala sugestie z nowej tury ze stanem sesji. Zastępuje dawny dedup, który
+ * powtórzony tytuł po prostu wyrzucał — przez co doprecyzowanie ustalone kilka
+ * tur później przepadało zamiast trafić do istniejącej sugestii.
+ */
+export function mergeBrainstormSuggestions(
+  incoming: ParsedBrainstormSuggestion[],
+  context: {
+    /** Sugestie o statusie "pending" — tylko one nadają się do wzbogacenia. */
+    active: SessionSuggestion[];
+    /** Nazwy encji oraz tytuły sugestii już zastosowanych lub odrzuconych. */
+    blockedTitles: Iterable<string>;
+  }
+): BrainstormSuggestionMerge {
+  const activeByKey = new Map(context.active.map((suggestion) => [suggestion.key, suggestion]));
+  const blocked = new Set<string>();
+  for (const title of context.blockedTitles) {
+    blocked.add(title.trim().toLowerCase());
+  }
+
+  const created: BrainstormSuggestion[] = [];
+  const revisions = new Map<string, { messageId: string; suggestion: BrainstormSuggestion }>();
+  const skipped: BrainstormSuggestionMerge["skipped"] = [];
+  const now = new Date().toISOString();
+  // Klucze zużyte w tej turze — druga sugestia o tym samym kluczu nadpisuje
+  // pierwszą, zamiast tworzyć bliźniaczy wpis.
+  const usedKeys = new Set<string>();
+
+  for (const suggestion of incoming) {
+    const derivedKey = suggestionKey(
+      suggestion.kind,
+      suggestion.conceptField,
+      suggestion.title,
+      { entityId: suggestion.targetEntityId, field: suggestion.targetField }
+    );
+    // Halucynowany klucz nie może kosztować treści: nieznany klucz degradujemy
+    // do zwykłego tworzenia, a nie odrzucamy.
+    const target =
+      (suggestion.op === "revise" && suggestion.suggestionKey
+        ? activeByKey.get(suggestion.suggestionKey)
+        : undefined) ?? activeByKey.get(derivedKey);
+
+    if (target) {
+      if (target.revision >= MAX_SUGGESTION_REVISION) {
+        skipped.push({ title: suggestion.title, reason: "revisionCap" });
+        continue;
+      }
+      // Rozpakowujemy jawnie: `messageId`/`messageCreatedAt` to adres wiadomości,
+      // a nie część sugestii — nie mogą trafić do zapisywanego JSON-a.
+      const { messageId, messageCreatedAt: _createdAt, ...stored } = target;
+      revisions.set(target.key, {
+        messageId,
+        suggestion: {
+          ...stored,
+          // id, key i status zostają — panel i log AI adresują sugestię po id.
+          mode: suggestion.mode,
+          kind: suggestion.kind,
+          conceptField: suggestion.conceptField,
+          targetEntityId: suggestion.targetEntityId,
+          targetField: suggestion.targetField,
+          updateMode: suggestion.updateMode,
+          title: suggestion.title,
+          value: suggestion.value,
+          reason: suggestion.reason,
+          revision: target.revision + 1,
+          updatedByAiAt: now
+        }
+      });
+      continue;
+    }
+
+    // Blokada dotyczy wyłącznie TWORZENIA. Sugestia aktualizująca nosi zwykle
+    // nazwę encji, której dotyczy ("Marta" → pole secret), więc lista
+    // "nie duplikuj" odrzucałaby dokładnie te sugestie, o które chodzi.
+    if (
+      suggestion.mode === "create" &&
+      (blocked.has(suggestion.title.trim().toLowerCase()) || blocked.has(derivedKey))
+    ) {
+      skipped.push({ title: suggestion.title, reason: "blocked" });
+      continue;
+    }
+
+    const fresh: BrainstormSuggestion = {
+      id: createSuggestionId(),
+      key: derivedKey,
+      revision: 1,
+      mode: suggestion.mode,
+      kind: suggestion.kind,
+      conceptField: suggestion.conceptField,
+      targetEntityId: suggestion.targetEntityId,
+      targetField: suggestion.targetField,
+      updateMode: suggestion.updateMode,
+      title: suggestion.title,
+      value: suggestion.value,
+      reason: suggestion.reason,
+      status: "pending"
+    };
+    if (usedKeys.has(derivedKey)) {
+      const index = created.findIndex((item) => item.key === derivedKey);
+      created[index] = { ...fresh, id: created[index].id };
+      continue;
+    }
+    usedKeys.add(derivedKey);
+    created.push(fresh);
+  }
+
+  return { created, revisions: [...revisions.values()], skipped };
+}
+
+/**
+ * Stabilny adres sugestii w sesji. `id` jest losowe i powstaje na nowo przy
+ * każdej turze, więc AI nie mogłoby się nim posłużyć; klucz derywujemy z
+ * rodzaju i tytułu, dzięki czemu działa też dla wpisów sprzed tej zmiany.
+ */
+export function suggestionKey(
+  kind: BrainstormSuggestionKind,
+  conceptField: string | undefined,
+  title: string,
+  target?: { entityId?: string; field?: string }
+): string {
+  // Pola koncepcji adresujemy po polu: dwie propozycje na to samo pole i tak
+  // są redundantne (zachowana semantyka dawnego dedupu).
+  if (kind === "conceptField") {
+    return `cf:${conceptField ?? ""}`;
+  }
+  // Aktualizacje adresujemy przez encję i pole — inaczej propozycja sekretu i
+  // propozycja wyglądu tej samej postaci miałyby wspólny klucz i druga
+  // nadpisywałaby pierwszą jako "rewizja".
+  if (target?.entityId && target.field) {
+    return `${kind}:${target.entityId}:${target.field}`;
+  }
+  return `${kind}:${slugifyTitle(title)}`;
+}
+
+function slugifyTitle(title: string): string {
+  return (
+    title
+      .trim()
+      .toLowerCase()
+      // „ł" nie ma formy rozkładalnej w NFKD — bez tej podmiany polskie tytuły
+      // gubiłyby litery i dawały klucze typu "atarnik".
+      .replace(/ł/g, "l")
+      .normalize("NFKD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "bez-nazwy"
+  );
+}
+
+function normalizeStatus(value: unknown): BrainstormSuggestionStatus {
+  return value === "applied" || value === "dismissed" ? value : "pending";
+}
+
+function normalizeSuggestion(value: unknown): ParsedBrainstormSuggestion | null {
   const record =
     value && typeof value === "object" && !Array.isArray(value)
       ? (value as Record<string, unknown>)
@@ -369,14 +762,52 @@ function normalizeSuggestion(value: unknown): BrainstormSuggestion | null {
     return null;
   }
 
+  const target = normalizeSuggestionTarget(kind, record.target);
+
   return {
-    id: createSuggestionId(),
+    op: record.op === "revise" ? "revise" : "create",
+    suggestionKey: stringValue(record.suggestionKey),
     kind,
     conceptField: kind === "conceptField" ? conceptField : undefined,
+    mode: target ? "update" : "create",
+    targetEntityId: target?.entityId,
+    targetField: target?.field,
+    updateMode: target?.mode,
     title,
     value: suggestionValue,
-    reason: stringValue(record.reason, "Wynika z rozmowy."),
-    status: "pending"
+    reason: stringValue(record.reason, "Wynika z rozmowy.")
+  };
+}
+
+/**
+ * Cel aktualizacji encji. Niekompletny lub spoza whitelisty → null, czyli
+ * degradacja do zwykłej sugestii tworzącej: treść zostaje, tylko trafi do
+ * nowego wpisu zamiast do istniejącego. Pola koncepcji mają własną ścieżkę
+ * (zastąp/dopisz na poziomie pola książki) i celu nigdy nie używają.
+ */
+function normalizeSuggestionTarget(
+  kind: BrainstormSuggestionKind,
+  value: unknown
+): { entityId: string; field: string; mode: "append" | "replace" } | null {
+  if (kind === "conceptField" || !isBrainstormEntityKind(kind)) {
+    return null;
+  }
+  const record =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  if (!record) {
+    return null;
+  }
+  const entityId = stringValue(record.entityId);
+  const field = stringValue(record.field);
+  if (!entityId || !isBrainstormEntityField(kind as BrainstormEntityKind, field)) {
+    return null;
+  }
+  return {
+    entityId,
+    field,
+    mode: record.mode === "append" ? "append" : "replace"
   };
 }
 
