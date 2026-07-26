@@ -44,6 +44,11 @@ import type {
   VisualAsset
 } from "../../shared/api/types";
 import {
+  CHARACTER_TYPES,
+  isCharacterType,
+  normalizeCharacterType
+} from "../../shared/api/characterTypes";
+import {
   buildCharacterPromptPackage,
   characterEntityId,
   CharacterFieldKey,
@@ -86,8 +91,6 @@ type MemoryLinkModalState =
   | { mode: "edit"; linkId: string };
 
 const newCharacterDraftId = "new-character";
-
-const characterTypeValues = ["person", "animal", "creature", "object", "spirit", "other"] as const;
 
 const relationTypeOptions = [
   "rodzina",
@@ -523,7 +526,7 @@ export function CharactersPage({ projectId }: CharactersPageProps) {
                 aria-label={t("characters.list.filterAriaLabel")}
               >
                 <option value="all">{t("characters.list.allTypes")}</option>
-                {characterTypeValues.map((value) => (
+                {CHARACTER_TYPES.map((value) => (
                   <option value={value} key={value}>{t(`characters.type.${value}`)}</option>
                 ))}
               </select>
@@ -829,7 +832,7 @@ function CharacterField({
           onFocus={activate}
           aria-label={fieldLabel}
         >
-          {characterTypeValues.map((option) => (
+          {CHARACTER_TYPES.map((option) => (
             <option value={option} key={option}>{t(`characters.type.${option}`)}</option>
           ))}
         </select>
@@ -1447,6 +1450,10 @@ function applyCharacterValue(input: UpsertCharacterInput, field: CharacterFieldK
     return applyCharacterProfileValue(input, value);
   }
 
+  if (field === "characterType") {
+    return { ...input, characterType: normalizeCharacterType(value) };
+  }
+
   const keyMap: Partial<Record<CharacterFieldKey, keyof UpsertCharacterInput>> = Object.fromEntries(
     characterFields.map((fieldItem) => [fieldItem.field, fieldItem.key])
   ) as Partial<Record<CharacterFieldKey, keyof UpsertCharacterInput>>;
@@ -1462,7 +1469,7 @@ function applyCharacterProfileValue(input: UpsertCharacterInput, value: string):
     const character = parsed.character ?? {};
     return {
       ...input,
-      characterType: stringValue(character.characterType, input.characterType),
+      characterType: normalizeCharacterType(stringValue(character.characterType, input.characterType)),
       name: stringValue(character.name, input.name),
       aliasesJson: arrayJsonValue(character.aliases, input.aliasesJson),
       role: stringValue(character.role, input.role),
@@ -1700,9 +1707,7 @@ function typeLabel(
   t: (key: string, options?: Record<string, unknown>) => string,
   value: string
 ): string {
-  return (characterTypeValues as readonly string[]).includes(value)
-    ? t(`characters.type.${value}`)
-    : value;
+  return isCharacterType(value) ? t(`characters.type.${value}`) : value;
 }
 
 // Stored value bywa albo stabilnym id (legacy: polskie słowo = klucz), albo już

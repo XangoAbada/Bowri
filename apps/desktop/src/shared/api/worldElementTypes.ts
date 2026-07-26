@@ -1,5 +1,6 @@
 import enWorld from "../i18n/locales/en/world.json";
 import plWorld from "../i18n/locales/pl/world.json";
+import { buildTypeLookup, canonicalTypeKey } from "./typeNormalization";
 
 /**
  * Dozwolone typy elementu świata. Kolejność steruje listą w selektorze typu
@@ -25,38 +26,10 @@ export const WORLD_ELEMENT_TYPE_ENUM = WORLD_ELEMENT_TYPES.join(" | ");
 
 const FALLBACK_TYPE: WorldElementType = "other";
 
-/**
- * Klucz porównania odporny na warianty zapisu modelu: wielkość liter,
- * diakrytyki, spacje i myślniki zamiast podkreśleń.
- */
-function canonicalKey(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-// Slug + etykieta PL i EN wskazują na ten sam typ — model bywa proszony o typ
-// po polsku i zwraca "Wydarzenie historyczne" zamiast "historical_event".
-const lookup = new Map<string, WorldElementType>();
-for (const type of WORLD_ELEMENT_TYPES) {
-  const labels = [
-    type,
-    (plWorld.world.elementType as Record<string, string>)[type],
-    (enWorld.world.elementType as Record<string, string>)[type]
-  ];
-  for (const label of labels) {
-    if (!label) {
-      continue;
-    }
-    const key = canonicalKey(label);
-    if (key && !lookup.has(key)) {
-      lookup.set(key, type);
-    }
-  }
-}
+const lookup = buildTypeLookup(WORLD_ELEMENT_TYPES, [
+  plWorld.world.elementType as Record<string, string>,
+  enWorld.world.elementType as Record<string, string>
+]);
 
 export function isWorldElementType(value: unknown): value is WorldElementType {
   return typeof value === "string" && (WORLD_ELEMENT_TYPES as readonly string[]).includes(value);
@@ -71,5 +44,5 @@ export function normalizeWorldElementType(value: unknown): WorldElementType {
   if (typeof value !== "string") {
     return FALLBACK_TYPE;
   }
-  return lookup.get(canonicalKey(value)) ?? FALLBACK_TYPE;
+  return lookup.get(canonicalTypeKey(value)) ?? FALLBACK_TYPE;
 }

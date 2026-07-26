@@ -1,4 +1,5 @@
 import type { Character, PlotThread, WorldElement, WorldRule } from "../../shared/api/types";
+import { normalizeCharacterType } from "../../shared/api/characterTypes";
 import { normalizeWorldElementType } from "../../shared/api/worldElementTypes";
 import type { SceneDiscovery } from "./sceneDiscoveryStore";
 
@@ -12,7 +13,10 @@ export function characterDraftFromDiscovery(discovery: SceneDiscovery): Characte
   return {
     id: `audit-character:${discovery.id}`,
     projectId: discovery.projectId,
-    characterType: discovery.suggestedType || "person",
+    // Pusty rodzaj, gdy odkrycie go nie niesie (tak jest zawsze w burzy mózgów)
+    // — "person" trafiało do migawki w prompcie i AI kopiowało je jako gotową
+    // odpowiedź, przez co każda postać wychodziła jako człowiek.
+    characterType: discovery.suggestedType ? normalizeCharacterType(discovery.suggestedType) : "",
     name: discovery.title,
     aliasesJson: "[]",
     role: "",

@@ -67,6 +67,7 @@ import type {
   UpsertWorldRuleInput,
   WorldWorkspace
 } from "../../shared/api/types";
+import { normalizeCharacterType } from "../../shared/api/characterTypes";
 import { normalizeWorldElementType } from "../../shared/api/worldElementTypes";
 import { parseConceptFieldSuggestion } from "./conceptFieldSuggestion";
 import { useCodexSettingsStore } from "./codexSettingsStore";
@@ -2903,7 +2904,9 @@ export function characterProfileInputFromProposal(
   return {
     id: optionalStringRecordValue(snapshot.id, "new-character"),
     projectId,
-    characterType: stringRecordValue(character.characterType, stringRecordValue(snapshot.characterType, "person")),
+    characterType: normalizeCharacterType(
+      stringRecordValue(character.characterType, stringRecordValue(snapshot.characterType))
+    ),
     name: stringRecordValue(character.name, stringRecordValue(snapshot.name, "Nowa postać")),
     aliasesJson: arrayJsonRecordValue(character.aliases, stringRecordValue(snapshot.aliasesJson, "[]")),
     role: stringRecordValue(character.role, stringRecordValue(snapshot.role)),
@@ -2972,7 +2975,7 @@ async function characterFieldInputFromProposal(
 
   switch (field) {
     case "characterType":
-      input.characterType = value;
+      input.characterType = normalizeCharacterType(value);
       break;
     case "name":
       input.name = value;

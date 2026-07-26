@@ -9,6 +9,7 @@ import type {
   Project,
   VisualAsset
 } from "../../shared/api/types";
+import { CHARACTER_TYPES, CHARACTER_TYPE_ENUM } from "../../shared/api/characterTypes";
 import { compactCharacter, compactMemory, compactRelation } from "./promptContextLimits";
 import type { PromptContextControl, PromptContextSource } from "./promptPackage";
 
@@ -133,7 +134,7 @@ export const characterFieldConfigs: Record<CharacterFieldKey, CharacterFieldConf
   characterProfile: field("characterProfile", "Pełny profil postaci", "generate_character_field", "character", "Wygeneruj kompletny opisowy profil jednej nowej postaci do powieści: sedno, wygląd, temperament, upodobania, wewnętrzny świat (pragnienia i lęki), światopogląd, sekret, mowę, manieryzmy, pochodzenie, rodzinę, przeszłość i wiedzę. Opisuj osobę — nie narzucaj z góry celów fabularnych ani łuku przemiany; niech wynikają z tego, kim postać jest. Uwzględnij rodzaj postaci: człowiek, zwierzę, ożywiony przedmiot, istota albo inny byt pasujący do książki. Nie generuj obrazu ani ścieżki obrazu."),
   characterRelation: field("characterRelation", "Pełna relacja", "generate_character_relation_field", "relation", "Wygeneruj kompletny szkic relacji między wskazanymi postaciami: typ, opis, historię, konflikt, opinię, zaufanie, sekret i zmianę w czasie. Nie twórz nowych postaci."),
   characterMemory: field("characterMemory", "Pełne wspomnienie", "generate_character_memory_field", "memory", "Wygeneruj kompletne wspomnienie dla wskazanej postaci: tytuł, opis, szczegóły, typ, temat, emocję i ważność. Nie twórz obrazu ani nowych postaci."),
-  characterType: field("characterType", "Rodzaj postaci", "generate_character_field", "character", "Wygeneruj tylko rodzaj postaci: człowiek, zwierzę, istota, ożywiony przedmiot albo inny precyzyjny typ."),
+  characterType: field("characterType", "Rodzaj postaci", "generate_character_field", "character", `Wygeneruj tylko rodzaj postaci — dokładnie jeden z identyfikatorów: ${CHARACTER_TYPE_ENUM}.`),
   name: field("name", "Imię / nazwa", "generate_character_field", "character", "Wygeneruj tylko imię lub nazwę postaci."),
   aliasesJson: field("aliasesJson", "Aliasy", "generate_character_field", "character", "Wygeneruj tylko listę aliasów postaci jako JSON array stringów."),
   role: field("role", "Rola fabularna", "generate_character_field", "character", "Wygeneruj tylko rolę fabularną postaci."),
@@ -295,6 +296,15 @@ Return only compact JSON after generation:
       : promptPackage.context.targetField === "characterMemory"
         ? "- Wygeneruj komplet pól tekstowych jednego wspomnienia. Nie twórz ani nie zapisuj postaci."
       : `- Wygeneruj tylko docelowe pole "${config.label}".`;
+
+  // Bez tej reguły model przepisuje rodzaj z migawki (nowa postać startuje jako
+  // "person") i każda wygenerowana postać lądowała jako człowiek.
+  const characterTypeRule =
+    promptPackage.context.targetField === "characterProfile" ||
+    promptPackage.context.targetField === "characterType"
+      ? `\n- Rodzaj postaci musi być dokładnie jedną z wartości: ${CHARACTER_TYPE_ENUM}. To identyfikatory, nie polskie etykiety.\n- Dobierz rodzaj pasujący do opisu postaci. Nie kopiuj rodzaju ze schematu ani z migawki docelowego elementu — są tam tylko wartości przykładowe lub domyślne.`
+      : "";
+
   return `# Role
 Jesteś asystentem pisarskim pracującym wewnątrz Bowri.
 
@@ -305,7 +315,7 @@ ${promptPackage.userInstruction}
 - Pisz po polsku, chyba że projekt ma inny język.
 - Dla locale "pl" używaj poprawnych polskich znaków.
 - Nie zapisuj danych. Zwróć tylko propozycję jako JSON.
-${scopeRule}
+${scopeRule}${characterTypeRule}
 - Nie aktualizuj innych pól, postaci, relacji, wspomnień ani obrazów.
 - Odpowiedz wyłącznie poprawnym JSON bez trailing commas.
 
@@ -602,7 +612,7 @@ function characterSuggestionSchema(fieldKey: CharacterFieldKey): unknown {
       kind: "character_profile",
       summary: "string",
       character: {
-        characterType: "person | animal | creature | object | spirit | other",
+        characterType: CHARACTER_TYPE_ENUM,
         name: "string",
         aliases: ["string"],
         role: "string",
@@ -658,6 +668,18 @@ function characterSuggestionSchema(fieldKey: CharacterFieldKey): unknown {
         emotion: "string",
         importance: 0
       },
+      warnings: ["string"]
+    };
+  }
+
+  if (fieldKey === "characterType") {
+    return {
+      version: 1,
+      kind: "character_field_suggestion",
+      field: fieldKey,
+      summary: "string",
+      value: CHARACTER_TYPE_ENUM,
+      allowedValues: [...CHARACTER_TYPES],
       warnings: ["string"]
     };
   }
