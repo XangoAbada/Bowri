@@ -1,4 +1,5 @@
 import type { Character, PlotThread, WorldElement, WorldRule } from "../../shared/api/types";
+import { normalizeWorldElementType } from "../../shared/api/worldElementTypes";
 import type { SceneDiscovery } from "./sceneDiscoveryStore";
 
 // Buduje szkic encji z odkrycia (analiza sceny lub burza mózgów) — wypełnia
@@ -42,7 +43,10 @@ export function worldElementDraftFromDiscovery(discovery: SceneDiscovery): World
   return {
     id: `audit-world-element:${discovery.id}`,
     projectId: discovery.projectId,
-    elementType: discovery.suggestedType || "location",
+    // Pusty typ, gdy odkrycie go nie niesie (tak jest zawsze w burzy mózgów) —
+    // wpisanie tu "location" trafiało do migawki w prompcie i AI kopiowało je
+    // jako gotową odpowiedź, przez co każdy element wychodził jako lokacja.
+    elementType: discovery.suggestedType ? normalizeWorldElementType(discovery.suggestedType) : "",
     name: discovery.title,
     summary: discovery.reason,
     details: discovery.evidence,

@@ -39,6 +39,11 @@ import type {
   WorldWorkspace
 } from "../../shared/api/types";
 import {
+  isWorldElementType,
+  normalizeWorldElementType,
+  WORLD_ELEMENT_TYPES
+} from "../../shared/api/worldElementTypes";
+import {
   buildWorldPromptPackage,
   renderWorldPromptPackage,
   worldEntityId,
@@ -91,20 +96,6 @@ type RelationPickerState =
 
 const newWorldElementDraftId = "new-world-element";
 const newWorldRuleDraftId = "new-world-rule";
-
-const worldElementTypeValues = [
-  "location",
-  "faction",
-  "object",
-  "culture",
-  "technology",
-  "magic",
-  "creature",
-  "historical_event",
-  "institution",
-  "custom",
-  "other"
-];
 
 const elementTabs: Array<{ key: WorldTab; icon: typeof Globe2 }> = [
   { key: "profile", icon: Globe2 },
@@ -624,7 +615,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   aria-label={t("world.list.filterAriaLabel")}
                 >
                   <option value="all">{t("world.list.allTypes")}</option>
-                  {worldElementTypeValues.map((value) => (
+                  {WORLD_ELEMENT_TYPES.map((value) => (
                     <option value={value} key={value}>{typeLabel(t, value)}</option>
                   ))}
                 </select>
@@ -711,7 +702,7 @@ export function WorldPage({ projectId }: WorldPageProps) {
                   onChange={(event) => setElementDraft({ ...elementDraft, elementType: event.target.value })}
                   onFocus={() => activateWorldPromptContext("elementType", elementDraftPreview(elementDraft))}
                 >
-                  {worldElementTypeValues.map((value) => (
+                  {WORLD_ELEMENT_TYPES.map((value) => (
                     <option key={value} value={value}>{typeLabel(t, value)}</option>
                   ))}
                 </select>
@@ -1111,7 +1102,7 @@ function applyWorldElementValue(input: UpsertWorldElementInput, field: WorldFiel
       const parsed = JSON.parse(value) as Record<string, unknown>;
       return {
         ...input,
-        elementType: stringValue(parsed.type, input.elementType),
+        elementType: normalizeWorldElementType(stringValue(parsed.type, input.elementType)),
         name: stringValue(parsed.name, input.name),
         summary: stringValue(parsed.summary, input.summary),
         details: stringValue(parsed.details, input.details),
@@ -1124,8 +1115,11 @@ function applyWorldElementValue(input: UpsertWorldElementInput, field: WorldFiel
     }
   }
 
+  if (field === "elementType") {
+    return { ...input, elementType: normalizeWorldElementType(value) };
+  }
+
   const map: Partial<Record<WorldFieldKey, keyof UpsertWorldElementInput>> = {
-    elementType: "elementType",
     elementName: "name",
     elementSummary: "summary",
     elementDetails: "details",
@@ -1317,7 +1311,7 @@ function chapterLabel(t: TFunction, plan: BookPlan, chapterId: string): string {
 }
 
 function typeLabel(t: TFunction, value: string): string {
-  return worldElementTypeValues.includes(value) ? t(`world.elementType.${value}`) : value;
+  return isWorldElementType(value) ? t(`world.elementType.${value}`) : value;
 }
 
 function sceneLabel(t: TFunction, plan: BookPlan, sceneId: string): string {

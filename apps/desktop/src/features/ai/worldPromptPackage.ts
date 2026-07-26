@@ -8,6 +8,7 @@ import type {
   WorldRule,
   WorldWorkspace
 } from "../../shared/api/types";
+import { WORLD_ELEMENT_TYPES, WORLD_ELEMENT_TYPE_ENUM } from "../../shared/api/worldElementTypes";
 import { optionalLine } from "./promptContextLimits";
 import type { PromptContextControl, PromptContextSource } from "./promptPackage";
 
@@ -98,7 +99,7 @@ export const worldFieldConfigs: Record<WorldFieldKey, WorldFieldConfig> = {
   worldElement: field("worldElement", "Pełny element świata", "generate_world_element_field", "element", "Wygeneruj kompletny element świata do Story Bible: typ, nazwę, opis, szczegóły, znaczenie fabularne, ograniczenia i prompt wizualny."),
   worldRule: field("worldRule", "Pełna reguła świata", "generate_world_rule_field", "rule", "Wygeneruj kompletną regułę świata: nazwę, opis, zakres, koszt, ograniczenie, wyjątki, konsekwencje naruszenia i przykłady scen."),
   worldRuleAnalysis: field("worldRuleAnalysis", "Analiza reguły", "generate_world_rule_analysis", "analysis", "Przeanalizuj regułę świata pod kątem konsekwencji, sprzeczności, okazji fabularnych i pytań do autora. Nie zmieniaj kanonu."),
-  elementType: field("elementType", "Typ elementu", "generate_world_element_field", "element", "Wygeneruj tylko typ elementu świata."),
+  elementType: field("elementType", "Typ elementu", "generate_world_element_field", "element", `Wygeneruj tylko typ elementu świata — dokładnie jedną z wartości: ${WORLD_ELEMENT_TYPE_ENUM}.`),
   elementName: field("elementName", "Nazwa", "generate_world_element_field", "element", "Wygeneruj tylko nazwę elementu świata."),
   elementSummary: field("elementSummary", "Krótki opis", "generate_world_element_field", "element", "Wygeneruj tylko krótki opis elementu świata."),
   elementDetails: field("elementDetails", "Szczegóły", "generate_world_element_field", "element", "Wygeneruj tylko szczegóły elementu świata przydatne podczas pisania scen."),
@@ -189,6 +190,14 @@ export function renderWorldPromptPackage(promptPackage: WorldPromptPackage): str
           ? "- Przeanalizuj wskazaną regułę. Nie zapisuj i nie zmieniaj kanonu."
           : `- Wygeneruj tylko docelowe pole "${config.label}".`;
 
+  // Bez tej reguły model kopiuje typ ze schematu albo z migawki i każdy
+  // wygenerowany element lądował jako "location".
+  const elementTypeRule =
+    promptPackage.context.targetField === "worldElement" ||
+    promptPackage.context.targetField === "elementType"
+      ? `\n- Typ elementu musi być dokładnie jedną z wartości: ${WORLD_ELEMENT_TYPE_ENUM}.\n- Dobierz typ pasujący do treści elementu. Nie kopiuj typu ze schematu ani z migawki docelowego elementu — są tam tylko wartości przykładowe lub domyślne.`
+      : "";
+
   return `# Role
 Jestes asystentem pisarskim pracujacym wewnatrz Bowri.
 
@@ -199,7 +208,7 @@ ${promptPackage.userInstruction}
 - Pisz po polsku, chyba że projekt ma inny język.
 - Dla locale "pl" używaj poprawnych polskich znaków.
 - Nie zapisuj danych. Zwroc tylko propozycje jako JSON.
-${scopeRule}
+${scopeRule}${elementTypeRule}
 - Nie aktualizuj innych pól, elementów, reguł, postaci, wątków ani rozdziałów.
 - Odpowiedz wylacznie poprawnym JSON bez trailing commas.
 
@@ -410,7 +419,7 @@ function worldSuggestionSchema(fieldKey: WorldFieldKey): unknown {
     return {
       version: 1,
       kind: "world_element",
-      type: "location",
+      type: WORLD_ELEMENT_TYPE_ENUM,
       name: "string",
       summary: "string",
       details: "string",
@@ -446,6 +455,18 @@ function worldSuggestionSchema(fieldKey: WorldFieldKey): unknown {
       possibleContradictions: ["string"],
       storyOpportunities: ["string"],
       questionsForAuthor: ["string"],
+      warnings: ["string"]
+    };
+  }
+
+  if (fieldKey === "elementType") {
+    return {
+      version: 1,
+      kind: "world_field_suggestion",
+      field: fieldKey,
+      summary: "string",
+      value: WORLD_ELEMENT_TYPE_ENUM,
+      allowedValues: [...WORLD_ELEMENT_TYPES],
       warnings: ["string"]
     };
   }

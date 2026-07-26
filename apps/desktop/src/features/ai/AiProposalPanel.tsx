@@ -67,6 +67,7 @@ import type {
   UpsertWorldRuleInput,
   WorldWorkspace
 } from "../../shared/api/types";
+import { normalizeWorldElementType } from "../../shared/api/worldElementTypes";
 import { parseConceptFieldSuggestion } from "./conceptFieldSuggestion";
 import { useCodexSettingsStore } from "./codexSettingsStore";
 import { parsePremiseDevelopment } from "./premiseDevelopment";
@@ -3227,7 +3228,9 @@ function worldElementInputFromProposal(
   return {
     id: optionalStringRecordValue(snapshot.id, "new-world-element"),
     projectId,
-    elementType: stringRecordValue(parsed.type, stringRecordValue(snapshot.elementType, "location")),
+    elementType: normalizeWorldElementType(
+      stringRecordValue(parsed.type, stringRecordValue(snapshot.elementType))
+    ),
     name: stringRecordValue(parsed.name, stringRecordValue(snapshot.name, "Nowy element świata")),
     summary: stringRecordValue(parsed.summary, stringRecordValue(snapshot.summary)),
     details: stringRecordValue(parsed.details, stringRecordValue(snapshot.details)),
