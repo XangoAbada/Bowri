@@ -25,6 +25,12 @@ use ai_settings::{get_ai_settings, load_ai_settings, save_ai_settings, AiSetting
 pub(crate) const PROVIDER_ID: &str = "codex-cli-bridge";
 const COVER_GENERATION_EVENT: &str = "cover-generation-progress";
 const MIN_COVER_TIMEOUT_SECONDS: u64 = 600;
+/// Domyślny limit generacji tekstowej, gdy front nie przyśle własnego.
+const DEFAULT_TEXT_TIMEOUT_SECONDS: u64 = 180;
+/// Analiza spójności dostaje całe dossier (dziesiątki tysięcy tokenów) w każdym
+/// z sześciu przebiegów. Model klasy Opus z wysokim reasoningiem nie mieści się
+/// w globalnym limicie „Codeksa”, więc ta ścieżka ma własną podłogę.
+const MIN_CONSISTENCY_AUDIT_TIMEOUT_SECONDS: u64 = 1800;
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 
 #[derive(Clone)]
@@ -65,9 +71,11 @@ pub enum AppError {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Process(String),
-    #[error("Codex CLI przekroczył limit czasu po {0} sekundach")]
+    // Bez nazwy providera: te warianty są wspólne dla CLI (Codex, Claude) i HTTP
+    // (OpenAI, Anthropic). Nazwę dokleja wywołujący, który zna aktywne ustawienia.
+    #[error("Generowanie przekroczyło limit czasu po {0} sekundach")]
     Timeout(u64),
-    #[error("Generowanie Codex CLI zostało przerwane")]
+    #[error("Generowanie zostało przerwane")]
     Cancelled,
 }
 
@@ -1003,6 +1011,37 @@ pub struct SaveSceneCritiqueInput {
     pub summary: String,
     pub findings_json: String,
     pub source_hash: String,
+}
+
+// Audyt spójności całego projektu. Inaczej niż krytyka sceny nie ma naturalnego
+// klucza biznesowego (nie „jeden raport na scenę"), więc upsert idzie po id —
+// front tworzy id przy starcie audytu i przepisuje wiersz po każdym przebiegu.
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsistencyAuditRecord {
+    pub id: String,
+    pub project_id: String,
+    pub book_id: String,
+    pub status: String,
+    pub dossier_hash: String,
+    pub summary: String,
+    pub passes_json: String,
+    pub findings_json: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveConsistencyAuditInput {
+    pub id: String,
+    pub project_id: String,
+    pub book_id: String,
+    pub status: String,
+    pub dossier_hash: String,
+    pub summary: String,
+    pub passes_json: String,
+    pub findings_json: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -2903,6 +2942,73 @@ pub async fn list_scene_critiques_in_pool(
     .fetch_all(pool)
     .await
     .map_err(AppError::from)
+}
+
+pub async fn save_consistency_audit_in_pool(
+    pool: &SqlitePool,
+    input: SaveConsistencyAuditInput,
+) -> Result<ConsistencyAuditRecord, AppError> {
+    let now = Utc::now().to_rfc3339();
+    // created_at zostaje z pierwszego zapisu — audyt jest przepisywany po
+    // każdym z sześciu przebiegów i po każdej zastosowanej poprawce.
+    sqlx::query(
+        r#"
+        INSERT INTO consistency_audits (
+            id, project_id, book_id, status, dossier_hash,
+            summary, passes_json, findings_json, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            status = excluded.status,
+            dossier_hash = excluded.dossier_hash,
+            summary = excluded.summary,
+            passes_json = excluded.passes_json,
+            findings_json = excluded.findings_json,
+            updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(&input.id)
+    .bind(&input.project_id)
+    .bind(&input.book_id)
+    .bind(&input.status)
+    .bind(&input.dossier_hash)
+    .bind(&input.summary)
+    .bind(&input.passes_json)
+    .bind(&input.findings_json)
+    .bind(&now)
+    .bind(&now)
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as::<_, ConsistencyAuditRecord>("SELECT * FROM consistency_audits WHERE id = ?")
+        .bind(&input.id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::from)
+}
+
+pub async fn list_consistency_audits_in_pool(
+    pool: &SqlitePool,
+    book_id: &str,
+) -> Result<Vec<ConsistencyAuditRecord>, AppError> {
+    sqlx::query_as::<_, ConsistencyAuditRecord>(
+        "SELECT * FROM consistency_audits WHERE book_id = ? ORDER BY updated_at DESC",
+    )
+    .bind(book_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::from)
+}
+
+pub async fn delete_consistency_audit_in_pool(
+    pool: &SqlitePool,
+    audit_id: &str,
+) -> Result<(), AppError> {
+    sqlx::query("DELETE FROM consistency_audits WHERE id = ?")
+        .bind(audit_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub async fn list_brainstorm_sessions_in_pool(
@@ -4812,6 +4918,35 @@ pub async fn mark_ai_proposal_decision_in_pool(
     .bind(applied_at)
     .bind(accepted_at)
     .bind(rejected_at)
+    .bind(&now)
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Cofnięcie decyzji autora: propozycja wraca do skrzynki. Osobna funkcja, a nie
+/// gałąź mark_ai_proposal_decision_in_pool — tamta scala znaczniki przez COALESCE
+/// i z założenia ich nie czyści, a przy powrocie do "pending" muszą zniknąć,
+/// inaczej log pokazywałby datę odrzucenia dla żywej propozycji.
+pub async fn mark_ai_proposal_pending_in_pool(
+    pool: &SqlitePool,
+    id: &str,
+) -> Result<(), AppError> {
+    let now = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        r#"
+        UPDATE ai_proposals
+        SET decision_status = 'pending',
+            applied_at = NULL,
+            accepted_at = NULL,
+            rejected_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+        "#,
+    )
     .bind(&now)
     .bind(id)
     .execute(pool)
@@ -7239,6 +7374,36 @@ async fn list_scene_critiques(
 }
 
 #[tauri::command]
+async fn save_consistency_audit(
+    state: State<'_, AppState>,
+    input: SaveConsistencyAuditInput,
+) -> Result<ConsistencyAuditRecord, String> {
+    save_consistency_audit_in_pool(&state.db, input)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn list_consistency_audits(
+    state: State<'_, AppState>,
+    book_id: String,
+) -> Result<Vec<ConsistencyAuditRecord>, String> {
+    list_consistency_audits_in_pool(&state.db, &book_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn delete_consistency_audit(
+    state: State<'_, AppState>,
+    audit_id: String,
+) -> Result<(), String> {
+    delete_consistency_audit_in_pool(&state.db, &audit_id)
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
 async fn list_brainstorm_sessions(
     state: State<'_, AppState>,
     project_id: String,
@@ -7584,6 +7749,13 @@ async fn mark_ai_proposal_accepted(state: State<'_, AppState>, id: String) -> Re
 #[tauri::command]
 async fn mark_ai_proposal_rejected(state: State<'_, AppState>, id: String) -> Result<(), String> {
     mark_ai_proposal_decision_in_pool(&state.db, &id, "rejected")
+        .await
+        .map_err(command_error)
+}
+
+#[tauri::command]
+async fn mark_ai_proposal_pending(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    mark_ai_proposal_pending_in_pool(&state.db, &id)
         .await
         .map_err(command_error)
 }
@@ -8082,6 +8254,22 @@ async fn generate_new_project_title(
         .map_err(command_error)
 }
 
+/// Komunikat timeoutu z nazwą aktywnego dostawcy — trafia do `ai_runs` i do UI,
+/// więc musi mówić o tym, co naprawdę generowało (nie zawsze o Codeksie).
+fn timeout_error_message(settings: &AiSettings, seconds: u64) -> String {
+    format!(
+        "{} przekroczył limit czasu po {seconds} sekundach",
+        settings.text_provider_label()
+    )
+}
+
+fn cancelled_error_message(settings: &AiSettings) -> String {
+    format!(
+        "Generowanie {} zostało przerwane.",
+        settings.text_provider_label()
+    )
+}
+
 pub(crate) async fn generate_new_project_title_with_codex(
     app: &AppHandle,
     active_codex_runs: &ActiveCodexRunRegistry,
@@ -8092,7 +8280,7 @@ pub(crate) async fn generate_new_project_title_with_codex(
     }
 
     let ai_run_id = Uuid::new_v4().to_string();
-    let timeout_seconds = request.timeout_seconds.unwrap_or(180);
+    let timeout_seconds = text_timeout_seconds(&request.action, request.timeout_seconds);
     let codex_request = RunCodexPromptRequest {
         project_id: "__new_project__".into(),
         action: request.action,
@@ -8136,16 +8324,14 @@ pub(crate) async fn generate_new_project_title_with_codex(
             "timeout".to_string(),
             None,
             None,
-            Some(format!(
-                "Codex CLI przekroczył limit czasu po {seconds} sekundach"
-            )),
+            Some(timeout_error_message(&settings, seconds)),
             providers::TokenUsage::default(),
         ),
         Err(AppError::Cancelled) => (
             "cancelled".to_string(),
             None,
             None,
-            Some("Generowanie Codex CLI zostało przerwane.".to_string()),
+            Some(cancelled_error_message(&settings)),
             providers::TokenUsage::default(),
         ),
         Err(error) => (
@@ -8188,7 +8374,7 @@ pub(crate) async fn run_codex_prompt_in_pool(
     let ai_run_id = Uuid::new_v4().to_string();
     let created_at = Utc::now().to_rfc3339();
     let prompt_package_json = serde_json::to_string(&request.prompt_package_json)?;
-    let timeout_seconds = request.timeout_seconds.unwrap_or(180);
+    let timeout_seconds = text_timeout_seconds(&request.action, request.timeout_seconds);
     let settings = load_ai_settings(app).await;
     let provider_id = settings.text_provider_id().to_string();
     let effective_model = settings
@@ -8243,16 +8429,14 @@ pub(crate) async fn run_codex_prompt_in_pool(
             "timeout".to_string(),
             None,
             None,
-            Some(format!(
-                "Codex CLI przekroczył limit czasu po {seconds} sekundach"
-            )),
+            Some(timeout_error_message(&settings, seconds)),
             providers::TokenUsage::default(),
         ),
         Err(AppError::Cancelled) => (
             "cancelled".to_string(),
             None,
             None,
-            Some("Generowanie Codex CLI zostało przerwane.".to_string()),
+            Some(cancelled_error_message(&settings)),
             providers::TokenUsage::default(),
         ),
         Err(error) => (
@@ -8461,7 +8645,7 @@ async fn cancel_active_codex_run_in_registry(
     ai_run_id: Option<&str>,
 ) -> bool {
     let runs = registry.lock().await;
-    let handle = runs.values().find(|handle| {
+    let mut matching = runs.values().filter(|handle| {
         project_id
             .map(|id| handle.run.project_id == id)
             .unwrap_or(true)
@@ -8470,12 +8654,18 @@ async fn cancel_active_codex_run_in_registry(
                 .unwrap_or(true)
     });
 
-    if let Some(handle) = handle {
-        let _ = handle.cancel.send(true);
-        return true;
+    let Some(handle) = matching.next() else {
+        return false;
+    };
+    // Bez `ai_run_id` żądanie jest niejednoznaczne. Gdy w projekcie biegnie
+    // więcej niż jedna generacja (np. kolejne przebiegi audytu spójności),
+    // trafienie „w pierwszą z brzegu” ubijało nie ten run, co trzeba.
+    if ai_run_id.is_none() && matching.next().is_some() {
+        return false;
     }
 
-    false
+    let _ = handle.cancel.send(true);
+    true
 }
 
 async fn run_registered_codex_command(
@@ -8537,10 +8727,10 @@ async fn run_registered_codex_command(
         };
 
         let stdout_bytes = stdout_task.await.map_err(|error| {
-            AppError::Process(format!("Nie udało się odczytać stdout Codex CLI: {error}"))
+            AppError::Process(format!("Nie udało się odczytać stdout CLI: {error}"))
         })??;
         let stderr_bytes = stderr_task.await.map_err(|error| {
-            AppError::Process(format!("Nie udało się odczytać stderr Codex CLI: {error}"))
+            AppError::Process(format!("Nie udało się odczytać stderr CLI: {error}"))
         })??;
 
         let status = wait_result?;
@@ -8581,6 +8771,20 @@ fn cover_timeout_seconds(requested: Option<u64>) -> u64 {
     requested
         .unwrap_or(MIN_COVER_TIMEOUT_SECONDS)
         .max(MIN_COVER_TIMEOUT_SECONDS)
+}
+
+/// Limit generacji tekstowej. Front przysyła jedną globalną wartość „Codeksa”,
+/// ale analiza spójności potrzebuje znacznie więcej — dostaje własną podłogę,
+/// analogicznie do `cover_timeout_seconds`. Nazwy akcji lustrzane wobec
+/// `auditActionFor` z src/features/ai/consistencyAuditPromptPackage.ts.
+fn text_timeout_seconds(action: &str, requested: Option<u64>) -> u64 {
+    let requested = requested.unwrap_or(DEFAULT_TEXT_TIMEOUT_SECONDS);
+    match action {
+        "analyze_consistency" | "synthesize_consistency_audit" => {
+            requested.max(MIN_CONSISTENCY_AUDIT_TIMEOUT_SECONDS)
+        }
+        _ => requested,
+    }
 }
 
 async fn execute_codex_image_generation(
@@ -9668,6 +9872,9 @@ pub fn run() {
             save_scene_auto_summary,
             save_scene_critique,
             list_scene_critiques,
+            save_consistency_audit,
+            list_consistency_audits,
+            delete_consistency_audit,
             list_brainstorm_sessions,
             create_brainstorm_session,
             rename_brainstorm_session,
@@ -9702,6 +9909,7 @@ pub fn run() {
             upsert_ai_proposal_snapshot,
             mark_ai_proposal_accepted,
             mark_ai_proposal_rejected,
+            mark_ai_proposal_pending,
             update_book_concept,
             generate_book_cover,
             accept_generated_book_cover,
@@ -9744,6 +9952,55 @@ mod tests {
         init_database_at(database_path).await.unwrap()
     }
 
+    #[test]
+    fn consistency_audit_gets_its_own_timeout_floor() {
+        // Globalne ustawienie „Codeksa” bywa niższe niż koszt jednego przebiegu
+        // audytu — podłoga ma je podnieść, a nie obniżać wyższych wartości.
+        assert_eq!(
+            text_timeout_seconds("analyze_consistency", Some(300)),
+            MIN_CONSISTENCY_AUDIT_TIMEOUT_SECONDS
+        );
+        assert_eq!(
+            text_timeout_seconds("synthesize_consistency_audit", None),
+            MIN_CONSISTENCY_AUDIT_TIMEOUT_SECONDS
+        );
+        assert_eq!(
+            text_timeout_seconds("analyze_consistency", Some(3600)),
+            3600
+        );
+    }
+
+    #[test]
+    fn other_actions_keep_the_requested_timeout() {
+        assert_eq!(text_timeout_seconds("update_concept_field", Some(300)), 300);
+        assert_eq!(
+            text_timeout_seconds("update_concept_field", None),
+            DEFAULT_TEXT_TIMEOUT_SECONDS
+        );
+    }
+
+    #[test]
+    fn timeout_and_cancel_messages_name_the_active_provider() {
+        let mut settings = AiSettings {
+            text_provider: ai_settings::TEXT_PROVIDER_CLAUDE.into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            timeout_error_message(&settings, 300),
+            "Claude Code CLI przekroczył limit czasu po 300 sekundach"
+        );
+        assert_eq!(
+            cancelled_error_message(&settings),
+            "Generowanie Claude Code CLI zostało przerwane."
+        );
+
+        settings.text_provider = ai_settings::TEXT_PROVIDER_CODEX.into();
+        assert_eq!(
+            timeout_error_message(&settings, 180),
+            "Codex CLI przekroczył limit czasu po 180 sekundach"
+        );
+    }
+
     fn scene_input(book_id: &str, title: &str, manuscript: &str) -> UpsertSceneInput {
         UpsertSceneInput {
             id: None,
@@ -9775,6 +10032,108 @@ mod tests {
                 .unwrap();
         assert!(!columns.iter().any(|(name,)| name == "logline"));
         assert!(columns.iter().any(|(name,)| name == "premise"));
+    }
+
+    #[tokio::test]
+    async fn consistency_audit_upsert_keeps_created_at_and_cascades() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Projekt audytu".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let first = save_consistency_audit_in_pool(
+            &pool,
+            SaveConsistencyAuditInput {
+                id: "audit-1".into(),
+                project_id: created.project.id.clone(),
+                book_id: created.book.id.clone(),
+                status: "running".into(),
+                dossier_hash: "hash-1".into(),
+                summary: String::new(),
+                passes_json: "{}".into(),
+                findings_json: "[]".into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.status, "running");
+
+        let second = save_consistency_audit_in_pool(
+            &pool,
+            SaveConsistencyAuditInput {
+                id: "audit-1".into(),
+                project_id: created.project.id.clone(),
+                book_id: created.book.id.clone(),
+                status: "complete".into(),
+                dossier_hash: "hash-1".into(),
+                summary: "Scalone".into(),
+                passes_json: "{\"passes\":{}}".into(),
+                findings_json: "[{\"id\":\"f1\"}]".into(),
+            },
+        )
+        .await
+        .unwrap();
+        // Kolejny przebieg przepisuje ten sam wiersz, nie zakłada nowego.
+        assert_eq!(second.status, "complete");
+        assert_eq!(second.summary, "Scalone");
+        assert_eq!(second.created_at, first.created_at);
+
+        let listed = list_consistency_audits_in_pool(&pool, &created.book.id)
+            .await
+            .unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].findings_json, "[{\"id\":\"f1\"}]");
+
+        delete_consistency_audit_in_pool(&pool, "audit-1")
+            .await
+            .unwrap();
+        assert!(list_consistency_audits_in_pool(&pool, &created.book.id)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn consistency_audits_are_removed_with_their_project() {
+        let pool = test_pool().await;
+        let created = create_project_in_pool(
+            &pool,
+            CreateProjectInput {
+                name: "Projekt kaskady".into(),
+                language: None,
+            },
+        )
+        .await
+        .unwrap();
+        save_consistency_audit_in_pool(
+            &pool,
+            SaveConsistencyAuditInput {
+                id: "audit-cascade".into(),
+                project_id: created.project.id.clone(),
+                book_id: created.book.id.clone(),
+                status: "running".into(),
+                dossier_hash: String::new(),
+                summary: String::new(),
+                passes_json: "{}".into(),
+                findings_json: "[]".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        delete_project_in_pool(&pool, &created.project.id).await.unwrap();
+
+        let remaining: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM consistency_audits")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(remaining.0, 0);
     }
 
     #[tokio::test]

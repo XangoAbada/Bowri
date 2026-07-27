@@ -497,7 +497,7 @@ export function AiSettingsPage() {
         <input
           type="number"
           min={30}
-          max={600}
+          max={1800}
           step={30}
           value={timeoutSeconds}
           onChange={(event) => setTimeoutSeconds(Number(event.target.value))}

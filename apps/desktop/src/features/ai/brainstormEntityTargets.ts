@@ -1,5 +1,6 @@
 import { characterFieldConfigs } from "./characterPromptPackage";
 import { planFieldConfigs } from "./planPromptPackage";
+import { conceptFieldConfigs, longConceptFields } from "./promptPackage";
 import { worldFieldConfigs } from "./worldPromptPackage";
 
 // Pola encji, które burza mózgów może aktualizować. Klucz = nazwa kolumny w
@@ -79,6 +80,88 @@ export const BRAINSTORM_ENTITY_FIELDS: Record<BrainstormEntityKind, EntityFieldT
   ]
 };
 
+// --- Koncepcja książki: rodzaj używany przez audyt spójności, nie przez burzę mózgów ---
+//
+// Tekstowe pola BookConceptInput. Świadomie POZA listą: title i workingTitle
+// (zmiana tytułu z bocznego panelu psuje identyfikację projektu), themesJson
+// i alternativeTitlesJson (tablice JSON, nie zwykły tekst) oraz targetWordCount
+// (liczba). Zapis idzie przez update_book_concept, który dla każdej kolumny
+// używa COALESCE, więc wysłanie jednego pola jest prawdziwym patchem.
+
+const CONCEPT_FIELD_KEYS = [
+  "premise",
+  "expandedPremise",
+  "protagonistSummary",
+  "protagonistGoal",
+  "centralConflict",
+  "antagonistForce",
+  "stakes",
+  "settingSketch",
+  "endingDirection",
+  "genre",
+  "subgenre",
+  "targetAudience",
+  "tone",
+  "styleGuide",
+  "pointOfView",
+  "unwantedThemes"
+] as const;
+
+export type ConceptFieldTargetKey = (typeof CONCEPT_FIELD_KEYS)[number];
+
+export const CONCEPT_FIELD_TARGETS: EntityFieldTarget[] = CONCEPT_FIELD_KEYS.map((key) => ({
+  key,
+  label: labelFrom(conceptFieldConfigs as LabelledConfig, key, key),
+  multiline: (longConceptFields as string[]).includes(key)
+}));
+
+/** Rodzaje encji z patchem pojedynczego pola — burza mózgów plus koncepcja. */
+export type EntityFieldKind = BrainstormEntityKind | "concept";
+
+export const ENTITY_FIELD_TARGETS: Record<EntityFieldKind, EntityFieldTarget[]> = {
+  ...BRAINSTORM_ENTITY_FIELDS,
+  concept: CONCEPT_FIELD_TARGETS
+};
+
+export function isEntityFieldKind(value: unknown): value is EntityFieldKind {
+  return value === "concept" || isBrainstormEntityKind(value);
+}
+
+export function isEntityFieldAllowed(kind: EntityFieldKind, field: string): boolean {
+  return ENTITY_FIELD_TARGETS[kind].some((target) => target.key === field);
+}
+
+export function entityKindLabel(kind: EntityFieldKind): string {
+  switch (kind) {
+    case "concept":
+      return "Koncepcja";
+    case "character":
+      return "Postać";
+    case "worldElement":
+      return "Element świata";
+    case "worldRule":
+      return "Reguła świata";
+    case "plotThread":
+      return "Wątek";
+  }
+}
+
+/**
+ * Sekcja promptu audytu: pełna whitelista pól wraz z koncepcją. Odrębna od
+ * renderEntityFieldWhitelist, bo tamta idzie do promptu burzy mózgów, która
+ * koncepcji nie dotyka.
+ */
+export function renderAuditFieldWhitelist(): string {
+  return (Object.keys(ENTITY_FIELD_TARGETS) as EntityFieldKind[])
+    .map((kind) => {
+      const fields = ENTITY_FIELD_TARGETS[kind]
+        .map((target) => `${target.key} (${target.label})`)
+        .join(", ");
+      return `${kind}: ${fields}`;
+    })
+    .join("\n");
+}
+
 export function isBrainstormEntityKind(value: unknown): value is BrainstormEntityKind {
   return (
     value === "character" ||
@@ -93,13 +176,13 @@ export function isBrainstormEntityField(kind: BrainstormEntityKind, field: strin
 }
 
 export function entityFieldTarget(
-  kind: BrainstormEntityKind,
+  kind: EntityFieldKind,
   field: string
 ): EntityFieldTarget | null {
-  return BRAINSTORM_ENTITY_FIELDS[kind].find((target) => target.key === field) ?? null;
+  return ENTITY_FIELD_TARGETS[kind].find((target) => target.key === field) ?? null;
 }
 
-export function entityFieldLabel(kind: BrainstormEntityKind, field: string): string {
+export function entityFieldLabel(kind: EntityFieldKind, field: string): string {
   return entityFieldTarget(kind, field)?.label ?? field;
 }
 

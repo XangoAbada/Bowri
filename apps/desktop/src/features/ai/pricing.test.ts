@@ -41,6 +41,40 @@ describe("costOf", () => {
     expect(cost.usd).toBeCloseTo(30, 6);
   });
 
+  it("prices Claude CLI cache writes as 1h cache (2x input), not 5min", () => {
+    // Realne `usage` z `claude -p --output-format json --model claude-opus-5`:
+    // cache_creation było w całości ephemeral_1h, a CLI podał total_cost_usd
+    // 0.067162. Ta sama liczba musi wyjść z naszego cennika.
+    const cost = costOf(
+      {
+        inputTokens: 2,
+        outputTokens: 3,
+        cacheReadTokens: 12_014,
+        cacheCreationTokens: 6_107,
+        tokensEstimated: false
+      },
+      "claude-cli",
+      "claude-opus-5"
+    );
+    expect(cost.hasPricing).toBe(true);
+    expect(cost.usd).toBeCloseTo(0.067162, 6);
+  });
+
+  it("keeps 5min cache pricing for the Anthropic API provider", () => {
+    const cost = costOf(
+      {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 1_000_000,
+        tokensEstimated: false
+      },
+      "anthropic-api",
+      "claude-opus-5"
+    );
+    expect(cost.usd).toBeCloseTo(6.25, 6);
+  });
+
   it("prices OpenAI gpt-5.5 at 5/30 input/output", () => {
     const cost = costOf(oneMillion, "openai-api", "gpt-5.5");
     expect(cost.hasPricing).toBe(true);

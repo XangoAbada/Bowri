@@ -8,6 +8,7 @@ import { BrainstormPage } from "../features/brainstorm/BrainstormPage";
 import { BookPlanPage } from "../features/book/BookPlanPage";
 import { CharactersPage } from "../features/characters/CharactersPage";
 import { WorldPage } from "../features/world/WorldPage";
+import { AnalysisPage } from "../features/analysis/AnalysisPage";
 import { SceneEditorPage } from "../features/scenes/SceneEditorPage";
 import { EditingPage } from "../features/editing/EditingPage";
 import { ExportPage } from "../features/export/ExportPage";
@@ -64,6 +65,12 @@ const projectWorldRoute = createRoute({
   component: ProjectWorldRoute
 });
 
+const projectAnalysisRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId/analysis",
+  component: ProjectAnalysisRoute
+});
+
 const projectEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects/$projectId/editor",
@@ -113,6 +120,7 @@ const routeTree = rootRoute.addChildren([
   projectPlanRoute,
   projectCharactersRoute,
   projectWorldRoute,
+  projectAnalysisRoute,
   projectEditorRoute,
   projectEditingRoute,
   projectExportRoute,
@@ -171,6 +179,15 @@ function ProjectWorldRoute() {
   return (
     <ProjectShell projectId={projectId} activeSection="world">
       <WorldPage projectId={projectId} />
+    </ProjectShell>
+  );
+}
+
+function ProjectAnalysisRoute() {
+  const projectId = useProjectId();
+  return (
+    <ProjectShell projectId={projectId} activeSection="analysis">
+      <AnalysisPage projectId={projectId} />
     </ProjectShell>
   );
 }

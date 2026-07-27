@@ -17,6 +17,7 @@ import {
   Search,
   SearchCheck,
   Settings,
+  ShieldCheck,
   Sparkles,
   Users
 } from "lucide-react";
@@ -60,7 +61,7 @@ import {
 
 type ProjectShellProps = {
   projectId: string;
-  activeSection: "brainstorm" | "concept" | "plan" | "characters" | "world" | "editor" | "editing" | "export" | "ai" | "aiLog";
+  activeSection: "brainstorm" | "concept" | "plan" | "characters" | "world" | "analysis" | "editor" | "editing" | "export" | "ai" | "aiLog";
   children: ReactNode;
 };
 
@@ -159,6 +160,8 @@ export function ProjectShell({
           ? t("shell.phase.characters")
           : activeSection === "world"
             ? t("shell.phase.world")
+            : activeSection === "analysis"
+              ? t("shell.phase.analysis")
             : activeSection === "editor"
               ? t("shell.phase.editor")
               : activeSection === "editing"
@@ -293,9 +296,10 @@ export function ProjectShell({
               ["plan", "03", t("shell.nav.plan"), ListTree],
               ["characters", "04", t("shell.nav.characters"), Users],
               ["world", "05", t("shell.nav.world"), Globe2],
-              ["editor", "06", t("shell.nav.editor"), PenLine],
-              ["editing", "07", t("shell.nav.editing"), SearchCheck],
-              ["export", "08", t("shell.nav.export"), PackageOpen]
+              ["analysis", "06", t("shell.nav.analysis"), ShieldCheck],
+              ["editor", "07", t("shell.nav.editor"), PenLine],
+              ["editing", "08", t("shell.nav.editing"), SearchCheck],
+              ["export", "09", t("shell.nav.export"), PackageOpen]
             ] as const
           ).map(([section, num, label, Icon]) => (
             <Link

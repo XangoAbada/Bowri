@@ -41,6 +41,13 @@ export const CLAUDE_CLI_MODEL_MAP: Record<string, string> = {
   haiku: "claude-haiku-4-5"
 };
 
+// Claude Code CLI cache'uje prompt na godzinę (`ephemeral_1h_input_tokens`
+// w zwracanym `usage`), a nie na 5 minut jak domyślne Messages API. Cache 1h
+// kosztuje 2× input zamiast 1.25×. Backend zapisuje tylko sumę
+// `cache_creation_input_tokens` (providers.rs, `anthropic_usage_from`), więc
+// korygujemy stawkę per dostawca zamiast rozbijać zużycie w bazie.
+const CLAUDE_CLI_CACHE_WRITE_MULTIPLIER = 2;
+
 // Oficjalny cennik OpenAI API (USD / 1M tokenów), stan 2026-07.
 // cacheReadPer1M = zniżka na cached input; OpenAI nie ma cache-write.
 const OPENAI_PRICING: Record<string, ModelPricing> = {
@@ -82,9 +89,16 @@ export function pricingFor(providerId: string, model: string | null | undefined)
     case "anthropic-api":
       pricing = ANTHROPIC_PRICING[key];
       break;
-    case "claude-cli":
-      pricing = ANTHROPIC_PRICING[CLAUDE_CLI_MODEL_MAP[key] ?? key];
+    case "claude-cli": {
+      const base = ANTHROPIC_PRICING[CLAUDE_CLI_MODEL_MAP[key] ?? key];
+      pricing = base
+        ? {
+            ...base,
+            cacheWritePer1M: base.inputPer1M * CLAUDE_CLI_CACHE_WRITE_MULTIPLIER
+          }
+        : undefined;
       break;
+    }
     case "openai-api":
     case "codex-cli":
       pricing = OPENAI_PRICING[key];

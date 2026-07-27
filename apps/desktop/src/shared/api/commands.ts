@@ -17,6 +17,7 @@ import {
   browserListAiProposals,
   browserListActiveCodexRuns,
   browserMarkAiProposalAccepted,
+  browserMarkAiProposalPending,
   browserMarkAiProposalRejected,
   browserUpsertAiProposalSnapshot,
   browserCreateProject,
@@ -63,6 +64,9 @@ import {
   browserAppendBrainstormMessage,
   browserUpdateBrainstormMessageSuggestions,
   browserListSceneCritiques,
+  browserSaveConsistencyAudit,
+  browserListConsistencyAudits,
+  browserDeleteConsistencyAudit,
   browserSaveChapterAutoSummary,
   browserSaveSceneAutoSummary,
   browserSaveSceneCritique,
@@ -147,6 +151,8 @@ import type {
   SaveSceneAutoSummaryInput,
   SaveSceneCritiqueInput,
   SceneCritiqueRecord,
+  SaveConsistencyAuditInput,
+  ConsistencyAuditRecord,
   SetSceneStyleReferenceInput,
   SaveStorySoFarInput,
   SaveStoryStructureInput,
@@ -447,6 +453,32 @@ export function listSceneCritiques(bookId: string): Promise<SceneCritiqueRecord[
   return invoke("list_scene_critiques", { bookId });
 }
 
+export function saveConsistencyAudit(
+  input: SaveConsistencyAuditInput
+): Promise<ConsistencyAuditRecord> {
+  if (!isTauriRuntime()) {
+    return browserSaveConsistencyAudit(input);
+  }
+
+  return invoke("save_consistency_audit", { input });
+}
+
+export function listConsistencyAudits(bookId: string): Promise<ConsistencyAuditRecord[]> {
+  if (!isTauriRuntime()) {
+    return browserListConsistencyAudits(bookId);
+  }
+
+  return invoke("list_consistency_audits", { bookId });
+}
+
+export function deleteConsistencyAudit(auditId: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserDeleteConsistencyAudit(auditId);
+  }
+
+  return invoke("delete_consistency_audit", { auditId });
+}
+
 export function listBrainstormSessions(projectId: string): Promise<BrainstormSession[]> {
   if (!isTauriRuntime()) {
     return browserListBrainstormSessions(projectId);
@@ -736,6 +768,15 @@ export function markAiProposalRejected(id: string): Promise<void> {
   }
 
   return invoke("mark_ai_proposal_rejected", { id });
+}
+
+/** Cofa decyzję autora — propozycja wraca do skrzynki w panelu AI. */
+export function markAiProposalPending(id: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    return browserMarkAiProposalPending(id);
+  }
+
+  return invoke("mark_ai_proposal_pending", { id });
 }
 
 export function updateBookConcept(

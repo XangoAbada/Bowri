@@ -51,6 +51,8 @@ import type {
   SaveSceneAutoSummaryInput,
   SaveSceneCritiqueInput,
   SceneCritiqueRecord,
+  SaveConsistencyAuditInput,
+  ConsistencyAuditRecord,
   AppendBrainstormMessageInput,
   BrainstormMessage,
   BrainstormSession,
@@ -118,6 +120,7 @@ type BrowserPreviewState = {
   exportPresets: ExportPreset[];
   /** Opcjonalne, żeby stare zapisy localStorage nie wymagały migracji. */
   sceneCritiques?: SceneCritiqueRecord[];
+  consistencyAudits?: ConsistencyAuditRecord[];
   brainstormSessions?: BrainstormSession[];
   brainstormMessages?: BrainstormMessage[];
 };
@@ -737,6 +740,47 @@ export async function browserListSceneCritiques(
 ): Promise<SceneCritiqueRecord[]> {
   const state = readState();
   return (state.sceneCritiques ?? []).filter((item) => item.bookId === bookId);
+}
+
+export async function browserSaveConsistencyAudit(
+  input: SaveConsistencyAuditInput
+): Promise<ConsistencyAuditRecord> {
+  const state = readState();
+  const now = new Date().toISOString();
+  const audits = state.consistencyAudits ?? [];
+  const existing = audits.find((item) => item.id === input.id);
+  const record: ConsistencyAuditRecord = {
+    id: input.id,
+    projectId: input.projectId,
+    bookId: input.bookId,
+    status: input.status,
+    dossierHash: input.dossierHash,
+    summary: input.summary,
+    passesJson: input.passesJson,
+    findingsJson: input.findingsJson,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now
+  };
+  state.consistencyAudits = [record, ...audits.filter((item) => item.id !== input.id)];
+  writeState(state);
+  return record;
+}
+
+export async function browserListConsistencyAudits(
+  bookId: string
+): Promise<ConsistencyAuditRecord[]> {
+  const state = readState();
+  return (state.consistencyAudits ?? [])
+    .filter((item) => item.bookId === bookId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function browserDeleteConsistencyAudit(auditId: string): Promise<void> {
+  const state = readState();
+  state.consistencyAudits = (state.consistencyAudits ?? []).filter(
+    (item) => item.id !== auditId
+  );
+  writeState(state);
 }
 
 export async function browserListBrainstormSessions(
@@ -1533,6 +1577,10 @@ export async function browserMarkAiProposalRejected(id: string): Promise<void> {
   markBrowserAiProposalDecision(id, "rejected");
 }
 
+export async function browserMarkAiProposalPending(id: string): Promise<void> {
+  markBrowserAiProposalDecision(id, "pending");
+}
+
 export async function browserUpdateBookConcept(
   bookId: string,
   input: BookConceptInput
@@ -2220,22 +2268,37 @@ function appendAiRun(
 
 function markBrowserAiProposalDecision(
   id: string,
-  decisionStatus: "accepted" | "rejected"
+  decisionStatus: "accepted" | "rejected" | "pending"
 ): void {
   const state = readState();
   const now = new Date().toISOString();
-  state.aiProposals = state.aiProposals.map((proposal) =>
-    proposal.id === id
-      ? {
-          ...proposal,
-          decisionStatus,
-          appliedAt: decisionStatus === "accepted" ? now : proposal.appliedAt ?? null,
-          acceptedAt: decisionStatus === "accepted" ? now : proposal.acceptedAt ?? null,
-          rejectedAt: decisionStatus === "rejected" ? now : proposal.rejectedAt ?? null,
-          updatedAt: now
-        }
-      : proposal
-  );
+  state.aiProposals = state.aiProposals.map((proposal) => {
+    if (proposal.id !== id) {
+      return proposal;
+    }
+
+    // Powrót do skrzynki czyści znaczniki decyzji — inaczej log pokazywałby
+    // datę odrzucenia dla propozycji, która znów czeka na autora.
+    if (decisionStatus === "pending") {
+      return {
+        ...proposal,
+        decisionStatus,
+        appliedAt: null,
+        acceptedAt: null,
+        rejectedAt: null,
+        updatedAt: now
+      };
+    }
+
+    return {
+      ...proposal,
+      decisionStatus,
+      appliedAt: decisionStatus === "accepted" ? now : proposal.appliedAt ?? null,
+      acceptedAt: decisionStatus === "accepted" ? now : proposal.acceptedAt ?? null,
+      rejectedAt: decisionStatus === "rejected" ? now : proposal.rejectedAt ?? null,
+      updatedAt: now
+    };
+  });
   writeState(state);
 }
 

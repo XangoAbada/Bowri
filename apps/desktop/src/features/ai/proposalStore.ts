@@ -32,6 +32,11 @@ import {
   type NormalizedSceneCritique,
   type SceneCritiquePromptPackage
 } from "./sceneCritiquePromptPackage";
+import {
+  CONSISTENCY_AUDIT_FIELD,
+  type ConsistencyAuditPromptPackage,
+  type NormalizedConsistencyAudit
+} from "./consistencyAuditPromptPackage";
 
 export type AiProposalStatus = "queued" | "running" | "success" | "error" | "cancelled";
 export type PendingAiProposalStatus = Extract<
@@ -46,6 +51,7 @@ export type AiProposalScope =
   | "characters"
   | "world"
   | "sceneEditor"
+  | "consistencyAudit"
   | "export";
 export const BOOK_COVER_FIELD = "__book_cover__";
 export const CHARACTER_IMAGE_FIELD = "__character_image__";
@@ -61,13 +67,15 @@ export type AiTaskFieldKey =
   | typeof CHARACTER_IMAGE_FIELD
   | typeof EXPORT_ARTWORK_FIELD
   | typeof SCENE_STORY_BIBLE_AUDIT_FIELD
-  | typeof SCENE_CRITIQUE_FIELD;
+  | typeof SCENE_CRITIQUE_FIELD
+  | typeof CONSISTENCY_AUDIT_FIELD;
 export type ParsedAiProposal =
   | NormalizedConceptFieldSuggestion
   | NormalizedPremiseDevelopment
   | NormalizedPlanSuggestion
   | NormalizedSceneStoryBibleAudit
-  | NormalizedSceneCritique;
+  | NormalizedSceneCritique
+  | NormalizedConsistencyAudit;
 
 export type NormalizedPlanSuggestion = {
   kind: "book_plan_suggestion";
@@ -94,6 +102,7 @@ export type AiPromptSnapshot = {
     | SceneEditorPromptPackage
     | SceneStoryBibleAuditPromptPackage
     | SceneCritiquePromptPackage
+    | ConsistencyAuditPromptPackage
     | Record<string, unknown>;
   prompt: string;
   coverPrompt?: string;
@@ -195,6 +204,7 @@ type ProposalState = {
   setEditableField: (id: string, field: ConceptFieldKey, value: string) => void;
   toggleSelectedField: (id: string, field: ConceptFieldKey) => void;
   hydratePersistentProposals: (records: AiProposalRecord[]) => void;
+  restoreProposal: (proposal: ActiveAiProposal) => void;
   clearProposal: (id: string) => void;
   clearAllProposals: () => void;
 };
@@ -441,6 +451,17 @@ export const useProposalStore = create<ProposalState>((set) => ({
 
       return syncActive({ proposals: [...state.proposals, ...hydrated] });
     }),
+  /**
+   * Propozycja cofnięta z odrzucenia wraca do skrzynki bez ponownej generacji.
+   * Bez persistProposalSnapshot: rekord w bazie już istnieje, a jego
+   * decision_status zmienia osobna komenda — upsert i tak go nie rusza.
+   */
+  restoreProposal: (proposal) =>
+    set((state) =>
+      state.proposals.some((item) => item.id === proposal.id)
+        ? state
+        : syncActive({ proposals: [...state.proposals, proposal] })
+    ),
   clearProposal: (id) =>
     set((state) =>
       syncActive({

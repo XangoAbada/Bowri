@@ -68,6 +68,19 @@ impl AiSettings {
         }
     }
 
+    /// Nazwa dostawcy pokazywana w komunikatach błędów (timeout, anulowanie).
+    /// Lustro `TEXT_PROVIDERS` z src/features/ai/textProviderInfo.ts — etykiety
+    /// muszą się zgadzać, bo front używa swoich jako fallbacku dla tych samych
+    /// zdarzeń.
+    pub fn text_provider_label(&self) -> &'static str {
+        match self.text_provider.as_str() {
+            TEXT_PROVIDER_CLAUDE => "Claude Code CLI",
+            TEXT_PROVIDER_OPENAI_API => "OpenAI API",
+            TEXT_PROVIDER_ANTHROPIC_API => "Anthropic API",
+            _ => "Codex CLI",
+        }
+    }
+
     pub fn image_provider_id(&self) -> &str {
         if self.image_provider == IMAGE_PROVIDER_CODEX {
             crate::PROVIDER_ID

@@ -583,6 +583,32 @@ export type SaveSceneCritiqueInput = {
   sourceHash: string;
 };
 
+/** Audyt spójności całego projektu — patrz features/ai/consistencyAuditStore. */
+export type ConsistencyAuditRecord = {
+  id: string;
+  projectId: string;
+  bookId: string;
+  status: string;
+  dossierHash: string;
+  summary: string;
+  passesJson: string;
+  findingsJson: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SaveConsistencyAuditInput = {
+  /** Zawsze podawane — id powstaje przy starcie audytu, upsert idzie po nim. */
+  id: string;
+  projectId: string;
+  bookId: string;
+  status: string;
+  dossierHash: string;
+  summary: string;
+  passesJson: string;
+  findingsJson: string;
+};
+
 export type SetSceneStyleReferenceInput = {
   sceneId: string;
   isStyleReference: number;
@@ -847,6 +873,8 @@ export type AIAction =
   | "expand_selection"
   | "analyze_scene_story_bible_opportunities"
   | "critique_scene"
+  | "analyze_consistency"
+  | "synthesize_consistency_audit"
   | "summarize_scene"
   | "summarize_chapter"
   | "summarize_story_so_far"

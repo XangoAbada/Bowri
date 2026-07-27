@@ -1,29 +1,34 @@
 import {
   getBookPlan,
   getCharacterWorkspace,
+  getProject,
   getWorldWorkspace,
+  updateBookConcept,
   upsertCharacter,
   upsertPlotThread,
   upsertWorldElement,
   upsertWorldRule
 } from "../../shared/api/commands";
 import type {
+  Book,
+  BookConceptInput,
   Character,
   PlotThread,
   WorldElement,
   WorldRule
 } from "../../shared/api/types";
 import {
-  isBrainstormEntityField,
-  type BrainstormEntityKind
+  isEntityFieldAllowed,
+  type EntityFieldKind
 } from "./brainstormEntityTargets";
 
-// Zapis JEDNEGO pola istniejącej encji — ścieżka burzy mózgów, która uzupełnia
-// story bible bez dodatkowego wywołania modelu.
+// Zapis JEDNEGO pola istniejącej encji. Ścieżka współdzielona przez burzę
+// mózgów (uzupełnia story bible bez dodatkowego wywołania modelu) i audyt
+// spójności (stosuje pojedynczą poprawkę z raportu).
 //
-// Osobny moduł (obok discoveryDrafts.ts) z tego samego powodu: panel sugestii
-// nie może importować z AiProposalPanel, bo oba komponenty żyją w tym samym
-// prawym sidebarze i powstałby cykl importów.
+// Osobny moduł (obok discoveryDrafts.ts) z tego samego powodu: panele sugestii
+// nie mogą importować z AiProposalPanel, bo wszystkie żyją w tym samym prawym
+// sidebarze i powstałby cykl importów.
 
 export class EntityNotFoundError extends Error {
   constructor(public entityId: string) {
@@ -39,14 +44,35 @@ export class UnknownEntityFieldError extends Error {
   }
 }
 
+/**
+ * Treść pola zmieniła się od czasu, gdy poprawka została wygenerowana. Rzucane
+ * zamiast zapisu, bo `replace` z nieaktualnego raportu audytu wymazałby ręczną
+ * pracę autora bez śladu.
+ */
+export class StaleFieldValueError extends Error {
+  constructor(public field: string) {
+    super(
+      `Treść pola ${field} zmieniła się od wygenerowania tej poprawki. Uruchom analizę ponownie, żeby nie nadpisać własnych zmian.`
+    );
+    this.name = "StaleFieldValueError";
+  }
+}
+
 export type EntityFieldUpdate = {
   projectId: string;
   bookId: string;
-  kind: BrainstormEntityKind;
+  kind: EntityFieldKind;
+  /** Dla kind === "concept" nieużywane — celem jest książka wskazana przez bookId. */
   entityId: string;
   field: string;
   value: string;
   mode: "append" | "replace";
+  /**
+   * Początek treści, jaką pole miało w momencie tworzenia poprawki. Podawany
+   * przez audyt spójności; przy niezgodności zapis jest odrzucany. Dla trybu
+   * "append" bez znaczenia — dopisanie nic nie kasuje.
+   */
+  expectedCurrentPrefix?: string;
 };
 
 export type EntityFieldUpdateResult = {
@@ -80,11 +106,13 @@ export function mergeFieldValue(
 export async function applyEntityFieldUpdate(
   update: EntityFieldUpdate
 ): Promise<EntityFieldUpdateResult> {
-  if (!isBrainstormEntityField(update.kind, update.field)) {
+  if (!isEntityFieldAllowed(update.kind, update.field)) {
     throw new UnknownEntityFieldError(update.field);
   }
 
   switch (update.kind) {
+    case "concept":
+      return applyConceptField(update);
     case "character":
       return applyCharacterField(update);
     case "worldElement":
@@ -104,6 +132,43 @@ function resultFor(
   return { entityId: update.entityId, field: update.field, previousValue, nextValue };
 }
 
+/**
+ * Docelowa treść pola z kontrolą świeżości. Porównanie po prefiksie, nie po
+ * całości: audyt zapisuje w poprawce tylko początek widzianej treści (do 200
+ * znaków), bo pełna kopia każdego pola podwoiłaby rozmiar raportu.
+ */
+function nextValueFor(update: EntityFieldUpdate, previousValue: string): string {
+  const expected = update.expectedCurrentPrefix?.trim();
+  if (update.mode === "replace" && expected) {
+    const current = previousValue.trim();
+    if (!current.startsWith(expected.slice(0, current.length))) {
+      throw new StaleFieldValueError(update.field);
+    }
+  }
+  return mergeFieldValue(previousValue, update.value, update.mode);
+}
+
+/**
+ * Koncepcja książki. Jedyna encja, której nie trzeba odsyłać w całości:
+ * update_book_concept ustawia każdą kolumnę przez COALESCE(?, kolumna), więc
+ * pominięte pola zostają nietknięte. Wysyłamy dokładnie jedno pole.
+ */
+async function applyConceptField(
+  update: EntityFieldUpdate
+): Promise<EntityFieldUpdateResult> {
+  const details = await getProject(update.projectId);
+  if (!details.book || details.book.id !== update.bookId) {
+    throw new EntityNotFoundError(update.bookId);
+  }
+
+  const previousValue = stringField(details.book, update.field);
+  const nextValue = nextValueFor(update, previousValue);
+  await updateBookConcept(update.bookId, {
+    [update.field]: nextValue
+  } as BookConceptInput);
+  return resultFor({ ...update, entityId: update.bookId }, previousValue, nextValue);
+}
+
 async function applyCharacterField(
   update: EntityFieldUpdate
 ): Promise<EntityFieldUpdateResult> {
@@ -114,7 +179,7 @@ async function applyCharacterField(
   }
 
   const previousValue = stringField(character, update.field);
-  const nextValue = mergeFieldValue(previousValue, update.value, update.mode);
+  const nextValue = nextValueFor(update, previousValue);
   await upsertCharacter({
     id: character.id,
     projectId: character.projectId,
@@ -154,7 +219,7 @@ async function applyWorldElementField(
   }
 
   const previousValue = stringField(element, update.field);
-  const nextValue = mergeFieldValue(previousValue, update.value, update.mode);
+  const nextValue = nextValueFor(update, previousValue);
   await upsertWorldElement({
     id: element.id,
     projectId: element.projectId,
@@ -183,7 +248,7 @@ async function applyWorldRuleField(
   }
 
   const previousValue = stringField(rule, update.field);
-  const nextValue = mergeFieldValue(previousValue, update.value, update.mode);
+  const nextValue = nextValueFor(update, previousValue);
   await upsertWorldRule({
     id: rule.id,
     projectId: rule.projectId,
@@ -212,7 +277,7 @@ async function applyPlotThreadField(
   }
 
   const previousValue = stringField(thread, update.field);
-  const nextValue = mergeFieldValue(previousValue, update.value, update.mode);
+  const nextValue = nextValueFor(update, previousValue);
   await upsertPlotThread({
     id: thread.id,
     bookId: thread.bookId,
@@ -229,7 +294,7 @@ async function applyPlotThreadField(
 
 /** Bieżąca wartość pola; pola encji z whitelisty są zawsze tekstowe. */
 export function stringField(
-  entity: Character | WorldElement | WorldRule | PlotThread,
+  entity: Book | Character | WorldElement | WorldRule | PlotThread,
   field: string
 ): string {
   const value = (entity as unknown as Record<string, unknown>)[field];

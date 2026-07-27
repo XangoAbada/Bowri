@@ -10,6 +10,7 @@ import {
   listAiRuns,
   listBrainstormMessages,
   markAiProposalAccepted,
+  markAiProposalPending,
   updateBrainstormMessageSuggestions,
   upsertAiProposalSnapshot
 } from "../../shared/api/commands";
@@ -23,7 +24,7 @@ import { suggestionKindLabel } from "../brainstorm/BrainstormSuggestionPanel";
 import { useBrainstormSessionStore } from "../brainstorm/brainstormSessionStore";
 import { costOf, formatCostLabel, imageCostOf } from "./pricing";
 import { formatLocalDateTime } from "../../shared/date";
-import { applyAiProposal } from "./AiProposalPanel";
+import { applyAiProposal, proposalCanAccept } from "./AiProposalPanel";
 import { conceptFieldConfigs, ConceptFieldKey } from "./promptPackage";
 import { planFieldConfigs, PlanFieldKey } from "./planPromptPackage";
 import { characterFieldConfigs, CharacterFieldKey } from "./characterPromptPackage";
@@ -31,13 +32,19 @@ import { worldFieldConfigs, WorldFieldKey } from "./worldPromptPackage";
 import { sceneEditorFieldLabel, SceneEditorFieldKey } from "./sceneEditorPromptPackage";
 import { SCENE_STORY_BIBLE_AUDIT_FIELD } from "./sceneStoryBibleAuditPromptPackage";
 import { extractJsonCandidate } from "./titleSuggestions";
-import { useProposalStore, type AiPromptSnapshot } from "./proposalStore";
+import {
+  useProposalStore,
+  type ActiveAiProposal,
+  type AiPromptSnapshot
+} from "./proposalStore";
 import {
   promptSnapshotFromLogEntry,
   proposalFromLogEntry,
   snapshotForRetry,
   type LogEntryProposal
 } from "./aiLogReplay";
+import { ConsistencyAuditLogFindings } from "./ConsistencyAuditLogFindings";
+import { isConsistencyAuditField } from "./reportProposals";
 
 type AiLogPageProps = {
   projectId: string;
@@ -133,6 +140,7 @@ export function AiLogPage({ projectId }: AiLogPageProps) {
           <AiLogEntryDetails
             entry={entry}
             key={entry.id}
+            projectId={projectId}
             fallbackBookId={fallbackBookId}
             applying={
               applyMutation.isPending &&
@@ -181,6 +189,7 @@ function entryCostLabel(entry: AiLogEntry, plnPerUsd: number): string {
 
 function AiLogEntryDetails({
   entry,
+  projectId,
   fallbackBookId,
   applying,
   applyErrorMessage,
@@ -188,6 +197,7 @@ function AiLogEntryDetails({
   onRetry
 }: {
   entry: AiLogEntry;
+  projectId: string;
   fallbackBookId: string;
   applying: boolean;
   applyErrorMessage: string;
@@ -195,9 +205,26 @@ function AiLogEntryDetails({
   onRetry: (snapshot: AiPromptSnapshot) => void;
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const restoreProposalToPanel = useProposalStore((state) => state.restoreProposal);
   const aiSettingsQuery = useQuery({
     queryKey: ["ai-settings"],
     queryFn: getAiSettings
+  });
+  const restoreProposalMutation = useMutation({
+    mutationFn: async (proposal: ActiveAiProposal) => {
+      await markAiProposalPending(proposal.id);
+      return proposal;
+    },
+    onSuccess: async (proposal) => {
+      restoreProposalToPanel(proposal);
+      await queryClient.invalidateQueries({ queryKey: ["ai-proposals", projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["ai-runs", projectId] });
+      toast.success(t("ai.log.proposalRestored"));
+    },
+    onError: () => {
+      toast.error(t("ai.log.proposalRestoreError"));
+    }
   });
   const plnPerUsd = aiSettingsQuery.data?.plnPerUsd ?? 4;
   const totalTokens = entry.inputTokens + entry.outputTokens;
@@ -208,10 +235,22 @@ function AiLogEntryDetails({
     entry.status === "queued" || entry.status === "running"
       ? null
       : promptSnapshotFromLogEntry(entry, fallbackBookId);
+  // Ta sama reguła co w panelu propozycji. Bez niej log oferował zapis dla
+  // raportów (audyt spójności, krytyka sceny), a applyAiProposal nie ma dla nich
+  // gałęzi — kończyło się błędem "invalid args".
   const canApply =
     entry.status === "success" &&
     entry.decisionStatus !== "accepted" &&
-    Boolean(logProposal);
+    Boolean(logProposal) &&
+    Boolean(logProposal && proposalCanAccept(logProposal.proposal));
+  // Odtworzona propozycja nie ma wiersza w ai_proposals, więc nie ma czego cofać;
+  // przebieg audytu nie wraca do skrzynki, bo jego kartą jest raport analizy.
+  const restorableProposal =
+    entry.decisionStatus === "rejected" &&
+    logProposal?.source === "stored" &&
+    !isConsistencyAuditField(logProposal.proposal.field)
+      ? logProposal.proposal
+      : null;
 
   return (
     <details className="ai-log-entry ui-card">
@@ -260,10 +299,14 @@ function AiLogEntryDetails({
               </Chip>
             ) : null}
           </div>
-          <div className="ai-log-prompt">
-            <h4>{t("ai.log.prompt")}</h4>
+          <details className="ai-log-prompt ai-log-collapsible">
+            <summary>
+              {entry.prompt
+                ? t("ai.log.promptToggle", { chars: entry.prompt.length })
+                : t("ai.log.prompt")}
+            </summary>
             <pre>{entry.prompt || t("ai.log.promptEmpty")}</pre>
-          </div>
+          </details>
         </section>
 
         <section className="ai-log-readable-block">
@@ -271,9 +314,14 @@ function AiLogEntryDetails({
           {entry.errorMessage ? (
             <p className="warning-text">{entry.errorMessage}</p>
           ) : null}
+          <ConsistencyAuditLogFindings
+            entry={entry}
+            projectId={projectId}
+            bookId={fallbackBookId}
+          />
           <ReadableResponse rawOutput={entry.rawOutput} />
           <BrainstormLogSuggestions entry={entry} />
-          {(canApply && logProposal) || retrySnapshot ? (
+          {(canApply && logProposal) || retrySnapshot || restorableProposal ? (
             <div className="ai-log-entry-actions">
               {canApply && logProposal ? (
                 <Button
@@ -285,7 +333,28 @@ function AiLogEntryDetails({
                   }}
                 >
                   {applying ? null : <Check size={15} />}
-                  {applying ? t("ai.log.applying") : t("ai.log.apply")}
+                  {applying
+                    ? t("ai.log.applying")
+                    : summary.fieldLabel
+                      ? t("ai.log.applyToField", { field: summary.fieldLabel })
+                      : t("ai.log.applyGeneric")}
+                </Button>
+              ) : null}
+              {restorableProposal ? (
+                <Button
+                  variant="secondary"
+                  busy={restoreProposalMutation.isPending}
+                  disabled={restoreProposalMutation.isPending}
+                  title={t("ai.log.restoreProposalTitle")}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    restoreProposalMutation.mutate(restorableProposal);
+                  }}
+                >
+                  {restoreProposalMutation.isPending ? null : (
+                    <Undo2 size={15} aria-hidden />
+                  )}
+                  {t("ai.log.restoreProposal")}
                 </Button>
               ) : null}
               {retrySnapshot ? (
@@ -315,6 +384,12 @@ function AiLogEntryDetails({
   );
 }
 
+/** Powyżej tego progu odpowiedź startuje zwinięta — raport audytu ma kilkadziesiąt kB. */
+const RESPONSE_INLINE_LIMIT = 2000;
+const MAX_DEPTH = 2;
+const MAX_INLINE_ITEMS = 5;
+const MAX_INLINE_KEYS = 8;
+
 function ReadableResponse({ rawOutput }: { rawOutput?: string | null }) {
   const { t } = useTranslation();
   if (!rawOutput?.trim()) {
@@ -322,19 +397,30 @@ function ReadableResponse({ rawOutput }: { rawOutput?: string | null }) {
   }
 
   const parsed = parseResponse(rawOutput);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return <pre className="ai-log-text-response">{rawOutput}</pre>;
-  }
+  const long = rawOutput.length > RESPONSE_INLINE_LIMIT;
+  const body =
+    !parsed || typeof parsed !== "object" || Array.isArray(parsed) ? (
+      <pre className="ai-log-text-response">{rawOutput}</pre>
+    ) : (
+      <dl className="ai-log-response-fields">
+        {Object.entries(parsed).map(([key, value]) => (
+          <div key={key}>
+            <dt>{responseLabel(key)}</dt>
+            <dd>{renderReadableValue(value)}</dd>
+          </div>
+        ))}
+      </dl>
+    );
 
-  return (
-    <dl className="ai-log-response-fields">
-      {Object.entries(parsed).map(([key, value]) => (
-        <div key={key}>
-          <dt>{responseLabel(key)}</dt>
-          <dd>{renderReadableValue(value)}</dd>
-        </div>
-      ))}
-    </dl>
+  // Długa odpowiedź startuje zwinięta; surowego JSON-a obok czytelnego widoku
+  // świadomie nie dublujemy — to była właśnie ta ściana tekstu.
+  return long ? (
+    <details className="ai-log-collapsible">
+      <summary>{t("ai.log.responseToggle", { chars: rawOutput.length })}</summary>
+      {body}
+    </details>
+  ) : (
+    body
   );
 }
 
@@ -603,31 +689,64 @@ function parseResponse(rawOutput: string): unknown {
   }
 }
 
-function renderReadableValue(value: unknown): ReactNode {
+/**
+ * Rekurencyjny podgląd odpowiedzi. Ograniczenia głębokości i liczby elementów
+ * są tu po to, żeby raport audytu nie rozwijał się w kilkumetrową ścianę
+ * zagnieżdżonych list — reszta danych chowa się w zwiniętym bloku.
+ */
+function renderReadableValue(value: unknown, depth = 0): ReactNode {
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return <span className="muted-text">{i18n.t("ai.log.noneValue")}</span>;
     }
 
-    return (
+    const list = (
       <ul>
         {value.map((item, index) => (
-          <li key={`${String(item)}-${index}`}>{renderReadableValue(item)}</li>
+          <li key={index}>{renderReadableValue(item, depth + 1)}</li>
         ))}
       </ul>
+    );
+
+    return value.length > MAX_INLINE_ITEMS ? (
+      <details className="ai-log-collapsible">
+        <summary>{i18n.t("ai.log.moreItems", { count: value.length })}</summary>
+        {list}
+      </details>
+    ) : (
+      list
     );
   }
 
   if (value && typeof value === "object") {
-    return (
+    const entries = Object.entries(value);
+    if (depth >= MAX_DEPTH) {
+      return (
+        <details className="ai-log-collapsible">
+          <summary>{i18n.t("ai.log.moreFields", { count: entries.length })}</summary>
+          <pre className="ai-log-text-response">{JSON.stringify(value, null, 2)}</pre>
+        </details>
+      );
+    }
+
+    const fields = (
       <dl className="ai-log-nested-fields">
-        {Object.entries(value).map(([key, nestedValue]) => (
+        {entries.map(([key, nestedValue]) => (
           <div key={key}>
             <dt>{responseLabel(key)}</dt>
-            <dd>{renderReadableValue(nestedValue)}</dd>
+            <dd>{renderReadableValue(nestedValue, depth + 1)}</dd>
           </div>
         ))}
       </dl>
+    );
+
+    return entries.length > MAX_INLINE_KEYS ? (
+      <details className="ai-log-collapsible">
+        <summary>{i18n.t("ai.log.moreFields", { count: entries.length })}</summary>
+        {fields}
+      </details>
+    ) : (
+      fields
     );
   }
 
@@ -636,28 +755,15 @@ function renderReadableValue(value: unknown): ReactNode {
   }
 
   if (value === null || value === undefined || value === "") {
-    return <span className="muted-text">Brak</span>;
+    return <span className="muted-text">{i18n.t("ai.log.noneValue")}</span>;
   }
 
   return String(value);
 }
 
+/** Etykiety trzymamy wyłącznie w ai.json — nowy klucz nie wymaga zmiany kodu. */
 function responseLabel(key: string): string {
-  const keys = [
-    "version",
-    "kind",
-    "field",
-    "summary",
-    "value",
-    "values",
-    "rationale",
-    "warnings",
-    "imagePath",
-    "risks",
-    "questionsForAuthor"
-  ];
-
-  return keys.includes(key) ? i18n.t(`ai.responseLabel.${key}`) : key;
+  return i18n.exists(`ai.responseLabel.${key}`) ? i18n.t(`ai.responseLabel.${key}`) : key;
 }
 
 function reasoningLabel(reasoningEffort?: string | null): string {

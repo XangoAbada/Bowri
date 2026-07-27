@@ -21,6 +21,7 @@ import { worldFieldConfigs, type WorldFieldKey } from "./worldPromptPackage";
 import type { SceneEditorFieldKey } from "./sceneEditorPromptPackage";
 import { SCENE_STORY_BIBLE_AUDIT_FIELD } from "./sceneStoryBibleAuditPromptPackage";
 import { SCENE_CRITIQUE_FIELD } from "./sceneCritiquePromptPackage";
+import { CONSISTENCY_AUDIT_FIELD } from "./consistencyAuditPromptPackage";
 import i18n from "../../shared/i18n";
 
 /** Pola, dla których `parseProposalResult` potrafi zbudować propozycję z odpowiedzi. */
@@ -31,7 +32,8 @@ type ParsableFieldKey =
   | WorldFieldKey
   | SceneEditorFieldKey
   | typeof SCENE_STORY_BIBLE_AUDIT_FIELD
-  | typeof SCENE_CRITIQUE_FIELD;
+  | typeof SCENE_CRITIQUE_FIELD
+  | typeof CONSISTENCY_AUDIT_FIELD;
 
 /**
  * Propozycja odtworzona z wpisu logu AI. `stored` to snapshot zapisany w tabeli
@@ -283,6 +285,10 @@ function scopeFor(field: AiTaskFieldKey): AiProposalScope | null {
     return "sceneEditor";
   }
 
+  if (field === CONSISTENCY_AUDIT_FIELD) {
+    return "consistencyAudit";
+  }
+
   if (SCENE_EDITOR_FIELDS.includes(field)) {
     return "sceneEditor";
   }
@@ -310,7 +316,8 @@ function isKnownField(field: string): boolean {
     field in worldFieldConfigs ||
     SCENE_EDITOR_FIELDS.includes(field) ||
     field === SCENE_STORY_BIBLE_AUDIT_FIELD ||
-    field === SCENE_CRITIQUE_FIELD
+    field === SCENE_CRITIQUE_FIELD ||
+    field === CONSISTENCY_AUDIT_FIELD
   );
 }
 

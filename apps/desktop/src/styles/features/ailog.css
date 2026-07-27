@@ -116,3 +116,94 @@
   margin: 0;
 }
 
+/* Zwijane bloki wpisu: prompt, długa odpowiedź, surowy JSON, głębokie gałęzie. */
+.ai-log-collapsible > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ai-log-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-log-collapsible > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--text-soft);
+  font-size: 11px;
+  transition: transform 140ms ease;
+}
+
+.ai-log-collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.ai-log-collapsible > summary:hover {
+  color: var(--text);
+}
+
+/* Uwagi analizy spójności pokazane przy wpisie logu. */
+.ai-log-findings {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-log-findings > h4 {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ai-log-finding-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.ai-log-finding-card > summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ai-log-finding-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-log-finding-head {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ai-log-finding-head strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.ai-log-finding-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.ai-log-finding-body p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+

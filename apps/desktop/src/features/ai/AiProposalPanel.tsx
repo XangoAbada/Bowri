@@ -1,6 +1,7 @@
 import { Check, CircleStop, Clock3, FileJson, GitBranch, Link2, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import i18n from "../../shared/i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
@@ -24,6 +25,7 @@ import {
   getBookPlan,
   listActiveCodexRuns,
   listAiProposals,
+  listConsistencyAudits,
   listSceneCritiques,
   markAiProposalAccepted,
   markAiProposalRejected,
@@ -130,6 +132,20 @@ import {
   useSceneDiscoveryStore
 } from "./sceneDiscoveryStore";
 import {
+  AUDIT_DIMENSION_LABELS,
+  CONSISTENCY_AUDIT_FIELD,
+  parseConsistencyAuditResult
+} from "./consistencyAuditPromptPackage";
+import {
+  consistencyAuditPassRef,
+  markConsistencyAuditPassRunning,
+  recordConsistencyAuditFailure,
+  recordConsistencyAuditPass
+} from "./consistencyAuditService";
+import { useConsistencyAuditStore } from "./consistencyAuditStore";
+import { ConsistencyAuditPanel } from "./ConsistencyAuditPanel";
+import { isConsistencyAuditField, isReportOnlyField } from "./reportProposals";
+import {
   applySceneEditorProposal,
   SceneEditorInsertMode
 } from "./sceneEditorProposalTargets";
@@ -151,7 +167,7 @@ import {
   BrainstormSuggestionPanel,
   usePendingBrainstormSuggestions
 } from "../brainstorm/BrainstormSuggestionPanel";
-import { Button } from "../../shared/ui";
+import { Button, toast } from "../../shared/ui";
 import {
   characterPromptContextTargetId,
   conceptPromptContextTargetId,
@@ -510,6 +526,10 @@ export function AiProposalPanel({
   const pendingAssignments = useSceneDiscoveryStore((state) => state.pendingAssignments);
   const visibleProposals = proposals
     .filter((proposal) => proposal.projectId === projectId)
+    // Sześć przebiegów audytu ma jedną wspólną kartę z postępem n/6 — osobne
+    // kafelki tylko by ją dublowały. Filtr dotyczy WYŁĄCZNIE renderowania:
+    // useAiQueueRunner czyta state.proposals bezpośrednio i nadal je wykonuje.
+    .filter((proposal) => !isConsistencyAuditField(proposal.field))
     .sort(compareProposalsForPanel);
   const discoveries = useSceneDiscoveryStore((state) => state.discoveries);
   const visibleDiscoveries = useMemo(
@@ -535,6 +555,21 @@ export function AiProposalPanel({
     [critiques, projectId]
   );
   const hydrateCritiques = useSceneCritiqueStore((state) => state.hydrate);
+  const audits = useConsistencyAuditStore((state) => state.audits);
+  const visibleAudits = useMemo(
+    () =>
+      // Karta zostaje aż autor przyjmie raport — także wtedy, gdy wszystkie
+      // uwagi są odrzucone albo zastosowane, bo inaczej nie dałoby się otworzyć
+      // ich listy ani rozliczyć przebiegów.
+      audits.filter(
+        (audit) =>
+          audit.projectId === projectId &&
+          !audit.acknowledged &&
+          (audit.status === "running" || audit.findings.length > 0)
+      ),
+    [audits, projectId]
+  );
+  const hydrateAudits = useConsistencyAuditStore((state) => state.hydrate);
   const brainstormSuggestions = usePendingBrainstormSuggestions();
   const panelProjectQuery = useQuery({
     queryKey: ["project", projectId],
@@ -553,6 +588,20 @@ export function AiProposalPanel({
       hydrateCritiques(sceneCritiquesQuery.data);
     }
   }, [hydrateCritiques, sceneCritiquesQuery.data]);
+  // Hydratacja audytów siedzi tutaj, a nie w ConsistencyAuditPanel, bo panel
+  // nie renderuje się, dopóki poniższa bramka pustego stanu go nie przepuści —
+  // gdyby to on pobierał dane, nigdy by do tego nie doszło.
+  const consistencyAuditsQuery = useQuery({
+    queryKey: ["consistency-audits", panelBookId],
+    queryFn: () => listConsistencyAudits(panelBookId ?? ""),
+    enabled: Boolean(panelBookId),
+    retry: 0
+  });
+  useEffect(() => {
+    if (consistencyAuditsQuery.data) {
+      hydrateAudits(consistencyAuditsQuery.data);
+    }
+  }, [hydrateAudits, consistencyAuditsQuery.data]);
   const persistentProposalQuery = useQuery({
     queryKey: ["ai-proposals", projectId],
     queryFn: () => listAiProposals(projectId),
@@ -948,6 +997,7 @@ export function AiProposalPanel({
     visibleAuditPrompts.length === 0 &&
     visibleAssignments.length === 0 &&
     visibleCritiques.length === 0 &&
+    visibleAudits.length === 0 &&
     brainstormSuggestions.length === 0
   ) {
     return (
@@ -979,6 +1029,7 @@ export function AiProposalPanel({
         </span>
       </div>
 
+      <ConsistencyAuditPanel projectId={projectId} audits={visibleAudits} />
       <SceneAuditPromptPanel prompts={visibleAuditPrompts} />
       <SceneAssignmentPanel projectId={projectId} assignments={visibleAssignments} />
       <SceneDiscoveryPanel projectId={projectId} discoveries={visibleDiscoveries} />
@@ -1002,12 +1053,20 @@ export function AiProposalPanel({
             onAcceptAsPlanVersion={() => acceptMutation.mutate({ proposalId: proposal.id, asNewPlanVersion: true })}
             onCancel={() => cancelMutation.mutate(proposal.id)}
             onClear={() => {
-              void markAiProposalRejected(proposal.id).finally(() => {
-                clearProposal(proposal.id);
-                void queryClient.invalidateQueries({ queryKey: ["ai-runs", projectId] });
-                void queryClient.invalidateQueries({ queryKey: ["ai-run-usage-totals", projectId] });
-                void queryClient.invalidateQueries({ queryKey: ["ai-proposals", projectId] });
-              });
+              // Dopiero po udanym zapisie decyzji: propozycja usunięta z pamięci
+              // mimo błędu zapisu zostałaby w bazie jako oczekująca i wróciłaby
+              // duchem przy następnej hydratacji.
+              void markAiProposalRejected(proposal.id).then(
+                () => {
+                  clearProposal(proposal.id);
+                  void queryClient.invalidateQueries({ queryKey: ["ai-runs", projectId] });
+                  void queryClient.invalidateQueries({ queryKey: ["ai-run-usage-totals", projectId] });
+                  void queryClient.invalidateQueries({ queryKey: ["ai-proposals", projectId] });
+                },
+                () => {
+                  toast.error(t("ai.proposalPanel.rejectError"));
+                }
+              );
             }}
             onRetry={() => retryProposal(proposal.id)}
             onPreview={(src, alt) => setPreviewImage({ src, alt })}
@@ -1965,7 +2024,12 @@ function ProposalQueueItem({
   const sceneEditorProposal = proposal.scope === "sceneEditor";
   const sceneAuditProposal = proposal.field === SCENE_STORY_BIBLE_AUDIT_FIELD;
   const sceneCritiqueProposal = proposal.field === SCENE_CRITIQUE_FIELD;
-  const label = sceneAuditProposal
+  // Panel odfiltrowuje przebiegi audytu przed renderem (mają wspólną kartę
+  // raportu), więc ta gałąź jest tu tylko na wypadek użycia kafelka gdzie indziej.
+  const consistencyAuditProposal = proposal.field === CONSISTENCY_AUDIT_FIELD;
+  const label = consistencyAuditProposal
+    ? consistencyAuditPassLabel(proposal, t)
+    : sceneAuditProposal
     ? t("ai.proposalLabel.sceneAudit")
     : sceneCritiqueProposal
     ? t("ai.proposalLabel.sceneCritique")
@@ -1999,6 +2063,7 @@ function ProposalQueueItem({
     !worldProposal &&
     !sceneAuditProposal &&
     !sceneCritiqueProposal &&
+    !consistencyAuditProposal &&
     !sceneEditorProposal &&
     !planProposal &&
     (longConceptFields.includes(proposal.field as ConceptFieldKey) || structured)
@@ -2028,9 +2093,11 @@ function ProposalQueueItem({
                       ? t("ai.proposalScope.world")
                       : sceneAuditProposal
                         ? t("ai.proposalScope.audit")
-                        : sceneCritiqueProposal
-                          ? t("ai.proposalScope.editor")
-                          : t("ai.proposalScope.field")}
+                        : consistencyAuditProposal
+                          ? t("analysis.proposalScope")
+                          : sceneCritiqueProposal
+                            ? t("ai.proposalScope.editor")
+                            : t("ai.proposalScope.field")}
           </p>
           <h3>{label}</h3>
         </div>
@@ -2325,6 +2392,13 @@ function useAiQueueRunner() {
         return;
       }
 
+      // null dla wszystkiego poza audytem spójności; ustawiane raz, bo używane
+      // w trzech miejscach: sukces, anulowanie i błąd.
+      const auditRef = consistencyAuditPassRef(snapshot.promptPackageJson);
+      if (auditRef) {
+        markConsistencyAuditPassRunning(auditRef);
+      }
+
       try {
         if (isBookCoverProposal(snapshot)) {
           updateProposalProgress(proposalId, {
@@ -2559,11 +2633,18 @@ function useAiQueueRunner() {
 
         if (result.status !== "success" || !result.rawOutput) {
           if (result.status === "cancelled") {
-            cancelProposal(
-              proposalId,
-              result.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel }),
-              result.id
-            );
+            const message =
+              result.errorMessage ?? i18n.t("ai.cancelledMessage", { provider: providerInfo.providerLabel });
+            // Anulowany przebieg audytu musi zostawić ślad w raporcie, inaczej
+            // audyt czekałby w nieskończoność na wynik, którego nie będzie.
+            if (auditRef) {
+              recordConsistencyAuditFailure({
+                ref: auditRef,
+                errorMessage: message,
+                aiRunId: result.id
+              });
+            }
+            cancelProposal(proposalId, message, result.id);
             return;
           }
           throw new QueueRunError(
@@ -2575,9 +2656,14 @@ function useAiQueueRunner() {
 
         const parsed = parseProposalResult(
           result.rawOutput,
-          snapshot.field as ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey | SceneEditorFieldKey | typeof SCENE_STORY_BIBLE_AUDIT_FIELD | typeof SCENE_CRITIQUE_FIELD,
+          snapshot.field as ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey | SceneEditorFieldKey | typeof SCENE_STORY_BIBLE_AUDIT_FIELD | typeof SCENE_CRITIQUE_FIELD | typeof CONSISTENCY_AUDIT_FIELD,
           snapshot.action
         );
+        if (parsed.kind === "consistency_audit" && auditRef) {
+          // Wynik przebiegu opuszcza kolejkę propozycji i wchodzi do raportu
+          // audytu; koordynator sprawdza przy okazji, czy można odpalić syntezę.
+          recordConsistencyAuditPass({ ref: auditRef, parsed, aiRunId: result.id });
+        }
         if (parsed.kind === "scene_critique") {
           const context =
             "context" in snapshot.promptPackageJson
@@ -2649,6 +2735,9 @@ function useAiQueueRunner() {
         const message = error instanceof Error ? error.message : String(error);
         const rawOutput = error instanceof QueueRunError ? error.rawOutput : "";
         const aiRunId = error instanceof QueueRunError ? error.aiRunId : undefined;
+        if (auditRef) {
+          recordConsistencyAuditFailure({ ref: auditRef, errorMessage: message, aiRunId });
+        }
         failProposal(proposalId, message, rawOutput, aiRunId);
       }
     }
@@ -2725,7 +2814,7 @@ function useCoverGenerationProgressListener() {
 
 export function parseProposalResult(
   rawOutput: string,
-  expectedField: ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey | SceneEditorFieldKey | typeof SCENE_STORY_BIBLE_AUDIT_FIELD | typeof SCENE_CRITIQUE_FIELD,
+  expectedField: ConceptFieldKey | PlanFieldKey | CharacterFieldKey | WorldFieldKey | SceneEditorFieldKey | typeof SCENE_STORY_BIBLE_AUDIT_FIELD | typeof SCENE_CRITIQUE_FIELD | typeof CONSISTENCY_AUDIT_FIELD,
   action: string
 ): ParsedAiProposal {
   if (action === "analyze_scene_story_bible_opportunities") {
@@ -2734,6 +2823,10 @@ export function parseProposalResult(
 
   if (action === "critique_scene") {
     return parseSceneCritiqueResult(rawOutput);
+  }
+
+  if (action === "analyze_consistency" || action === "synthesize_consistency_audit") {
+    return parseConsistencyAuditResult(rawOutput);
   }
 
   if (isPlanAction(action)) {
@@ -3682,6 +3775,18 @@ function isExportArtworkProposal(
   return proposal.scope === "export" && proposal.field === EXPORT_ARTWORK_FIELD;
 }
 
+/** Etykieta pozycji w kolejce: "Analiza spójności: Świat i reguły". */
+function consistencyAuditPassLabel(
+  proposal: Pick<ActiveAiProposal, "promptPackageJson">,
+  t: TFunction
+): string {
+  const ref = consistencyAuditPassRef(proposal.promptPackageJson);
+  const dimension = ref ? AUDIT_DIMENSION_LABELS[ref.dimension] : "";
+  return dimension
+    ? `${t("analysis.proposalLabel")}: ${dimension}`
+    : t("analysis.proposalLabel");
+}
+
 function hasSelectedEditableField(proposal: ActiveAiProposal): boolean {
   return Object.entries(proposal.selectedFields).some(([field, selected]) => {
     const value = proposal.editableFields[field as ConceptFieldKey] ?? "";
@@ -3706,11 +3811,9 @@ export function proposalCanAccept(proposal: ActiveAiProposal): boolean {
     return Boolean((proposal.exportArtworkPath || proposal.coverImagePath || proposal.editableValue).trim());
   }
 
-  if (proposal.field === SCENE_STORY_BIBLE_AUDIT_FIELD) {
-    return false;
-  }
-
-  if (proposal.field === SCENE_CRITIQUE_FIELD) {
+  // Raport (audyt sceny, krytyka, audyt spójności) niesie listę uwag, nie jedną
+  // wartość — jego poprawki stosuje się pojedynczo w panelu analizy albo w logu AI.
+  if (isReportOnlyField(proposal.field)) {
     return false;
   }
 

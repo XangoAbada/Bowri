@@ -13,7 +13,8 @@ const OPENAI_CONTEXT_WINDOWS: Record<string, number> = {
 };
 
 const ANTHROPIC_CONTEXT_WINDOWS: Record<string, number> = {
-  "claude-opus-5": 200_000,
+  // Opus 5 ma 1M natywnie — potwierdza to samo CLI w `modelUsage[].contextWindow`.
+  "claude-opus-5": 1_000_000,
   "claude-opus-4-8": 200_000,
   // Wariant 1M kontekstu (patrz etykieta w textProviderInfo.CLAUDE_MODELS).
   "claude-opus-4-7": 1_000_000,
@@ -35,6 +36,14 @@ export const DEFAULT_OUTPUT_RESERVE_TOKENS = 16_000;
  * niż autor się spodziewa. Kto chce więcej — podnosi override w ustawieniach.
  */
 export const DEFAULT_CONTEXT_SHARE = 0.25;
+
+/**
+ * Sufit trybu automatycznego. Bez niego model z oknem 1M dostałby 250 000
+ * tokenów wejścia w KAŻDEJ turze brainstormu — przy stawkach klasy Opus to
+ * rząd wielkości więcej, niż autor się spodziewa po zwykłej rozmowie.
+ * Kto świadomie chce więcej, podnosi `contextWindowOverride` w ustawieniach.
+ */
+export const MAX_AUTOMATIC_BUDGET_TOKENS = 120_000;
 
 export type ContextWindowInfo = {
   totalTokens: number;
@@ -112,7 +121,11 @@ export function resolveContextBudget(
   }
   return {
     windowTokens: totalTokens,
-    budgetTokens: Math.min(Math.round(totalTokens * DEFAULT_CONTEXT_SHARE), usable),
+    budgetTokens: Math.min(
+      Math.round(totalTokens * DEFAULT_CONTEXT_SHARE),
+      usable,
+      MAX_AUTOMATIC_BUDGET_TOKENS
+    ),
     source
   };
 }
