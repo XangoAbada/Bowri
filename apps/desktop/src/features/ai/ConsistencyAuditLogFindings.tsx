@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -156,6 +157,7 @@ export function ConsistencyAuditLogFindings({
             key={`${finding.title}:${index}`}
           >
             <summary>
+              <ChevronRight size={15} className="ai-log-disclosure" aria-hidden="true" />
               <span className="ai-log-finding-head">
                 <span className="scene-discovery-kind">
                   {CONSISTENCY_FINDING_SEVERITY_LABELS[finding.severity]} ·{" "}

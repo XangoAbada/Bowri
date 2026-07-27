@@ -1280,3 +1280,17 @@ export type CoverGenerationProgressEvent = {
   partialImageDataUrl?: string | null;
   progress?: number | null;
 };
+
+/**
+ * Podgląd generacji tekstu na żywo. Nic z tego nie idzie do bazy — zdarzenie
+ * żyje tyle, ile przebieg. `partialText` to ogon odpowiedzi (ostatnie ~2000
+ * znaków), nie całość.
+ */
+export type TextGenerationProgressEvent = {
+  projectId: string;
+  aiRunId: string;
+  action: string;
+  phase: "streaming" | "final" | string;
+  charCount: number;
+  partialText: string;
+};

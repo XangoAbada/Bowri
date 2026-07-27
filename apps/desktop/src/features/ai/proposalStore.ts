@@ -133,6 +133,13 @@ export type ActiveAiProposal = AiPromptSnapshot & {
   progressMessage?: string;
   progress?: number | null;
   partialImageDataUrl?: string | null;
+  /**
+   * Podgląd generacji tekstu: ogon odpowiedzi spływającej z modelu wraz z liczbą
+   * odebranych znaków. Stan ulotny — nie idzie do bazy i jest czyszczony razem z
+   * resztą progresu po zakończeniu przebiegu.
+   */
+  partialText?: string;
+  partialTextChars?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -173,7 +180,7 @@ type ProposalResult = Pick<
 type ProposalProgress = Partial<
   Pick<
     ActiveAiProposal,
-    "progressMessage" | "progress" | "partialImageDataUrl"
+    "progressMessage" | "progress" | "partialImageDataUrl" | "partialText" | "partialTextChars"
   >
 >;
 
@@ -330,22 +337,24 @@ export const useProposalStore = create<ProposalState>((set) => ({
     );
     persistProposalSnapshot(updated);
   },
+  // Świadomie bez persistProposalSnapshot: podgląd generacji sypie zdarzeniami
+  // kilka razy na sekundę przez cały przebieg (audyt spójności trwa minutami),
+  // a zapis stanu, który nie przeżywa restartu, byłby tysiącami zapisów do
+  // SQLite bez żadnego zysku.
   updateProposalProgress: (id, progress) => {
-    let updated: ActiveAiProposal | undefined;
     set((state) =>
       syncActive({
         proposals: state.proposals.map((proposal) =>
           proposal.id === id
-            ? (updated = {
+            ? {
                 ...proposal,
                 ...progress,
                 updatedAt: new Date().toISOString()
-              })
+              }
             : proposal
         )
       })
     );
-    persistProposalSnapshot(updated);
   },
   retryProposal: (id) => {
     let updated: ActiveAiProposal | undefined;
@@ -376,6 +385,8 @@ export const useProposalStore = create<ProposalState>((set) => ({
                 progressMessage: undefined,
                 progress: undefined,
                 partialImageDataUrl: undefined,
+                partialText: undefined,
+                partialTextChars: undefined,
                 updatedAt: new Date().toISOString()
               })
             : proposal
@@ -587,12 +598,25 @@ function persistProposalSnapshot(proposal: ActiveAiProposal | undefined): void {
     return;
   }
 
+  // Progres jest ulotny: opisuje generację, która albo trwa, albo już się
+  // skończyła, a po restarcie aplikacji nie ma czego podglądać. Bez tego
+  // odfiltrowania ogon odpowiedzi (do 2000 znaków) trafiałby do payload_json
+  // razem z każdą propozycją.
+  const {
+    progressMessage: _progressMessage,
+    progress: _progress,
+    partialImageDataUrl: _partialImageDataUrl,
+    partialText: _partialText,
+    partialTextChars: _partialTextChars,
+    ...persisted
+  } = proposal;
+
   void upsertAiProposalSnapshot({
     id: proposal.id,
     aiRunId: proposal.aiRunId ?? null,
     projectId: proposal.projectId,
     proposalType: proposal.scope ?? "bookConcept",
-    payloadJson: proposal,
+    payloadJson: persisted,
     status: proposal.status
   }).catch(() => undefined);
 }

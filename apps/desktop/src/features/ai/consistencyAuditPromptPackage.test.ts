@@ -104,6 +104,34 @@ describe("renderConsistencyAuditPromptPackage", () => {
     expect(prompt).not.toContain("maksymalnie 10");
   });
 
+  it("zakazuje uwag o warstwie planu i nie oferuje jej w kontrakcie dowodów", () => {
+    for (const dimension of [...AUDIT_DIMENSIONS, "synthesis" as AuditDimension]) {
+      const prompt = renderConsistencyAuditPromptPackage(packageFor(dimension));
+
+      expect(prompt).toContain("Audyt obejmuje WYŁĄCZNIE Story Bible");
+      expect(prompt).toContain("Nie zgłaszaj uwag o rozdziałach, scenach, aktach, beatach");
+      // Kontrakt evidence.kind nie może wymieniać encji, których nie ma w dossier.
+      expect(prompt).not.toContain("| act | beat | chapter | scene");
+    }
+  });
+
+  it("pyta o wątki bez odwołań do rozdziałów, scen, aktów i beatów", () => {
+    const prompt = renderConsistencyAuditPromptPackage(packageFor("threads"));
+
+    expect(prompt).toContain("Wymiar tego przebiegu: Wątki.");
+    expect(prompt).toContain("Sprawdź wątki fabularne.");
+
+    // Same pytania przebiegu, bez sekcji Role i bez Hard Rules, które o warstwie
+    // planu wspominają celowo (zakaz zgłaszania uwag).
+    const focus = prompt.slice(
+      prompt.indexOf("Wymiar tego przebiegu:"),
+      prompt.indexOf("# Hard Rules")
+    );
+    for (const forbidden of ["rozdzia", "scen", "akt", "beat", "znaczniki czasu", "POV"]) {
+      expect(focus).not.toContain(forbidden);
+    }
+  });
+
   it("podaje whitelistę pól patcha wraz z koncepcją", () => {
     const prompt = renderConsistencyAuditPromptPackage(packageFor("crossCutting"));
 

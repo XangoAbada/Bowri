@@ -13,7 +13,6 @@ import { Button, EmptyState, StatusPill } from "../../shared/ui";
 import {
   AUDIT_DIMENSION_LABELS,
   AUDIT_DIMENSIONS,
-  AUDIT_PASS_COUNT,
   CONSISTENCY_FINDING_SEVERITY_LABELS,
   CONSISTENCY_SEVERITY_ORDER,
   type AuditDimension
@@ -27,6 +26,7 @@ import {
   useConsistencyAuditStore,
   type ConsistencyAudit
 } from "../ai/consistencyAuditStore";
+import { ProposalStreamPreview } from "../ai/TextStreamPreview";
 import {
   contextWindowFor,
   DEFAULT_OUTPUT_RESERVE_TOKENS,
@@ -37,7 +37,8 @@ import { buildStoryBibleDossier } from "../ai/storyBibleDossier";
 
 // Sekcja "Analiza": sterowanie audytem spójności i historia raportów.
 // Same poprawki żyją w panelu AI po prawej (ConsistencyAuditPanel) — tutaj
-// autor widzi gotowość projektu, postęp sześciu przebiegów i przeszłe audyty.
+// autor widzi gotowość projektu, wybiera zakres analizy, śledzi postęp
+// przebiegów i przegląda przeszłe audyty.
 
 type AnalysisPageProps = {
   projectId: string;
@@ -52,6 +53,9 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
   const markOutdated = useConsistencyAuditStore((state) => state.markOutdated);
   const setAcknowledged = useConsistencyAuditStore((state) => state.setAcknowledged);
   const [starting, setStarting] = useState(false);
+  // Zakres analizy. Domyślnie komplet — raport częściowy jest świadomą decyzją
+  // autora, nie stanem, w który da się wpaść przypadkiem.
+  const [scope, setScope] = useState<AuditDimension[]>(() => [...AUDIT_DIMENSIONS]);
 
   const projectQuery = useQuery({
     queryKey: ["project", projectId],
@@ -117,6 +121,18 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
   // co robimy przy przekroczeniu, to ostrzeżenie — kontekstu nie obcinamy.
   const overflows = dossierTokens + DEFAULT_OUTPUT_RESERVE_TOKENS > window.totalTokens;
 
+  // Synteza scala uwagi z wielu wymiarów — przy jednym nie ma czego scalać,
+  // więc przebiegów jest dokładnie tyle, ile wybranych wymiarów.
+  const passCount = scope.length + (scope.length > 1 ? 1 : 0);
+
+  function toggleDimension(dimension: AuditDimension) {
+    setScope((current) =>
+      current.includes(dimension)
+        ? current.filter((item) => item !== dimension)
+        : AUDIT_DIMENSIONS.filter((item) => item === dimension || current.includes(item))
+    );
+  }
+
   function handleStart() {
     // Powtórzona bramka: TypeScript nie przenosi zawężenia typów z early
     // return powyżej do wnętrza tej funkcji.
@@ -125,7 +141,7 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
     }
     setStarting(true);
     try {
-      startConsistencyAudit({ project, book, plan, characters, world });
+      startConsistencyAudit({ project, book, plan, characters, world, dimensions: scope });
     } finally {
       setStarting(false);
     }
@@ -163,9 +179,7 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
               ["memory", dossier.counts.memory],
               ["worldElement", dossier.counts.worldElement],
               ["worldRule", dossier.counts.worldRule],
-              ["plotThread", dossier.counts.plotThread],
-              ["chapter", dossier.counts.chapter],
-              ["scene", dossier.counts.scene]
+              ["plotThread", dossier.counts.plotThread]
             ] as const
           ).map(([kind, count]) => (
             <li key={kind}>
@@ -191,17 +205,40 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
           </p>
         ) : null}
 
+        <h3 className="analysis-scope-title">{t("analysis.scopeTitle")}</h3>
+        <ul className="analysis-scope">
+          {AUDIT_DIMENSIONS.map((dimension) => (
+            <li key={dimension}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={scope.includes(dimension)}
+                  disabled={Boolean(runningAudit)}
+                  onChange={() => toggleDimension(dimension)}
+                />
+                <span>{AUDIT_DIMENSION_LABELS[dimension]}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        <p className="muted-text">
+          {scope.length > 1 ? t("analysis.scopeHint") : t("analysis.scopeHintSingle")}
+        </p>
+
         <div className="analysis-actions">
           <Button
             variant="ai"
             busy={starting}
-            disabled={Boolean(runningAudit) || starting}
+            disabled={Boolean(runningAudit) || starting || scope.length === 0}
             onClick={handleStart}
           >
-            {t("analysis.startButton", { passes: AUDIT_PASS_COUNT })}
+            {t("analysis.startButton", { passes: passCount })}
           </Button>
           {runningAudit ? (
             <span className="muted-text">{t("analysis.alreadyRunning")}</span>
+          ) : null}
+          {scope.length === 0 ? (
+            <span className="muted-text">{t("analysis.scopeEmpty")}</span>
           ) : null}
         </div>
       </div>
@@ -321,6 +358,9 @@ function AuditCard({
                   ? ` · ${t("analysis.passFindings", { count: pass.findingCount })}`
                   : ""}
               </span>
+              {pass.status === "skipped" ? (
+                <span className="muted-text">{t("analysis.passSkippedHint")}</span>
+              ) : null}
               {pass.status === "error" ? (
                 <>
                   <span className="warning-text">{pass.errorMessage}</span>
@@ -338,6 +378,11 @@ function AuditCard({
                     {t("analysis.retryPass")}
                   </Button>
                 </>
+              ) : null}
+              {/* Podgląd generacji: store audytu zna id propozycji od momentu
+                  zakolejkowania (setPassProposalId), więc wystarczy je podać. */}
+              {pass.status === "running" ? (
+                <ProposalStreamPreview proposalId={pass.proposalId} />
               ) : null}
             </li>
           );

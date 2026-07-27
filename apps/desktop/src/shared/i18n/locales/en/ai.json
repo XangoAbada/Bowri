@@ -76,6 +76,10 @@
       "world": "World",
       "field": "Field"
     },
+    "streamPreview": {
+      "label": "Model is writing",
+      "chars": "{{count}} characters"
+    },
     "queueItem": {
       "queuedHint": "The task is waiting for the previous generation in the queue to finish.",
       "generatingCover": "{{provider}} is generating the cover.",

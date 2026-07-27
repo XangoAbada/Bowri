@@ -238,6 +238,9 @@
   gap: 6px;
 }
 
+/* Checkbox „domowy”: appearance:none + rysowany ptaszek. Reguły niżej dzielą
+   go z .analysis-scope — natywny input renderuje się w tym webview znacznie
+   większy niż 18 px i rozpychał kafelki wyboru zakresu analizy. */
 .chapter-export-row,
 .toggle-row {
   display: grid;
@@ -253,7 +256,8 @@
 }
 
 .chapter-export-row input[type="checkbox"],
-.toggle-row input[type="checkbox"] {
+.toggle-row input[type="checkbox"],
+.analysis-scope input[type="checkbox"] {
   appearance: none;
   display: grid;
   place-items: center;
@@ -268,7 +272,8 @@
 }
 
 .chapter-export-row input[type="checkbox"]::before,
-.toggle-row input[type="checkbox"]::before {
+.toggle-row input[type="checkbox"]::before,
+.analysis-scope input[type="checkbox"]::before {
   content: "";
   width: 8px;
   height: 5px;
@@ -281,18 +286,21 @@
 }
 
 .chapter-export-row input[type="checkbox"]:checked,
-.toggle-row input[type="checkbox"]:checked {
+.toggle-row input[type="checkbox"]:checked,
+.analysis-scope input[type="checkbox"]:checked {
   border-color: var(--accent);
   background: var(--accent);
 }
 
 .chapter-export-row input[type="checkbox"]:checked::before,
-.toggle-row input[type="checkbox"]:checked::before {
+.toggle-row input[type="checkbox"]:checked::before,
+.analysis-scope input[type="checkbox"]:checked::before {
   transform: rotate(-45deg) scale(1);
 }
 
 .chapter-export-row input[type="checkbox"]:focus-visible,
-.toggle-row input[type="checkbox"]:focus-visible {
+.toggle-row input[type="checkbox"]:focus-visible,
+.analysis-scope input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

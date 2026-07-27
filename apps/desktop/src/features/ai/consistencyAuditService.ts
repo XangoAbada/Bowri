@@ -17,6 +17,7 @@ import {
   type NormalizedConsistencyAudit
 } from "./consistencyAuditPromptPackage";
 import {
+  auditScope,
   createAuditId,
   createFindingId,
   serializeAuditFindings,
@@ -44,6 +45,8 @@ type AuditContext = {
   project: Project;
   book: Book;
   dossier: StoryBibleDossier;
+  /** Zakres wybrany przy starcie — po nim liczy się domknięcie syntezą. */
+  dimensions: AuditDimension[];
 };
 
 /**
@@ -60,27 +63,36 @@ export function startConsistencyAudit({
   book,
   plan,
   characters,
-  world
+  world,
+  dimensions
 }: {
   project: Project;
   book: Book;
   plan: BookPlan;
   characters: CharacterWorkspace;
   world: WorldWorkspace;
+  /** Zakres audytu; pominięty albo pusty oznacza wszystkie wymiary. */
+  dimensions?: AuditDimension[];
 }): { auditId: string; dossier: StoryBibleDossier } {
   const dossier = buildStoryBibleDossier({ project, book, plan, characters, world });
   const auditId = createAuditId();
-  auditContexts.set(auditId, { project, book, dossier });
+  // Kolejność z AUDIT_DIMENSIONS, nie z wyboru autora: przebiegi mają lecieć
+  // zawsze w tej samej kolejności, niezależnie od tego, co odklikał.
+  const scope = dimensions?.length
+    ? AUDIT_DIMENSIONS.filter((dimension) => dimensions.includes(dimension))
+    : [...AUDIT_DIMENSIONS];
+  auditContexts.set(auditId, { project, book, dossier, dimensions: scope });
 
   useConsistencyAuditStore.getState().startAudit({
     id: auditId,
     projectId: project.id,
     bookId: book.id,
     dossierHash: dossier.hash,
-    dossierText: dossier.text
+    dossierText: dossier.text,
+    dimensions: scope
   });
 
-  for (const dimension of AUDIT_DIMENSIONS) {
+  for (const dimension of scope) {
     enqueuePass({ project, book, auditId, dimension, dossier });
   }
 
@@ -234,9 +246,12 @@ export function markConsistencyAuditPassRunning(ref: ConsistencyAuditPassRef): v
 }
 
 /**
- * Domyka audyt: gdy wszystkie pięć wymiarów ma wynik, dorzuca do kolejki
+ * Domyka audyt: gdy wszystkie wymiary z zakresu mają wynik, dorzuca do kolejki
  * przebieg syntezy. Idempotentne — enqueueProposal deduplikuje po celu
  * (auditId:synthesis), więc powtórne wywołanie nie tworzy drugiej syntezy.
+ *
+ * Przy jednowymiarowym zakresie synteza nie ma czego scalać — jej "skipped"
+ * wystawia store i tutaj nie robimy nic.
  */
 export function advanceConsistencyAudit(auditId: string): void {
   const context = auditContexts.get(auditId);
@@ -250,7 +265,12 @@ export function advanceConsistencyAudit(auditId: string): void {
     return;
   }
 
-  const dimensionsDone = AUDIT_DIMENSIONS.every(
+  const scope = auditScope(audit);
+  if (scope.length < 2) {
+    return;
+  }
+
+  const dimensionsDone = scope.every(
     (dimension) => audit.passes[dimension].status === "success"
   );
   if (!dimensionsDone || audit.passes.synthesis.status === "success") {
@@ -499,7 +519,7 @@ export async function acceptConsistencyAuditReport(
 }
 
 function collectPriorFindings(audit: ConsistencyAudit): ConsistencyFinding[] {
-  return AUDIT_DIMENSIONS.flatMap(
+  return auditScope(audit).flatMap(
     (dimension) => audit.rawFindingsByDimension[dimension] ?? []
   );
 }

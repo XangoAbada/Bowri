@@ -142,8 +142,16 @@ pub(crate) async fn execute_claude_cli(
     command
         .args(command_spec.prefix_args)
         .arg("-p")
+        // stream-json zamiast json: NDJSON pozwala emitować podgląd generacji w
+        // trakcie (run_registered_codex_command czyta stdout linia po linii).
+        // --include-partial-messages daje zdarzenia content_block_delta z
+        // tekstem, a --verbose jest przy tej kombinacji wymagany przez CLI.
+        // Wynik końcowy to nadal linia `{"type":"result", ...}` z tymi samymi
+        // polami co poprzednio: is_error, result, usage.
         .arg("--output-format")
-        .arg("json")
+        .arg("stream-json")
+        .arg("--include-partial-messages")
+        .arg("--verbose")
         .arg("--model")
         .arg(model)
         // 1 tura bywa za ciasna: model potrafi zgłosić error_max_turns, nawet
@@ -178,6 +186,7 @@ pub(crate) async fn execute_claude_cli(
     }
 
     let (status, stdout, stderr) = run_registered_codex_command(
+        app,
         registry,
         ActiveCodexRun {
             ai_run_id: ai_run_id.to_string(),
@@ -194,10 +203,20 @@ pub(crate) async fn execute_claude_cli(
     )
     .await?;
 
-    tokio::fs::write(workspace.join("response.raw.md"), stdout.as_bytes()).await?;
+    // Surowy strumień zostaje na dysku do diagnozy; response.raw.md dostaje
+    // wyłuskany tekst, żeby dalej dało się go po prostu przeczytać.
+    tokio::fs::write(workspace.join("response.stream.jsonl"), stdout.as_bytes()).await?;
+
+    let parsed = claude_cli_result_line(&stdout);
 
     if !status.success() {
-        if stdout.contains("error_max_turns") {
+        if stdout.contains("error_max_turns")
+            || parsed
+                .as_ref()
+                .and_then(|value| value.get("subtype"))
+                .and_then(Value::as_str)
+                == Some("error_max_turns")
+        {
             return Err(AppError::Process(
                 "Claude CLI przerwał odpowiedź na limicie tur (error_max_turns). Spróbuj ponownie lub uprość pole.".into(),
             ));
@@ -212,10 +231,10 @@ pub(crate) async fn execute_claude_cli(
         }));
     }
 
-    let parsed: Value = serde_json::from_str(stdout.trim()).map_err(|_| {
+    let parsed = parsed.ok_or_else(|| {
         AppError::Process(format!(
-            "Claude CLI nie zwrócił poprawnego JSON. Początek odpowiedzi: {}",
-            truncate(&stdout, 300)
+            "Claude CLI nie zwrócił linii wyniku (type: \"result\"). Koniec strumienia: {}",
+            truncate(tail(&stdout, 300), 300)
         ))
     })?;
 
@@ -224,6 +243,9 @@ pub(crate) async fn execute_claude_cli(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let result_text = parsed.get("result").and_then(Value::as_str);
+    if let Some(text) = result_text {
+        tokio::fs::write(workspace.join("response.raw.md"), text.as_bytes()).await?;
+    }
     // Claude CLI raportuje realne `usage` mimo rozliczenia subskrypcyjnego —
     // wyceniamy je w TS wg oficjalnego cennika API (ignorujemy total_cost_usd).
     let usage = anthropic_usage_from(parsed.get("usage"));
@@ -734,4 +756,34 @@ fn truncate(value: &str, max_chars: usize) -> String {
         let prefix: String = value.chars().take(max_chars).collect();
         format!("{}…", prefix.trim())
     }
+}
+
+/// Ogon tekstu — przy strumieniu NDJSON początek to metadane sesji, a diagnostyka
+/// potrzebuje tego, co przyszło na końcu.
+fn tail(value: &str, max_chars: usize) -> &str {
+    let count = value.chars().count();
+    if count <= max_chars {
+        return value;
+    }
+    let skip = count - max_chars;
+    let offset = value
+        .char_indices()
+        .nth(skip)
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+    &value[offset..]
+}
+
+/// Linia wyniku ze strumienia `claude --output-format stream-json`.
+///
+/// Szukamy po typie, nie po pozycji: kolejność linii nie jest gwarantowana (w
+/// praktyce `assistant` potrafi wyprzedzić `content_block_stop`), a przed
+/// wynikiem lecą jeszcze `system`, `stream_event` i `rate_limit_event`. Bierzemy
+/// ostatnie trafienie, bo przy ponowieniu tury CLI może wypisać ich więcej.
+pub(crate) fn claude_cli_result_line(stdout: &str) -> Option<Value> {
+    stdout
+        .lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
+        .find(|value| value.get("type").and_then(Value::as_str) == Some("result"))
 }

@@ -116,12 +116,66 @@
   margin: 0;
 }
 
+/* Wskaźnik rozwinięcia — jedna reguła obsługuje wszystkie poziomy zwijania w
+   logu: wpis, sekcję Request/Response, prompt, odpowiedź i kartę uwagi. */
+.ai-log-disclosure {
+  flex-shrink: 0;
+  color: currentColor;
+  transform-origin: center;
+  transition: transform 140ms ease;
+}
+
+details[open] > summary .ai-log-disclosure {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-log-disclosure {
+    transition: none;
+  }
+}
+
+/* Sekcje wpisu: Request i Response. */
+.ai-log-section > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: var(--radius);
+  color: var(--text);
+  list-style: none;
+  cursor: pointer;
+}
+
+.ai-log-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ai-log-section > summary:hover {
+  background: var(--surface-sunken);
+}
+
+.ai-log-section > summary h3 {
+  margin: 0;
+}
+
+/* Odstęp między nagłówkiem a treścią daje grid-gap z .ai-log-readable-block —
+   własny padding dokładałby go po raz drugi. */
+.ai-log-section-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 /* Zwijane bloki wpisu: prompt, długa odpowiedź, surowy JSON, głębokie gałęzie. */
 .ai-log-collapsible > summary {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 0;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius);
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 700;
@@ -134,19 +188,8 @@
   display: none;
 }
 
-.ai-log-collapsible > summary::before {
-  content: "▸";
-  display: inline-block;
-  color: var(--text-soft);
-  font-size: 11px;
-  transition: transform 140ms ease;
-}
-
-.ai-log-collapsible[open] > summary::before {
-  transform: rotate(90deg);
-}
-
 .ai-log-collapsible > summary:hover {
+  background: var(--surface-sunken);
   color: var(--text);
 }
 
@@ -175,7 +218,6 @@
 .ai-log-finding-card > summary {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 10px;
   list-style: none;
   cursor: pointer;
@@ -183,6 +225,18 @@
 
 .ai-log-finding-card > summary::-webkit-details-marker {
   display: none;
+}
+
+/* Pigułka statusu dosunięta do prawej — wcześniej robiło to
+   justify-content: space-between, ale ikona rozwijania jest trzecim dzieckiem
+   i przy space-between rozjeżdżałaby się na środek. */
+.ai-log-finding-card > summary > :last-child {
+  margin-left: auto;
+}
+
+/* Strzałka w karcie uwagi ma trafić w linię tytułu, nie w środek bloku. */
+.ai-log-finding-card > summary .ai-log-disclosure {
+  margin-top: 2px;
 }
 
 .ai-log-finding-head {

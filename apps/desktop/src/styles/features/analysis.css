@@ -67,6 +67,73 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Wybór wymiarów przed startem — raport częściowy. */
+.analysis-scope-title {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.analysis-scope {
+  display: grid;
+  /* Najdłuższa etykieta to „Spójność całości” — poniżej ~185 px łamie się na
+     dwie linie i kafelki przestają być równej wysokości. */
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analysis-scope label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+/* Wspólna reguła checkboxa (features/ai.css) ma margin-top 1px pod
+   align-items: start; tutaj kafelek centruje w pionie, więc offset trzeba
+   zdjąć. Selektor celowo bardziej szczegółowy niż tamten, żeby nie zależeć od
+   kolejności importów w main.tsx. */
+.analysis-scope label input[type="checkbox"] {
+  margin: 0;
+}
+
+.analysis-scope label:hover {
+  border-color: var(--border-strong);
+}
+
+/* Zaznaczony wymiar wchodzi do analizy — kafelek ma to pokazywać bez czytania
+   samego checkboxa. */
+.analysis-scope label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.analysis-scope label:has(input:disabled) {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.analysis-scope span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .analysis-actions {
   display: flex;
   flex-wrap: wrap;
@@ -148,6 +215,15 @@
 
 .analysis-pass.queued {
   opacity: 0.7;
+}
+
+/* Wymiar poza zakresem: widoczny, ale wyraźnie nieaktywny. */
+.analysis-pass.skipped {
+  opacity: 0.45;
+}
+
+.analysis-pass.skipped .analysis-pass-name {
+  font-weight: 500;
 }
 
 .analysis-pass.error .analysis-pass-status {

@@ -6,13 +6,21 @@ import {
   type EntityFieldKind
 } from "./brainstormEntityTargets";
 import { parseModelJson } from "./modelJson";
-import type { DossierEntityKind, StoryBibleDossier } from "./storyBibleDossier";
+import type {
+  DossierEntityKind,
+  EvidenceEntityKind,
+  StoryBibleDossier
+} from "./storyBibleDossier";
 
 // Audyt spójności całego projektu: pięć przebiegów wymiarowych plus synteza.
 // Każdy przebieg dostaje IDENTYCZNE, pełne dossier (patrz storyBibleDossier.ts)
 // i różni się wyłącznie zadanym pytaniem. Dzięki temu żaden wymiar nie analizuje
 // projektu w oderwaniu od pozostałych, a synteza może rozstrzygać sprzeczne
 // zalecenia mając ten sam materiał pod ręką.
+//
+// Audyt obejmuje wyłącznie Story Bible. Rozdziały, sceny, akty i beaty nie
+// wchodzą do dossier ani do pytań — za spójność planu i prozy odpowiadają etapy
+// Edytor i Redakcja.
 
 export const CONSISTENCY_AUDIT_FIELD = "__consistency_audit__";
 
@@ -63,7 +71,12 @@ export type ConsistencyPatch = {
 };
 
 export type ConsistencyEvidence = {
-  kind: DossierEntityKind;
+  /**
+   * EvidenceEntityKind, nie DossierEntityKind: nowe przebiegi zgłaszają tylko
+   * encje Story Bible, ale raporty zapisane przed zawężeniem audytu trzymają w
+   * dowodach także rozdziały i sceny i muszą dać się odczytać.
+   */
+  kind: EvidenceEntityKind;
   id: string;
   label: string;
   field?: string;
@@ -80,7 +93,7 @@ export type ConsistencyFinding = {
   evidence: ConsistencyEvidence[];
   /**
    * Jedna uwaga może wymagać zmian w kilku encjach (np. wygląd całej obsady).
-   * Pusta tablica = uwaga bez automatycznej poprawki (rozdziały, sceny, akty, beaty…).
+   * Pusta tablica = uwaga bez automatycznej poprawki (relacje, wspomnienia…).
    */
   patches: ConsistencyPatch[];
 };
@@ -127,7 +140,7 @@ export const AUDIT_DIMENSION_LABELS: Record<AuditDimension, string> = {
   concept: "Koncepcja",
   characters: "Postacie",
   world: "Świat i reguły",
-  threads: "Wątki i plan",
+  threads: "Wątki",
   crossCutting: "Spójność całości",
   synthesis: "Synteza"
 };
@@ -195,30 +208,30 @@ const DIMENSION_SPECS: Record<AuditDimension, DimensionSpec> = {
 - Czy element świata ma cel fabularny, czy jest ozdobą?
 - Czy ograniczenia elementu nie są sprzeczne z jego opisem lub z regułą, do której jest przypięty?
 - Czy wyjątki od reguł nie unieważniają samych reguł?
-- Czy elementy oznaczone jako lokacje są realnie używane przez sceny i rozdziały?`
+- Czy element oznaczony jako lokacja ma opisany cel fabularny, czy jest tylko nazwą na mapie?`
   },
   threads: {
-    instruction: "Sprawdź wątki i strukturę planu.",
-    focus: `- Czy każdy wątek ma zawiązanie, eskalację i payoff (pole rozwiązania) w konkretnych rozdziałach?
-- Czy któryś wątek nie jest przypisany do ani jednego rozdziału lub sceny?
-- Czy rozdziały mają cel, konflikt i punkt zwrotny, czy tylko streszczenie?
-- Czy przypisania rozdziałów do aktów zgadzają się z zakresami procentowymi aktów?
-- Czy beaty pokrywają wybraną strukturę fabularną, czy zostawiają dziury?
-- Czy znaczniki czasu scen tworzą spójną chronologię?
-- Czy sceny mają POV i lokację tam, gdzie to potrzebne?
-- Czy suma docelowych liczb słów rozdziałów daje się pogodzić z celem książki?`
+    instruction: "Sprawdź wątki fabularne.",
+    focus: `- Czy opis wątku zawiera zawiązanie i eskalację, czy tylko nazywa temat?
+- Czy pole rozwiązania domyka konflikt zawiązany w opisie, czy zostawia wątek otwarty?
+- Czy rozwiązanie nie jest deus ex machina — czy wynika z tego, co wątek wcześniej ustalił?
+- Czy któryś wątek nie ma żadnego powiązania z elementami ani regułami świata, choć ich wymaga?
+- Czy dwa wątki nie prowadzą tego samego konfliktu tymi samymi środkami?
+- Czy wątek główny realizuje premisę i konflikt centralny z koncepcji?
+- Czy wątki poboczne mają stawki własne, czy są tylko powtórzeniem wątku głównego?
+- Czy status wątku zgadza się z kompletnością jego opisu i rozwiązania?`
   },
   crossCutting: {
     instruction:
       "Znajdź sprzeczności MIĘDZY warstwami projektu — to jedyny przebieg, który ma szukać wyłącznie kolizji krzyżowych.",
     focus: `- Czy postać wie lub potrafi coś, czego reguła świata zabrania?
-- Czy wątek albo rozdział wymaga elementu świata, którego w projekcie nie ma?
-- Czy plan realizuje ton, gatunek i perspektywę zapowiedziane w koncepcji?
-- Czy stawki z koncepcji mają odzwierciedlenie w konfliktach rozdziałów?
-- Czy sekret postaci nie jest ujawniany w rozdziale wcześniejszym niż wymaga tego jej wątek?
-- Czy wspomnienia postaci nie kolidują z chronologią scen i rozdziałów?
+- Czy wątek wymaga elementu świata, którego w projekcie nie ma?
+- Czy stawki z koncepcji mają odzwierciedlenie w konfliktach wątków?
+- Czy wspomnienia postaci nie przeczą regułom świata ani jego historii?
 - Czy siła antagonistyczna z koncepcji ma reprezentację w obsadzie, świecie i wątkach?
 - Czy protagonista z koncepcji to ta sama postać, która prowadzi wątek główny?
+- Czy relacje między postaciami dają się pogodzić z rolami, jakie te postacie mają w wątkach?
+- Czy szkic świata z koncepcji zgadza się z elementami i regułami zapisanymi w projekcie?
 - Ignoruj problemy zamknięte w jednej warstwie — te wychwytują pozostałe przebiegi.`
   },
   synthesis: {
@@ -307,9 +320,9 @@ ${spec.focus}
 # Hard Rules
 - Pisz po polsku, chyba że projekt ma inny język.
 - Dla locale "pl" używaj poprawnych polskich znaków.
-- Dossier poniżej jest KOMPLETNY: zawiera każdą encję i każde pole projektu. Nic nie zostało skrócone ani pominięte ze względu na rozmiar. Nie zakładaj, że czegoś nie widzisz.
+- Dossier poniżej jest KOMPLETNY: zawiera każdą encję i każde pole Story Bible projektu. Nic nie zostało skrócone ani pominięte ze względu na rozmiar. Nie zakładaj, że czegoś nie widzisz.
 - Pole opisane jako "— (nieuzupełnione)" jest faktycznie puste w projekcie. Jeśli jest potrzebne, zgłoś to jako lukę (kind: "gap"). Jeśli nie jest potrzebne, milcz.
-- Nie zgłaszaj uwag o brakującej prozie, streszczeniach ani okładce — te dane świadomie nie wchodzą do audytu.
+- Audyt obejmuje WYŁĄCZNIE Story Bible: koncepcję, postacie, relacje, wspomnienia, świat, reguły i wątki. Nie zgłaszaj uwag o rozdziałach, scenach, aktach, beatach, strukturze fabularnej, prozie, streszczeniach ani okładce — te warstwy świadomie nie wchodzą do audytu i odpowiadają za nie osobne etapy pracy. Nie zgłaszaj też ich braku.
 - Nie chwal. Nie parafrazuj dossier. Każda uwaga musi wskazywać konkretny problem, który autor może naprawić.
 - Każda uwaga o rodzaju "contradiction" musi mieć w polu "evidence" co najmniej dwie pozycje: obie strony sprzeczności.
 - W "evidence" wolno wskazywać wyłącznie identyfikatory obecne w dossier, przepisane znak w znak z nagłówka \`[rodzaj:id]\`.
@@ -317,7 +330,7 @@ ${spec.focus}
 - Jedna uwaga może nieść KILKA poprawek — po jednej na każdą encję, którą trzeba zmienić. Jeżeli problem dotyczy sześciu postaci, podaj sześć poprawek zamiast opisywać zmianę słowami.
 - Para ("targetKind", "targetId", "field") musi być unikalna w obrębie uwagi. Nie rozbijaj jednej zmiany na dwie poprawki tego samego pola — złóż ją w jedną treść.
 - "targetId" MUSI być identyfikatorem z dossier. Nigdy nie wymyślaj identyfikatora tylko po to, by dołożyć poprawkę — uwaga bez poprawek jest w porządku.
-- "field" MUSI należeć do whitelisty poniżej. Pola spoza whitelisty (rozdziały, sceny, akty, beaty, relacje, wspomnienia) opisuj tekstem i pomijaj w "patches".
+- "field" MUSI należeć do whitelisty poniżej. Pola spoza whitelisty (relacje, wspomnienia, powiązania między encjami) opisuj tekstem i pomijaj w "patches".
 - "proposedValue" to GOTOWA, kompletna treść pola do wklejenia — nie instrukcja, nie polecenie, nie streszczenie zmiany.
 - Przy "mode": "replace" nowa treść musi zachować wszystkie prawdziwe ustalenia z obecnej treści pola. Przy "append" podaj wyłącznie fragment do dopisania.
 - "currentValueExcerpt" to dosłowny początek treści, którą widzisz w dossier (do 200 znaków) — służy do wykrycia, że autor zmienił pole po analizie.
@@ -347,7 +360,7 @@ Zwróć JSON:
       "description": "Na czym polega problem i dlaczego zagraża spójności",
       "evidence": [
         {
-          "kind": "concept | character | relation | memory | memoryLink | worldElement | worldRule | plotThread | act | beat | chapter | scene",
+          "kind": "concept | character | relation | memory | memoryLink | worldElement | worldRule | plotThread",
           "id": "identyfikator przepisany z dossier",
           "label": "nazwa encji dla autora",
           "field": "opcjonalnie: pole, w którym siedzi problem",
@@ -455,7 +468,7 @@ function normalizeEvidence(value: unknown): ConsistencyEvidence[] {
           ? (item as Record<string, unknown>)
           : {};
       const id = stringValue(record.id);
-      const kind = normalizeDossierKind(record.kind);
+      const kind = normalizeEvidenceKind(record.kind);
       if (!id || !kind) {
         return null;
       }
@@ -571,7 +584,12 @@ function normalizeSeverity(value: unknown): ConsistencyFindingSeverity {
   return value === "blocker" || value === "major" || value === "minor" ? value : "major";
 }
 
-function normalizeDossierKind(value: unknown): DossierEntityKind | null {
+/**
+ * Rodzaj encji w dowodzie. Lista jest szersza niż to, co dziś trafia do dossier
+ * — rozdziały, sceny, akty i beaty przechodzą, bo tylko tak raporty zapisane
+ * przed zawężeniem audytu zachowują swoje dowody.
+ */
+function normalizeEvidenceKind(value: unknown): EvidenceEntityKind | null {
   return value === "concept" ||
     value === "character" ||
     value === "relation" ||

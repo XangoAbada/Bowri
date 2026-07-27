@@ -8,6 +8,7 @@ import { listen } from "@tauri-apps/api/event";
 import { coverImageSource } from "../../shared/api/assets";
 import { isTauriRuntime } from "../../shared/api/browserDevCommands";
 import { useTextProviderInfo } from "./textProviderInfo";
+import { TextStreamPreview } from "./TextStreamPreview";
 import {
   acceptGeneratedBookCover,
   acceptGeneratedCharacterImage,
@@ -59,6 +60,7 @@ import type {
   CharacterMemory,
   CharacterRelation,
   CoverGenerationProgressEvent,
+  TextGenerationProgressEvent,
   ActiveCodexRun,
   WorldElement,
   WorldRule,
@@ -499,6 +501,7 @@ export function AiProposalPanel({
   const { t } = useTranslation();
   useAiQueueRunner();
   useCoverGenerationProgressListener();
+  useTextGenerationProgressListener();
 
   const providerInfo = useTextProviderInfo();
   const aiSettingsQuery = useQuery({
@@ -2193,6 +2196,13 @@ function ProposalQueueItem({
         </div>
       ) : null}
 
+      {running && proposal.partialText ? (
+        <TextStreamPreview
+          text={proposal.partialText}
+          chars={proposal.partialTextChars ?? proposal.partialText.length}
+        />
+      ) : null}
+
       {(coverProposal || characterImageProposal || exportArtworkProposal) && success ? (
         <p className="success-text">
           {t("ai.queueItem.coverReady")}
@@ -2795,6 +2805,59 @@ function useCoverGenerationProgressListener() {
           ...(payload.partialImageDataUrl
             ? { partialImageDataUrl: payload.partialImageDataUrl }
             : {})
+        });
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      unlistenPromise
+        .then((unlisten) => {
+          if (cancelled) {
+            unlisten();
+          }
+        })
+        .catch(() => undefined);
+    };
+  }, [updateProposalProgress]);
+}
+
+/**
+ * Podgląd generacji tekstu. Runner kolejki jest ściśle szeregowy, więc w danym
+ * momencie biegnie dokładnie jedna propozycja — dopasowujemy po projekcie i
+ * akcji, a gdy front zna już aiRunId, także po nim.
+ */
+function useTextGenerationProgressListener() {
+  const updateProposalProgress = useProposalStore(
+    (state) => state.updateProposalProgress
+  );
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let cancelled = false;
+    const unlistenPromise = listen<TextGenerationProgressEvent>(
+      "text-generation-progress",
+      (event) => {
+        const payload = event.payload;
+        const proposal = useProposalStore
+          .getState()
+          .proposals.find(
+            (item) =>
+              item.projectId === payload.projectId &&
+              (item.aiRunId === payload.aiRunId ||
+                (item.status === "running" && item.action === payload.action))
+          );
+
+        if (!proposal) {
+          return;
+        }
+
+        updateProposalProgress(proposal.id, {
+          partialText: payload.partialText,
+          partialTextChars: payload.charCount
         });
       }
     );

@@ -76,6 +76,10 @@
       "world": "Świat",
       "field": "Pole"
     },
+    "streamPreview": {
+      "label": "Model pisze",
+      "chars": "{{count}} znaków"
+    },
     "queueItem": {
       "queuedHint": "Zadanie czeka, aż poprzednia generacja w kolejce się zakończy.",
       "generatingCover": "{{provider}} generuje okładkę.",

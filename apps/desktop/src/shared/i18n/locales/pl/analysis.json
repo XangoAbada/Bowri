@@ -2,9 +2,9 @@
   "analysis": {
     "eyebrow": "Etap 06",
     "title": "Analiza spójności",
-    "intro": "Pełny audyt projektu przed rozpoczęciem pisania: koncepcja, postacie, świat i reguły, wątki oraz spójność całości. Do analizy trafia komplet encji i pól, bez skracania i bez pomijania.",
+    "intro": "Audyt Story Bible przed rozpoczęciem pisania: koncepcja, postacie, świat i reguły, wątki oraz spójność całości. Do analizy trafia komplet encji i pól, bez skracania i bez pomijania. Rozdziałami, scenami i prozą zajmują się Edytor i Redakcja.",
     "loadingTitle": "Ładowanie projektu",
-    "loadingDescription": "Zbieram koncepcję, plan, postacie i świat do dossier analizy.",
+    "loadingDescription": "Zbieram koncepcję, wątki, postacie i świat do dossier analizy.",
 
     "readinessTitle": "Materiał do analizy",
     "count": {
@@ -13,14 +13,16 @@
       "memory": "Wspomnienia",
       "worldElement": "Elementy świata",
       "worldRule": "Reguły świata",
-      "plotThread": "Wątki",
-      "chapter": "Rozdziały",
-      "scene": "Sceny"
+      "plotThread": "Wątki"
     },
     "dossierSize": "Dossier: ~{{tokens}} tokenów ({{chars}} znaków). Okno kontekstu modelu {{model}}: {{window}} tokenów.",
     "noTruncationNote": "Każdy z przebiegów dostaje całe dossier — żadne pole ani encja nie są skracane. Puste pola są przekazywane jawnie, żeby model widział luki w projekcie.",
     "overflowWarning": "Dossier nie mieści się w oknie kontekstu wybranego modelu. Analiza nadal się uruchomi i nic nie zostanie obcięte, ale model może odrzucić żądanie — wybierz model z oknem 1M (claude-opus-4-7 albo gpt-4.1).",
-    "startButton": "Przeanalizuj całość ({{passes}} przebiegi)",
+    "scopeTitle": "Zakres analizy",
+    "scopeHint": "Każdy wybrany wymiar to osobny przebieg. Na końcu dochodzi synteza, która scala uwagi w jedną listę.",
+    "scopeHintSingle": "Jeden wymiar — bez syntezy. Dostaniesz uwagi tego przebiegu, gotowe do zastosowania.",
+    "scopeEmpty": "Wybierz co najmniej jeden wymiar.",
+    "startButton": "Przeanalizuj ({{passes}} przebiegi)",
     "alreadyRunning": "Analiza tego projektu już trwa.",
 
     "emptyTitle": "Brak analiz",
@@ -35,8 +37,10 @@
       "queued": "w kolejce",
       "running": "w toku",
       "success": "gotowe",
-      "error": "błąd"
+      "error": "błąd",
+      "skipped": "pominięty"
     },
+    "passSkippedHint": "Ten wymiar był poza zakresem analizy.",
     "passFindings": "{{count}} uwag",
     "retryPass": "Ponów przebieg",
     "appliedCount": "Zastosowane: {{count}}",

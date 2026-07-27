@@ -31,13 +31,14 @@ function findingFixture(
   };
 }
 
-function startAudit() {
+function startAudit(dimensions: AuditDimension[] = [...AUDIT_DIMENSIONS]) {
   return useConsistencyAuditStore.getState().startAudit({
     id: "audit-1",
     projectId: "project-1",
     bookId: "book-1",
     dossierHash: "hash-1",
-    dossierText: "# Dossier"
+    dossierText: "# Dossier",
+    dimensions
   });
 }
 
@@ -114,6 +115,97 @@ describe("useConsistencyAuditStore — status audytu", () => {
 
     expect(audit().status).toBe("partial");
     expect(audit().passes.world.errorMessage).toBe("timeout");
+  });
+});
+
+describe("useConsistencyAuditStore — zakres audytu (raport częściowy)", () => {
+  it("pomija wymiary poza zakresem i syntezę przy jednym wymiarze", () => {
+    const created = startAudit(["world"]);
+
+    expect(created.dimensions).toEqual(["world"]);
+    expect(created.passes.world.status).toBe("queued");
+    expect(created.passes.concept.status).toBe("skipped");
+    expect(created.passes.characters.status).toBe("skipped");
+    // Jeden wymiar nie ma czego scalać — synteza od razu poza zakresem.
+    expect(created.passes.synthesis.status).toBe("skipped");
+  });
+
+  it("domyka raport jednowymiarowy jako complete, bez syntezy", () => {
+    startAudit(["world"]);
+    useConsistencyAuditStore.getState().setPassResult({
+      auditId: "audit-1",
+      dimension: "world",
+      summary: "Reguły trzymają się kupy.",
+      findings: [findingFixture({ id: "finding-world", dimension: "world" })]
+    });
+
+    expect(audit().status).toBe("complete");
+    expect(audit().findings).toHaveLength(1);
+  });
+
+  it("kolejkuje syntezę, gdy w zakresie są co najmniej dwa wymiary", () => {
+    const created = startAudit(["world", "characters"]);
+
+    expect(created.passes.synthesis.status).toBe("queued");
+    expect(created.passes.concept.status).toBe("skipped");
+  });
+
+  it("nie uznaje raportu za niepełny z powodu wymiarów poza zakresem", () => {
+    startAudit(["concept", "world"]);
+    for (const dimension of ["concept", "world"] as AuditDimension[]) {
+      useConsistencyAuditStore.getState().setPassResult({
+        auditId: "audit-1",
+        dimension,
+        summary: "ok",
+        findings: []
+      });
+    }
+
+    // Wymiary poza zakresem są "skipped" — audyt czeka wyłącznie na syntezę.
+    expect(audit().status).toBe("running");
+
+    useConsistencyAuditStore.getState().setPassResult({
+      auditId: "audit-1",
+      dimension: "synthesis",
+      summary: "Scalone",
+      findings: []
+    });
+
+    expect(audit().status).toBe("complete");
+  });
+
+  it("odtwarza zakres z bazy, a raport bez zakresu traktuje jako pełny", () => {
+    const partial = {
+      ...startAudit(["world"]),
+      findings: []
+    };
+    const partialRecord: ConsistencyAuditRecord = {
+      id: "audit-partial",
+      projectId: "project-1",
+      bookId: "book-1",
+      status: "complete",
+      dossierHash: "hash-1",
+      summary: "",
+      passesJson: serializeAuditPasses(partial),
+      findingsJson: serializeAuditFindings([]),
+      createdAt: "2026-07-01T10:00:00Z",
+      updatedAt: "2026-07-01T11:00:00Z"
+    };
+    // Raport zapisany przed wprowadzeniem zakresu: passesJson bez pola dimensions.
+    const legacyRecord: ConsistencyAuditRecord = {
+      ...partialRecord,
+      id: "audit-legacy",
+      passesJson: JSON.stringify({ passes: {}, rawFindingsByDimension: {} })
+    };
+
+    useConsistencyAuditStore.setState({ audits: [] });
+    useConsistencyAuditStore.getState().hydrate([partialRecord, legacyRecord]);
+
+    const audits = useConsistencyAuditStore.getState().audits;
+    expect(audits.find((item) => item.id === "audit-partial")?.dimensions).toEqual(["world"]);
+    expect(audits.find((item) => item.id === "audit-legacy")?.dimensions).toEqual([
+      ...AUDIT_DIMENSIONS
+    ]);
   });
 });
 
@@ -217,7 +309,8 @@ describe("useConsistencyAuditStore — hydratacja", () => {
         projectId: "project-1",
         bookId: "book-1",
         dossierHash: "hash-1",
-        dossierText: "# Dossier"
+        dossierText: "# Dossier",
+        dimensions: [...AUDIT_DIMENSIONS]
       }),
       findings: [finding]
     };

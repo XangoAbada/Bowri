@@ -1,5 +1,13 @@
-import { Check, FileJson, History, Loader2, RotateCcw, Undo2 } from "lucide-react";
-import { ReactNode } from "react";
+import {
+  Check,
+  ChevronRight,
+  FileJson,
+  History,
+  Loader2,
+  RotateCcw,
+  Undo2
+} from "lucide-react";
+import { ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "../../shared/i18n";
 import { Button, Chip, StatusPill, toast } from "../../shared/ui";
@@ -255,6 +263,7 @@ function AiLogEntryDetails({
   return (
     <details className="ai-log-entry ui-card">
       <summary>
+        <Disclosure />
         <span>
           <strong>{summary.title}</strong>
           <small>{formatLocalDateTime(entry.createdAt)}</small>
@@ -265,8 +274,9 @@ function AiLogEntryDetails({
       </summary>
 
       <div className="ai-log-entry-body">
-        <section className="ai-log-readable-block">
-          <h3>{t("ai.log.request")}</h3>
+        {/* Request domyślnie zwinięty: przy otwarciu wpisu autor szuka wyniku,
+            nie metadanych żądania. Response otwarty z tego samego powodu. */}
+        <LogSection title={t("ai.log.request")}>
           <div className="ai-log-meta">
             <Chip tone="accent" title={t("ai.log.actionTitle")}>
               {summary.actionLabel}
@@ -299,18 +309,19 @@ function AiLogEntryDetails({
               </Chip>
             ) : null}
           </div>
-          <details className="ai-log-prompt ai-log-collapsible">
-            <summary>
-              {entry.prompt
+          <LogCollapsible
+            className="ai-log-prompt"
+            label={
+              entry.prompt
                 ? t("ai.log.promptToggle", { chars: entry.prompt.length })
-                : t("ai.log.prompt")}
-            </summary>
+                : t("ai.log.prompt")
+            }
+          >
             <pre>{entry.prompt || t("ai.log.promptEmpty")}</pre>
-          </details>
-        </section>
+          </LogCollapsible>
+        </LogSection>
 
-        <section className="ai-log-readable-block">
-          <h3>{t("ai.log.response")}</h3>
+        <LogSection title={t("ai.log.response")} defaultOpen>
           {entry.errorMessage ? (
             <p className="warning-text">{entry.errorMessage}</p>
           ) : null}
@@ -378,8 +389,73 @@ function AiLogEntryDetails({
           {entry.status === "terminated" ? (
             <p className="muted-text">{t("ai.log.terminated")}</p>
           ) : null}
-        </section>
+        </LogSection>
       </div>
+    </details>
+  );
+}
+
+/**
+ * Wskaźnik rozwinięcia wspólny dla wszystkich zwijanych bloków logu. Ikona z
+ * lucide zamiast tekstowego glifu w ::before — glif w rozmiarze 11 px był
+ * praktycznie niewidoczny, a jako element JSX ikona ma pewną geometrię i obraca
+ * się wokół własnego środka.
+ */
+function Disclosure() {
+  return <ChevronRight size={15} className="ai-log-disclosure" aria-hidden="true" />;
+}
+
+/**
+ * Sekcja wpisu logu (Request / Response). Natywne <details>, a nie
+ * shared/ui/Collapsible: tamten odmontowuje zawartość po zamknięciu, więc
+ * gubiłby pozycję przewinięcia w kilkunastokilobajtowych promptach.
+ *
+ * Stan trzymamy lokalnie i synchronizujemy przez onToggle — samo `open` jako
+ * atrybut sprawiłoby, że rerender komponentu nadrzędnego (np. po zapisaniu
+ * propozycji) cofałby decyzję autora o zwinięciu sekcji.
+ */
+function LogSection({
+  title,
+  defaultOpen = false,
+  children
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <details
+      className="ai-log-section ai-log-readable-block"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <Disclosure />
+        <h3>{title}</h3>
+      </summary>
+      <div className="ai-log-section-body">{children}</div>
+    </details>
+  );
+}
+
+/** Zwijany blok wewnątrz sekcji: prompt, długa odpowiedź, głębokie gałęzie JSON. */
+function LogCollapsible({
+  label,
+  className,
+  children
+}: {
+  label: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className={`ai-log-collapsible${className ? ` ${className}` : ""}`}>
+      <summary>
+        <Disclosure />
+        <span>{label}</span>
+      </summary>
+      {children}
     </details>
   );
 }
@@ -415,10 +491,9 @@ function ReadableResponse({ rawOutput }: { rawOutput?: string | null }) {
   // Długa odpowiedź startuje zwinięta; surowego JSON-a obok czytelnego widoku
   // świadomie nie dublujemy — to była właśnie ta ściana tekstu.
   return long ? (
-    <details className="ai-log-collapsible">
-      <summary>{t("ai.log.responseToggle", { chars: rawOutput.length })}</summary>
+    <LogCollapsible label={t("ai.log.responseToggle", { chars: rawOutput.length })}>
       {body}
-    </details>
+    </LogCollapsible>
   ) : (
     body
   );
@@ -709,10 +784,9 @@ function renderReadableValue(value: unknown, depth = 0): ReactNode {
     );
 
     return value.length > MAX_INLINE_ITEMS ? (
-      <details className="ai-log-collapsible">
-        <summary>{i18n.t("ai.log.moreItems", { count: value.length })}</summary>
+      <LogCollapsible label={i18n.t("ai.log.moreItems", { count: value.length })}>
         {list}
-      </details>
+      </LogCollapsible>
     ) : (
       list
     );
@@ -722,10 +796,9 @@ function renderReadableValue(value: unknown, depth = 0): ReactNode {
     const entries = Object.entries(value);
     if (depth >= MAX_DEPTH) {
       return (
-        <details className="ai-log-collapsible">
-          <summary>{i18n.t("ai.log.moreFields", { count: entries.length })}</summary>
+        <LogCollapsible label={i18n.t("ai.log.moreFields", { count: entries.length })}>
           <pre className="ai-log-text-response">{JSON.stringify(value, null, 2)}</pre>
-        </details>
+        </LogCollapsible>
       );
     }
 
@@ -741,10 +814,9 @@ function renderReadableValue(value: unknown, depth = 0): ReactNode {
     );
 
     return entries.length > MAX_INLINE_KEYS ? (
-      <details className="ai-log-collapsible">
-        <summary>{i18n.t("ai.log.moreFields", { count: entries.length })}</summary>
+      <LogCollapsible label={i18n.t("ai.log.moreFields", { count: entries.length })}>
         {fields}
-      </details>
+      </LogCollapsible>
     ) : (
       fields
     );

@@ -14,8 +14,19 @@ import {
 // z bazy + status per uwaga. Różnica: audyt składa się z sześciu przebiegów,
 // więc store musi wiedzieć, na którym etapie jest, i przetrwać restart
 // aplikacji w połowie analizy.
+//
+// Audyt nie musi obejmować wszystkich wymiarów: autor wybiera zakres przed
+// startem (raport częściowy). Wymiary poza zakresem dostają status "skipped" i
+// nie wpływają na status całości — inaczej raport z jednego wymiaru na zawsze
+// zostawałby „niepełny".
 
-export type ConsistencyAuditPassStatus = "queued" | "running" | "success" | "error";
+export type ConsistencyAuditPassStatus =
+  | "queued"
+  | "running"
+  | "success"
+  | "error"
+  /** Wymiar poza zakresem tego audytu — nie był i nie będzie uruchomiony. */
+  | "skipped";
 
 export type ConsistencyFindingStatus = "open" | "applied" | "dismissed" | "stale";
 
@@ -68,6 +79,11 @@ export type ConsistencyAudit = {
    * hasha, żeby wykryć, że projekt zmienił się po analizie.
    */
   dossierText?: string;
+  /**
+   * Zakres audytu: wymiary wybrane przez autora, bez syntezy. Status całości i
+   * warunek domknięcia syntezą liczą się wyłącznie po tej liście.
+   */
+  dimensions: AuditDimension[];
   passes: Record<AuditDimension, ConsistencyAuditPass>;
   /** Uwagi pokazywane autorowi: po syntezie jej wynik, wcześniej suma przebiegów. */
   findings: ConsistencyAuditReportFinding[];
@@ -90,6 +106,7 @@ type ConsistencyAuditState = {
     bookId: string;
     dossierHash: string;
     dossierText: string;
+    dimensions: AuditDimension[];
   }) => ConsistencyAudit;
   setPassStatus: (
     auditId: string,
@@ -128,17 +145,39 @@ type ConsistencyAuditState = {
   removeAudit: (auditId: string) => void;
 };
 
-function emptyPasses(): Record<AuditDimension, ConsistencyAuditPass> {
+/**
+ * Przebiegi dla zadanego zakresu. Wymiar poza zakresem jest "skipped" od razu, a
+ * synteza tylko wtedy, gdy jest co scalać — przy jednym wymiarze jego uwagi są
+ * już wynikiem końcowym.
+ */
+function passesForScope(
+  dimensions: AuditDimension[]
+): Record<AuditDimension, ConsistencyAuditPass> {
+  const scope = new Set(dimensions);
   const passes = {} as Record<AuditDimension, ConsistencyAuditPass>;
-  for (const dimension of [...AUDIT_DIMENSIONS, "synthesis" as AuditDimension]) {
-    passes[dimension] = { status: "queued", summary: "", findingCount: 0 };
+  for (const dimension of AUDIT_DIMENSIONS) {
+    passes[dimension] = {
+      status: scope.has(dimension) ? "queued" : "skipped",
+      summary: "",
+      findingCount: 0
+    };
   }
+  passes.synthesis = {
+    status: dimensions.length > 1 ? "queued" : "skipped",
+    summary: "",
+    findingCount: 0
+  };
   return passes;
+}
+
+/** Pełny zakres — dla hydratacji raportów zapisanych przed wyborem zakresu. */
+function emptyPasses(): Record<AuditDimension, ConsistencyAuditPass> {
+  return passesForScope([...AUDIT_DIMENSIONS]);
 }
 
 export const useConsistencyAuditStore = create<ConsistencyAuditState>((set) => ({
   audits: [],
-  startAudit: ({ id, projectId, bookId, dossierHash, dossierText }) => {
+  startAudit: ({ id, projectId, bookId, dossierHash, dossierText, dimensions }) => {
     const now = new Date().toISOString();
     const audit: ConsistencyAudit = {
       id,
@@ -147,7 +186,8 @@ export const useConsistencyAuditStore = create<ConsistencyAuditState>((set) => (
       status: "running",
       dossierHash,
       dossierText,
-      passes: emptyPasses(),
+      dimensions,
+      passes: passesForScope(dimensions),
       findings: [],
       rawFindingsByDimension: {},
       summary: "",
@@ -350,7 +390,8 @@ export function serializeAuditPasses(audit: ConsistencyAudit): string {
   return JSON.stringify({
     passes: audit.passes,
     rawFindingsByDimension: audit.rawFindingsByDimension,
-    acknowledged: audit.acknowledged
+    acknowledged: audit.acknowledged,
+    dimensions: audit.dimensions
   });
 }
 
@@ -359,6 +400,7 @@ function auditFromRecord(record: ConsistencyAuditRecord): ConsistencyAudit | nul
   let passes = emptyPasses();
   let rawFindingsByDimension: Partial<Record<AuditDimension, ConsistencyFinding[]>> = {};
   let acknowledged = false;
+  let dimensions: AuditDimension[] = [...AUDIT_DIMENSIONS];
 
   try {
     const parsedFindings: unknown = JSON.parse(record.findingsJson || "[]");
@@ -370,6 +412,10 @@ function auditFromRecord(record: ConsistencyAuditRecord): ConsistencyAudit | nul
 
     const parsedPasses: unknown = JSON.parse(record.passesJson || "{}");
     if (isRecord(parsedPasses)) {
+      // Zakres czytamy przed przebiegami: raport zapisany przed jego
+      // wprowadzeniem zostaje z pełnym zestawem wymiarów.
+      dimensions = normalizeDimensions(parsedPasses.dimensions);
+      passes = passesForScope(dimensions);
       if (isRecord(parsedPasses.passes)) {
         passes = { ...passes, ...(parsedPasses.passes as typeof passes) };
       }
@@ -390,6 +436,7 @@ function auditFromRecord(record: ConsistencyAuditRecord): ConsistencyAudit | nul
     bookId: record.bookId,
     status: normalizeAuditStatus(record.status),
     dossierHash: record.dossierHash,
+    dimensions,
     passes,
     findings: sortFindings(findings),
     rawFindingsByDimension,
@@ -490,21 +537,35 @@ function upgradeRawFindings(
 // ---------------------------------------------------------------------------
 
 /**
+ * Wymiary w zakresie audytu. Raport zapisany przed wprowadzeniem zakresu nie ma
+ * tego pola — wtedy zakresem jest komplet wymiarów, bo taki audyt zawsze
+ * uruchamiał wszystkie.
+ */
+export function auditScope(audit: {
+  dimensions?: AuditDimension[];
+}): AuditDimension[] {
+  return audit.dimensions?.length ? audit.dimensions : [...AUDIT_DIMENSIONS];
+}
+
+/**
  * Status całości pochodzi z przebiegów, nie jest ustawiany ręcznie: complete
  * dopiero po syntezie, partial gdy któryś przebieg padł i nic już nie leci.
  *
  * Synteza startuje wyłącznie po komplecie wymiarów, więc jej "queued" przy
  * padniętym wymiarze nie jest pracą w toku — inaczej audyt zostawałby na
  * zawsze w stanie "running".
+ *
+ * Liczymy tylko po wymiarach z zakresu audytu: wymiar "skipped" nie jest ani
+ * pracą w toku, ani porażką, a synteza "skipped" (jeden wymiar w zakresie)
+ * domyka raport tak samo jak synteza udana.
  */
 function withStatus(audit: ConsistencyAudit): ConsistencyAudit {
-  const dimensionStatuses = AUDIT_DIMENSIONS.map(
-    (dimension) => audit.passes[dimension].status
-  );
+  const scope = auditScope(audit);
+  const dimensionStatuses = scope.map((dimension) => audit.passes[dimension].status);
   const synthesisStatus = audit.passes.synthesis.status;
   if (
     dimensionStatuses.every((status) => status === "success") &&
-    synthesisStatus === "success"
+    (synthesisStatus === "success" || synthesisStatus === "skipped")
   ) {
     return { ...audit, status: "complete" };
   }
@@ -647,6 +708,18 @@ function normalizePatchStatus(
 
 function normalizeAuditStatus(value: unknown): ConsistencyAuditStatus {
   return value === "complete" || value === "partial" ? value : "running";
+}
+
+/**
+ * Zakres audytu z bazy. Puste, nieznane albo nie-tablicowe dane oznaczają raport
+ * sprzed wprowadzenia zakresu, czyli komplet wymiarów.
+ */
+function normalizeDimensions(value: unknown): AuditDimension[] {
+  if (!Array.isArray(value)) {
+    return [...AUDIT_DIMENSIONS];
+  }
+  const known = AUDIT_DIMENSIONS.filter((dimension) => value.includes(dimension));
+  return known.length ? known : [...AUDIT_DIMENSIONS];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

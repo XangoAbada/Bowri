@@ -342,32 +342,39 @@
   min-width: 0;
 }
 
-.ai-log-entry summary {
+/* Selektory dziecka, nie potomka: wewnątrz wpisu siedzą teraz zagnieżdżone
+   <details> (sekcje Request/Response, prompt, karty uwag) z własnym stylem
+   summary. Przy selektorze potomnym o tej samej specyficzności rozstrzygała
+   kolejność importów w main.tsx — układ, który psuł się przy każdej zmianie
+   kolejności plików CSS. */
+.ai-log-entry > summary {
   display: flex;
   gap: 12px;
   align-items: center;
-  justify-content: space-between;
   padding: 12px;
   cursor: pointer;
   list-style: none;
 }
 
-.ai-log-entry summary::-webkit-details-marker {
+.ai-log-entry > summary::-webkit-details-marker {
   display: none;
 }
 
-.ai-log-entry summary span:first-child {
+/* Nagłówek wpisu (tytuł + data) rozpycha się, żeby pigułka statusu trzymała się
+   prawej krawędzi mimo dodanej z przodu strzałki. */
+.ai-log-entry > summary > span:first-of-type {
   display: grid;
   gap: 3px;
   min-width: 0;
+  margin-right: auto;
 }
 
-.ai-log-entry summary strong,
-.ai-log-entry summary small {
+.ai-log-entry > summary strong,
+.ai-log-entry > summary small {
   overflow-wrap: anywhere;
 }
 
-.ai-log-entry summary small {
+.ai-log-entry > summary small {
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 600;

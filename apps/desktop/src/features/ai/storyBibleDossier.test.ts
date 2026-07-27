@@ -110,6 +110,88 @@ const emptyWorld = {
   visualAssets: []
 } as unknown as WorldWorkspace;
 
+/**
+ * Plan z wypełnioną warstwą struktury. Służy do sprawdzenia, że rozdziały,
+ * sceny, akty i beaty NIE trafiają do dossier — wraz z wątkiem, który trafić
+ * musi, bo jest częścią Story Bible.
+ */
+function planWithStructure(): BookPlan {
+  return {
+    ...emptyPlan,
+    structure: {
+      id: "structure-1",
+      structureType: "three-act",
+      description: "OPIS STRUKTURY POZA DOSSIER",
+      notes: "",
+      status: "draft"
+    },
+    acts: [
+      {
+        id: "act-1",
+        name: "Akt pierwszy",
+        purpose: "CEL AKTU POZA DOSSIER",
+        summary: "",
+        startPercent: 0,
+        endPercent: 25,
+        orderIndex: 0
+      }
+    ],
+    beats: [
+      {
+        id: "beat-1",
+        name: "Zawiązanie",
+        role: "ROLA BEATU POZA DOSSIER",
+        description: "",
+        orderIndex: 0
+      }
+    ],
+    threads: [
+      {
+        id: "thread-1",
+        name: "Wątek główny",
+        description: "Opis wątku.",
+        resolution: "",
+        status: "active",
+        orderIndex: 0
+      }
+    ],
+    chapters: [
+      {
+        id: "chapter-1",
+        number: 1,
+        workingTitle: "TYTUŁ ROZDZIAŁU POZA DOSSIER",
+        summary: "",
+        purpose: "",
+        conflict: "",
+        turningPoint: "",
+        targetWordCount: 3000,
+        actId: "act-1",
+        orderIndex: 0
+      }
+    ],
+    chapterThreads: [{ chapterId: "chapter-1", threadId: "thread-1", description: "" }],
+    chapterBeats: [{ chapterId: "chapter-1", beatId: "beat-1" }],
+    scenes: [
+      {
+        id: "scene-1",
+        chapterId: "chapter-1",
+        title: "TYTUŁ SCENY POZA DOSSIER",
+        summary: "",
+        goal: "",
+        conflict: "",
+        outcome: "",
+        timeMarker: "",
+        povCharacterId: null,
+        locationId: null,
+        targetWordCount: null,
+        status: "draft",
+        orderIndex: 0
+      }
+    ],
+    sceneThreads: [{ sceneId: "scene-1", threadId: "thread-1" }]
+  } as unknown as BookPlan;
+}
+
 function workspaceWith(characters: Character[]): CharacterWorkspace {
   return {
     characters,
@@ -177,6 +259,42 @@ describe("buildStoryBibleDossier — puste pola i wykluczenia", () => {
 
     expect(dossier.text).toContain("- Motywy: pamięć, strata");
     expect(dossier.text).toContain(`- Alternatywne tytuły: ${EMPTY_MARKER}`);
+  });
+
+  it("nie wpuszcza warstwy planu — rozdziałów, scen, aktów ani beatów", () => {
+    const dossier = dossierFor(workspaceWith([characterFixture(1)]), planWithStructure());
+
+    // Same encje: ani nagłówków, ani identyfikatorów do wskazania w dowodach.
+    expect(dossier.text).not.toContain("[chapter:");
+    expect(dossier.text).not.toContain("[scene:");
+    expect(dossier.text).not.toContain("[act:");
+    expect(dossier.text).not.toContain("[beat:");
+    expect(dossier.text).not.toContain("Rozdziały");
+    expect(dossier.text).not.toContain("Sceny");
+    expect(dossier.text).not.toContain("Struktura fabularna");
+
+    // Treść pól warstwy planu też nie może przeciekać przez powiązania.
+    expect(dossier.text).not.toContain("TYTUŁ ROZDZIAŁU POZA DOSSIER");
+    expect(dossier.text).not.toContain("TYTUŁ SCENY POZA DOSSIER");
+
+    // Wątek zostaje — to Story Bible.
+    expect(dossier.text).toContain("[plotThread:thread-1]");
+    expect(dossier.counts.plotThread).toBe(1);
+  });
+
+  it("liczy wyłącznie encje Story Bible", () => {
+    const dossier = dossierFor(workspaceWith([characterFixture(1)]), planWithStructure());
+
+    expect(Object.keys(dossier.counts).sort()).toEqual([
+      "character",
+      "concept",
+      "memory",
+      "memoryLink",
+      "plotThread",
+      "relation",
+      "worldElement",
+      "worldRule"
+    ]);
   });
 });
 

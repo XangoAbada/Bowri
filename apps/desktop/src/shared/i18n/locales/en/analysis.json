@@ -2,9 +2,9 @@
   "analysis": {
     "eyebrow": "Stage 06",
     "title": "Consistency analysis",
-    "intro": "A full project audit before you start writing: concept, characters, world and rules, plot threads, and overall consistency. The analysis receives every entity and every field, without shortening or omissions.",
+    "intro": "A Story Bible audit before you start writing: concept, characters, world and rules, plot threads, and overall consistency. The analysis receives every entity and every field, without shortening or omissions. Chapters, scenes and prose are handled by the Editor and Editing stages.",
     "loadingTitle": "Loading project",
-    "loadingDescription": "Collecting concept, plan, characters and world into the analysis dossier.",
+    "loadingDescription": "Collecting concept, plot threads, characters and world into the analysis dossier.",
 
     "readinessTitle": "Material for analysis",
     "count": {
@@ -13,14 +13,16 @@
       "memory": "Memories",
       "worldElement": "World elements",
       "worldRule": "World rules",
-      "plotThread": "Plot threads",
-      "chapter": "Chapters",
-      "scene": "Scenes"
+      "plotThread": "Plot threads"
     },
     "dossierSize": "Dossier: ~{{tokens}} tokens ({{chars}} characters). Context window of {{model}}: {{window}} tokens.",
     "noTruncationNote": "Every pass receives the complete dossier — no field or entity is shortened. Empty fields are passed explicitly so the model can see gaps in the project.",
     "overflowWarning": "The dossier does not fit into the selected model's context window. The analysis will still run and nothing will be truncated, but the model may reject the request — pick a 1M-window model (claude-opus-4-7 or gpt-4.1).",
-    "startButton": "Analyse everything ({{passes}} passes)",
+    "scopeTitle": "Analysis scope",
+    "scopeHint": "Each selected dimension is a separate pass. A synthesis pass at the end merges the findings into a single list.",
+    "scopeHintSingle": "A single dimension — no synthesis. You get that pass's findings, ready to apply.",
+    "scopeEmpty": "Select at least one dimension.",
+    "startButton": "Analyse ({{passes}} passes)",
     "alreadyRunning": "An analysis of this project is already running.",
 
     "emptyTitle": "No analyses yet",
@@ -35,8 +37,10 @@
       "queued": "queued",
       "running": "running",
       "success": "done",
-      "error": "error"
+      "error": "error",
+      "skipped": "skipped"
     },
+    "passSkippedHint": "This dimension was outside the analysis scope.",
     "passFindings": "{{count}} findings",
     "retryPass": "Retry pass",
     "appliedCount": "Applied: {{count}}",

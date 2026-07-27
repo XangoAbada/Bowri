@@ -7,7 +7,6 @@ import { Button, StatusPill, toast } from "../../shared/ui";
 import { useProjectNavigationStore } from "../../app/projectNavigationStore";
 import {
   AUDIT_DIMENSION_LABELS,
-  AUDIT_PASS_COUNT,
   CONSISTENCY_FINDING_KIND_LABELS,
   CONSISTENCY_FINDING_SEVERITY_LABELS,
   CONSISTENCY_SEVERITY_ORDER,
@@ -20,6 +19,7 @@ import {
   persistConsistencyAudit
 } from "./consistencyAuditService";
 import {
+  auditScope,
   useConsistencyAuditStore,
   type ConsistencyAudit,
   type ConsistencyAuditReportFinding,
@@ -27,6 +27,7 @@ import {
   type ConsistencyReportPatch
 } from "./consistencyAuditStore";
 import { entityFieldLabel, entityKindLabel } from "./brainstormEntityTargets";
+import { ProposalStreamPreview } from "./TextStreamPreview";
 
 // Panel raportów audytu spójności w prawym sidebarze. Wzorzec SceneCritiquePanel:
 // samoukrywanie przy pustej liście, uwagi filtrowane po statusie, zapis raportu
@@ -219,7 +220,7 @@ function ConsistencyAuditCard({
           {running
             ? t("analysis.panelHeadingRunning", {
                 done: completedPassCount(audit),
-                total: AUDIT_PASS_COUNT
+                total: totalPassCount(audit)
               })
             : t("analysis.panelHeading", { count: openFindings.length })}
         </h3>
@@ -242,6 +243,7 @@ function ConsistencyAuditCard({
           ) : null}
         </div>
         {running ? <p className="muted-text">{runningPassLabel(audit, t)}</p> : null}
+        {running ? <RunningPassProgress audit={audit} /> : null}
       </div>
 
       {appliedFindings.length > 0 || dismissedFindings.length > 0 ? (
@@ -515,6 +517,28 @@ function firstPlanEvidenceId(finding: ConsistencyAuditReportFinding): string | n
 
 function completedPassCount(audit: ConsistencyAudit): number {
   return Object.values(audit.passes).filter((pass) => pass.status === "success").length;
+}
+
+/**
+ * Ile przebiegów ma ten audyt. Nie stała 6: raport częściowy ma tyle przebiegów,
+ * ile wymiarów wybrał autor, a synteza dochodzi tylko wtedy, gdy jest co scalać.
+ */
+function totalPassCount(audit: ConsistencyAudit): number {
+  const scope = auditScope(audit).length;
+  return scope + (scope > 1 ? 1 : 0);
+}
+
+/**
+ * Podgląd generacji przy karcie audytu. Przebiegi audytu są odfiltrowane z
+ * kafelków kolejki (patrz AiProposalPanel), więc bez tego autor pracujący poza
+ * stroną Analiza widziałby wyłącznie licznik „przebieg n/N".
+ */
+function RunningPassProgress({ audit }: { audit: ConsistencyAudit }) {
+  const proposalId = Object.values(audit.passes).find(
+    (pass) => pass.status === "running"
+  )?.proposalId;
+
+  return <ProposalStreamPreview proposalId={proposalId} />;
 }
 
 function runningPassLabel(audit: ConsistencyAudit, t: TFunction): string {

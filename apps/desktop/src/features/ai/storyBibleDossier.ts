@@ -1,9 +1,6 @@
 import type {
-  Act,
-  Beat,
   Book,
   BookPlan,
-  Chapter,
   Character,
   CharacterMemory,
   CharacterMemoryLink,
@@ -11,7 +8,6 @@ import type {
   CharacterWorkspace,
   PlotThread,
   Project,
-  Scene,
   WorldElement,
   WorldRule,
   WorldWorkspace
@@ -20,6 +16,14 @@ import { fnv1aHash } from "../../shared/text/plainText";
 import { estimateTokens } from "./contextWindows";
 
 // PEŁNE, NIEOBCINANE dossier projektu — jedyny kontekst audytu spójności.
+//
+// ZAKRES: wyłącznie Story Bible — koncepcja, postacie, relacje, wspomnienia,
+// świat, reguły i wątki. Warstwa planu (rozdziały, sceny, akty, beaty) oraz
+// napisana proza świadomie NIE wchodzą do audytu: rozdziały i sceny sprawdza
+// etap 07 (Edytor, sceneStoryBibleAuditPromptPackage) i etap 08 (Redakcja,
+// sceneCritiquePromptPackage). Analiza spójności odpowiada za materiał, z
+// którego plan dopiero powstaje, i zgłasza wyłącznie uwagi o encjach, które
+// da się poprawić jednym zapisem pola.
 //
 // Ten plik świadomie NIE importuje niczego z promptContextLimits.ts i nie wolno
 // tego zmienić. Cała reszta warstwy promptów oszczędza tokeny: MAX_FIELD_CHARS
@@ -32,8 +36,8 @@ import { estimateTokens } from "./contextWindows";
 //     a wykrywanie luk jest jednym z celów analizy.
 // Dlatego puste pola renderujemy JAWNIE jako EMPTY_MARKER.
 //
-// Poza dossier zostają wyłącznie dane, które nie są treścią projektu: proza scen
-// (decyzja autora — audyt dotyczy przygotowań przed pisaniem), pola pochodne AI
+// Poza dossier zostają: cała warstwa planu (rozdziały, sceny, akty, beaty) wraz
+// z prozą — patrz nota o zakresie na górze pliku — a także pola pochodne AI
 // (autoSummary, storySoFar, *Stale, *SourceHash), zasoby graficzne
 // (visualPrompt, imageAssetId, coverPrompt) oraz metadane techniczne
 // (createdAt, updatedAt, orderIndex — orderIndex służy do sortowania).
@@ -46,11 +50,7 @@ export type DossierEntityKind =
   | "memoryLink"
   | "worldElement"
   | "worldRule"
-  | "plotThread"
-  | "act"
-  | "beat"
-  | "chapter"
-  | "scene";
+  | "plotThread";
 
 export const DOSSIER_ENTITY_KINDS: readonly DossierEntityKind[] = [
   "concept",
@@ -60,12 +60,16 @@ export const DOSSIER_ENTITY_KINDS: readonly DossierEntityKind[] = [
   "memoryLink",
   "worldElement",
   "worldRule",
-  "plotThread",
-  "act",
-  "beat",
-  "chapter",
-  "scene"
+  "plotThread"
 ];
+
+/**
+ * Rodzaje encji, jakie mogą wystąpić w dowodach uwagi. Warstwa planu jest tutaj
+ * WYŁĄCZNIE dla raportów zapisanych w bazie przed zawężeniem audytu do Story
+ * Bible — nowe przebiegi jej nie wygenerują, bo nie ma jej w dossier. Bez tego
+ * stare raporty straciłyby dowody i przycisk „Pokaż w planie".
+ */
+export type EvidenceEntityKind = DossierEntityKind | "act" | "beat" | "chapter" | "scene";
 
 export type StoryBibleDossier = {
   /** Pełny Markdown — wchodzi do promptu bez żadnego obcięcia. */
@@ -111,10 +115,7 @@ export function buildStoryBibleDossier({
     renderMemoryLinks(characters.memoryLinks, index),
     renderWorldElements(world, index),
     renderWorldRules(world, index),
-    renderStructure(plan),
-    renderThreads(plan, world, index),
-    renderChapters(plan, world, index),
-    renderScenes(plan, world, index)
+    renderThreads(plan, world, index)
   ];
   const text = sections.join("\n\n");
 
@@ -129,11 +130,7 @@ export function buildStoryBibleDossier({
       memoryLink: characters.memoryLinks.length,
       worldElement: world.elements.length,
       worldRule: world.rules.length,
-      plotThread: plan.threads.length,
-      act: plan.acts.length,
-      beat: plan.beats.length,
-      chapter: plan.chapters.length,
-      scene: plan.scenes.length
+      plotThread: plan.threads.length
     },
     knownIds: {
       concept: new Set([book.id]),
@@ -143,11 +140,7 @@ export function buildStoryBibleDossier({
       memoryLink: idSet(characters.memoryLinks),
       worldElement: idSet(world.elements),
       worldRule: idSet(world.rules),
-      plotThread: idSet(plan.threads),
-      act: idSet(plan.acts),
-      beat: idSet(plan.beats),
-      chapter: idSet(plan.chapters),
-      scene: idSet(plan.scenes)
+      plotThread: idSet(plan.threads)
     },
     estimatedTokens: estimateTokens(text)
   };
@@ -162,10 +155,6 @@ type DossierIndex = {
   elementName: Map<string, string>;
   ruleName: Map<string, string>;
   threadName: Map<string, string>;
-  actName: Map<string, string>;
-  beatName: Map<string, string>;
-  chapterLabel: Map<string, string>;
-  sceneLabel: Map<string, string>;
   memoryLabel: Map<string, string>;
 };
 
@@ -179,12 +168,6 @@ function buildIndex(
     elementName: labelMap(world.elements, (item) => item.name),
     ruleName: labelMap(world.rules, (item) => item.name),
     threadName: labelMap(plan.threads, (item) => item.name),
-    actName: labelMap(plan.acts, (item) => item.name),
-    beatName: labelMap(plan.beats, (item) => item.name),
-    chapterLabel: labelMap(plan.chapters, (item) =>
-      `Rozdział ${item.number}${item.workingTitle ? `: ${item.workingTitle}` : ""}`
-    ),
-    sceneLabel: labelMap(plan.scenes, (item) => item.title),
     memoryLabel: labelMap(characters.memories, (item) => item.title)
   };
 }
@@ -213,8 +196,8 @@ function renderHeader(
 ): string {
   return `# Dossier projektu: ${project.name || "(bez nazwy)"}
 
-Ten dokument jest KOMPLETNYM zbiorem danych projektu przygotowanym do audytu
-spójności: każda encja i każde pole treściowe. Nic nie zostało skrócone,
+Ten dokument jest KOMPLETNYM zbiorem Story Bible projektu przygotowanym do
+audytu spójności: każda encja i każde pole treściowe. Nic nie zostało skrócone,
 przycięte ani pominięte ze względu na rozmiar.
 
 Pole opisane jako "${EMPTY_MARKER}" jest FAKTYCZNIE PUSTE w projekcie — to luka
@@ -223,8 +206,10 @@ do zgłoszenia, nie skutek obcięcia kontekstu.
 Każda encja ma w nagłówku identyfikator w postaci \`[rodzaj:id]\`. Wskazując cel
 poprawki, przepisuj ten identyfikator znak w znak.
 
-Świadomie poza dossier: napisana proza scen, streszczenia generowane przez AI,
-prompty i zasoby graficzne, znaczniki czasu utworzenia i modyfikacji.
+Świadomie poza dossier jest CAŁA warstwa planu: rozdziały, sceny, akty i beaty,
+a wraz z nimi napisana proza, streszczenia generowane przez AI, prompty i zasoby
+graficzne oraz znaczniki czasu. Za spójność planu i prozy odpowiadają osobne
+etapy (Edytor i Redakcja) — tego audytu one nie dotyczą.
 
 ## Zawartość
 - Język projektu: ${project.language || "pl"}
@@ -235,11 +220,7 @@ prompty i zasoby graficzne, znaczniki czasu utworzenia i modyfikacji.
 - Powiązania wspomnień: ${characters.memoryLinks.length}
 - Elementy świata: ${world.elements.length}
 - Reguły świata: ${world.rules.length}
-- Wątki: ${plan.threads.length}
-- Akty: ${plan.acts.length}
-- Beaty: ${plan.beats.length}
-- Rozdziały: ${plan.chapters.length}
-- Sceny: ${plan.scenes.length}`;
+- Wątki: ${plan.threads.length}`;
 }
 
 function renderConcept(book: Book): string {
@@ -474,28 +455,6 @@ ${lines([
               `${index.threadName.get(link.threadId) ?? "(nieznany wątek)"} [plotThread:${link.threadId}]`
           )
       )
-    ),
-    field(
-      "Powiązane rozdziały",
-      refList(
-        world.elementChapters
-          .filter((link) => link.elementId === element.id)
-          .map(
-            (link) =>
-              `${index.chapterLabel.get(link.chapterId) ?? "(nieznany rozdział)"} [chapter:${link.chapterId}]`
-          )
-      )
-    ),
-    field(
-      "Powiązane sceny",
-      refList(
-        world.elementScenes
-          .filter((link) => link.elementId === element.id)
-          .map(
-            (link) =>
-              `${index.sceneLabel.get(link.sceneId) ?? "(nieznana scena)"} [scene:${link.sceneId}]`
-          )
-      )
     )
   ])}`;
 }
@@ -548,114 +507,23 @@ ${lines([
               `${index.threadName.get(link.threadId) ?? "(nieznany wątek)"} [plotThread:${link.threadId}]`
           )
       )
-    ),
-    field(
-      "Powiązane rozdziały",
-      refList(
-        world.ruleChapters
-          .filter((link) => link.ruleId === rule.id)
-          .map(
-            (link) =>
-              `${index.chapterLabel.get(link.chapterId) ?? "(nieznany rozdział)"} [chapter:${link.chapterId}]`
-          )
-      )
-    ),
-    field(
-      "Powiązane sceny",
-      refList(
-        world.ruleScenes
-          .filter((link) => link.ruleId === rule.id)
-          .map(
-            (link) =>
-              `${index.sceneLabel.get(link.sceneId) ?? "(nieznana scena)"} [scene:${link.sceneId}]`
-          )
-      )
     )
   ])}`;
-}
-
-function renderStructure(plan: BookPlan): string {
-  const structureBlock = plan.structure
-    ? lines([
-        field("Typ struktury", plan.structure.structureType),
-        field("Opis", plan.structure.description),
-        field("Notatki", plan.structure.notes),
-        field("Status", plan.structure.status)
-      ])
-    : "(struktura fabularna nie została wybrana)";
-
-  const acts = sorted(plan.acts);
-  const actsBlock = acts.length
-    ? acts
-        .map(
-          (act: Act, position) => `### 8.${position + 1}. Akt: ${act.name || "(bez nazwy)"}  [act:${act.id}]
-
-${lines([
-            field("Cel aktu", act.purpose),
-            field("Streszczenie", act.summary),
-            field("Zakres", `${act.startPercent}% – ${act.endPercent}%`)
-          ])}`
-        )
-        .join("\n\n")
-    : "(brak aktów)";
-
-  const beats = sorted(plan.beats);
-  const beatsBlock = beats.length
-    ? beats
-        .map(
-          (beat: Beat) => `- ${beat.name || "(bez nazwy)"} [beat:${beat.id}]
-  - Rola: ${textOrEmpty(beat.role)}
-  - Opis: ${textOrEmpty(beat.description)}`
-        )
-        .join("\n")
-    : "(brak beatów)";
-
-  return `## 8. Struktura fabularna
-
-${structureBlock}
-
-### Akty (${acts.length})
-
-${actsBlock}
-
-### Beaty (${beats.length})
-
-${beatsBlock}`;
 }
 
 function renderThreads(plan: BookPlan, world: WorldWorkspace, index: DossierIndex): string {
   const items = sorted(plan.threads);
   if (!items.length) {
-    return `## 9. Wątki (0)\n\n(brak wątków)`;
+    return `## 8. Wątki (0)\n\n(brak wątków)`;
   }
 
   const body = items.map((thread: PlotThread, position) => {
-    const chapterLinks = plan.chapterThreads.filter((link) => link.threadId === thread.id);
-    const sceneLinks = plan.sceneThreads.filter((link) => link.threadId === thread.id);
-    return `### 9.${position + 1}. Wątek: ${thread.name || "(bez nazwy)"}  [plotThread:${thread.id}]
+    return `### 8.${position + 1}. Wątek: ${thread.name || "(bez nazwy)"}  [plotThread:${thread.id}]
 
 ${lines([
       field("Opis", thread.description),
       field("Rozwiązanie / payoff", thread.resolution),
       field("Status", thread.status),
-      field(
-        "Rozdziały",
-        refList(
-          chapterLinks.map(
-            (link) =>
-              `${index.chapterLabel.get(link.chapterId) ?? "(nieznany rozdział)"} [chapter:${link.chapterId}]${link.description ? ` — ${link.description}` : ""}`
-          )
-        )
-      ),
-      field(
-        "Sceny",
-        refList(
-          sceneLinks.map(
-            (link) =>
-              `${index.sceneLabel.get(link.sceneId) ?? "(nieznana scena)"} [scene:${link.sceneId}]`
-          )
-        )
-      ),
       field(
         "Powiązane elementy świata",
         refList(
@@ -680,168 +548,10 @@ ${lines([
       )
     ])}`;
   });
-  return `## 9. Wątki (${items.length})\n\n${body.join("\n\n")}`;
-}
+  return `## 8. Wątki (${items.length})
 
-function renderChapters(plan: BookPlan, world: WorldWorkspace, index: DossierIndex): string {
-  const items = sortedChapters(plan.chapters);
-  if (!items.length) {
-    return `## 10. Rozdziały (0)\n\n(brak rozdziałów)`;
-  }
-
-  const body = items.map((chapter: Chapter, position) => {
-    const scenes = plan.scenes
-      .filter((scene) => scene.chapterId === chapter.id)
-      .sort((a, b) => a.orderIndex - b.orderIndex);
-    return `### 10.${position + 1}. Rozdział ${chapter.number}: ${chapter.workingTitle || "(bez tytułu)"}  [chapter:${chapter.id}]
-
-${lines([
-      field(
-        "Akt",
-        chapter.actId
-          ? `${index.actName.get(chapter.actId) ?? "(nieznany akt)"} [act:${chapter.actId}]`
-          : ""
-      ),
-      field("Streszczenie", chapter.summary),
-      field("Cel rozdziału", chapter.purpose),
-      field("Konflikt", chapter.conflict),
-      field("Punkt zwrotny", chapter.turningPoint),
-      field("Docelowa liczba słów", numberValue(chapter.targetWordCount)),
-      field(
-        "Wątki",
-        refList(
-          plan.chapterThreads
-            .filter((link) => link.chapterId === chapter.id)
-            .map(
-              (link) =>
-                `${index.threadName.get(link.threadId) ?? "(nieznany wątek)"} [plotThread:${link.threadId}]${link.description ? ` — ${link.description}` : ""}`
-            )
-        )
-      ),
-      field(
-        "Beaty",
-        refList(
-          plan.chapterBeats
-            .filter((link) => link.chapterId === chapter.id)
-            .map(
-              (link) => `${index.beatName.get(link.beatId) ?? "(nieznany beat)"} [beat:${link.beatId}]`
-            )
-        )
-      ),
-      field(
-        "Elementy świata",
-        refList(
-          world.elementChapters
-            .filter((link) => link.chapterId === chapter.id)
-            .map(
-              (link) =>
-                `${index.elementName.get(link.elementId) ?? "(nieznany element)"} [worldElement:${link.elementId}]`
-            )
-        )
-      ),
-      field(
-        "Reguły świata",
-        refList(
-          world.ruleChapters
-            .filter((link) => link.chapterId === chapter.id)
-            .map(
-              (link) => `${index.ruleName.get(link.ruleId) ?? "(nieznana reguła)"} [worldRule:${link.ruleId}]`
-            )
-        )
-      ),
-      field(
-        "Sceny",
-        refList(scenes.map((scene) => `${scene.title || "(bez tytułu)"} [scene:${scene.id}]`))
-      )
-    ])}`;
-  });
-  return `## 10. Rozdziały (${items.length})\n\n${body.join("\n\n")}`;
-}
-
-function renderScenes(plan: BookPlan, world: WorldWorkspace, index: DossierIndex): string {
-  const items = [...plan.scenes].sort((a, b) => a.orderIndex - b.orderIndex);
-  if (!items.length) {
-    return `## 11. Sceny (0)\n\n(brak scen)`;
-  }
-
-  const body = items.map((scene: Scene, position) => {
-    return `### 11.${position + 1}. Scena: ${scene.title || "(bez tytułu)"}  [scene:${scene.id}]
-
-${lines([
-      field(
-        "Rozdział",
-        scene.chapterId
-          ? `${index.chapterLabel.get(scene.chapterId) ?? "(nieznany rozdział)"} [chapter:${scene.chapterId}]`
-          : ""
-      ),
-      field("Streszczenie", scene.summary),
-      field("Cel sceny", scene.goal),
-      field("Konflikt", scene.conflict),
-      field("Wynik", scene.outcome),
-      field("Znacznik czasu", scene.timeMarker),
-      field(
-        "Postać POV",
-        scene.povCharacterId
-          ? `${index.characterName.get(scene.povCharacterId) ?? "(nieznana postać)"} [character:${scene.povCharacterId}]`
-          : ""
-      ),
-      field(
-        "Lokacja",
-        scene.locationId
-          ? `${index.elementName.get(scene.locationId) ?? "(nieznany element)"} [worldElement:${scene.locationId}]`
-          : ""
-      ),
-      field("Docelowa liczba słów", numberValue(scene.targetWordCount)),
-      field("Status", scene.status),
-      field(
-        "Postacie w scenie",
-        refList(
-          plan.sceneCharacters
-            .filter((link) => link.sceneId === scene.id)
-            .map(
-              (link) =>
-                `${index.characterName.get(link.characterId) ?? "(nieznana postać)"} [character:${link.characterId}]`
-            )
-        )
-      ),
-      field(
-        "Wątki",
-        refList(
-          plan.sceneThreads
-            .filter((link) => link.sceneId === scene.id)
-            .map(
-              (link) =>
-                `${index.threadName.get(link.threadId) ?? "(nieznany wątek)"} [plotThread:${link.threadId}]`
-            )
-        )
-      ),
-      field(
-        "Elementy świata",
-        refList(
-          world.elementScenes
-            .filter((link) => link.sceneId === scene.id)
-            .map(
-              (link) =>
-                `${index.elementName.get(link.elementId) ?? "(nieznany element)"} [worldElement:${link.elementId}]`
-            )
-        )
-      ),
-      field(
-        "Reguły świata",
-        refList(
-          world.ruleScenes
-            .filter((link) => link.sceneId === scene.id)
-            .map(
-              (link) => `${index.ruleName.get(link.ruleId) ?? "(nieznana reguła)"} [worldRule:${link.ruleId}]`
-            )
-        )
-      )
-    ])}`;
-  });
-  return `## 11. Sceny (${items.length})
-
-Sceny zawierają wyłącznie metadane planistyczne — napisana proza nie wchodzi do
-tego audytu.
+Przypisania wątków do rozdziałów i scen są częścią planu i świadomie nie wchodzą
+do tego audytu — nie zgłaszaj uwag o osadzeniu wątku w strukturze.
 
 ${body.join("\n\n")}`;
 }
@@ -935,10 +645,4 @@ function jsonList(json: string): string {
 
 function sorted<T extends { orderIndex: number; id: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.orderIndex - b.orderIndex || a.id.localeCompare(b.id));
-}
-
-function sortedChapters(items: Chapter[]): Chapter[] {
-  return [...items].sort(
-    (a, b) => a.orderIndex - b.orderIndex || a.number - b.number || a.id.localeCompare(b.id)
-  );
 }

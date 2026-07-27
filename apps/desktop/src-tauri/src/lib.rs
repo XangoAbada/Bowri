@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{watch, Mutex};
 use uuid::Uuid;
@@ -24,6 +24,16 @@ use ai_settings::{get_ai_settings, load_ai_settings, save_ai_settings, AiSetting
 
 pub(crate) const PROVIDER_ID: &str = "codex-cli-bridge";
 const COVER_GENERATION_EVENT: &str = "cover-generation-progress";
+/// Podgląd generacji tekstu na żywo. Zdarzenie jest ulotne — nic z niego nie
+/// idzie do bazy, front trzyma je tylko na czas trwania przebiegu.
+const TEXT_GENERATION_EVENT: &str = "text-generation-progress";
+/// Ile znaków odpowiedzi trzymamy w podglądzie. Cała odpowiedź audytu to
+/// kilkadziesiąt kilobajtów — przepychanie jej przez IPC przy każdej delcie nie
+/// ma sensu, a autor i tak czyta ogon.
+const TEXT_PROGRESS_TAIL_CHARS: usize = 2000;
+/// Progi throttlingu emisji: albo tyle nowych znaków, albo tyle czasu.
+const TEXT_PROGRESS_MIN_CHARS: usize = 200;
+const TEXT_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
 const MIN_COVER_TIMEOUT_SECONDS: u64 = 600;
 /// Domyślny limit generacji tekstowej, gdy front nie przyśle własnego.
 const DEFAULT_TEXT_TIMEOUT_SECONDS: u64 = 180;
@@ -272,6 +282,20 @@ pub struct CoverGenerationProgress {
     pub message: String,
     pub partial_image_data_url: Option<String>,
     pub progress: Option<u8>,
+}
+
+/// Postęp generacji tekstu. `partialText` to ogon odpowiedzi, nie całość —
+/// patrz TEXT_PROGRESS_TAIL_CHARS. Zdarzenie nie jest nigdzie utrwalane.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextGenerationProgress {
+    pub project_id: String,
+    pub ai_run_id: String,
+    pub action: String,
+    /// `streaming` w trakcie, `final` po zamknięciu strumienia.
+    pub phase: String,
+    pub char_count: usize,
+    pub partial_text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -8668,7 +8692,109 @@ async fn cancel_active_codex_run_in_registry(
     true
 }
 
+/// Akumulator podglądu generacji. Zbiera tekst spływający ze stdout providera i
+/// emituje go do frontu z throttlingiem — bez tego jedna delta na token zalałaby
+/// IPC setkami zdarzeń na sekundę.
+struct TextProgressEmitter {
+    app: AppHandle,
+    project_id: String,
+    ai_run_id: String,
+    action: String,
+    char_count: usize,
+    tail: String,
+    since_last_emit: usize,
+    last_emit: Instant,
+}
+
+impl TextProgressEmitter {
+    fn new(app: AppHandle, run: &ActiveCodexRun) -> Self {
+        Self {
+            app,
+            project_id: run.project_id.clone(),
+            ai_run_id: run.ai_run_id.clone(),
+            action: run.action.clone(),
+            char_count: 0,
+            tail: String::new(),
+            since_last_emit: 0,
+            last_emit: Instant::now(),
+        }
+    }
+
+    /// Jedna linia stdout. Poprawny JSON oddaje tylko swoją deltę tekstu —
+    /// pozostałe typy zdarzeń (system, result, assistant, rate_limit_event) są
+    /// metadanymi i nie mogą trafić do podglądu. Linia, która nie jest JSON-em,
+    /// to surowe wyjście providera bez streamingu (codex-cli) i idzie w całości.
+    fn push_line(&mut self, line: &str) {
+        let trimmed = line.trim_end_matches(['\n', '\r']);
+        if trimmed.is_empty() {
+            return;
+        }
+
+        let text = match serde_json::from_str::<Value>(trimmed.trim()) {
+            Ok(value) => match text_delta_from_stream_event(&value) {
+                Some(delta) => delta,
+                None => return,
+            },
+            Err(_) => format!("{trimmed}\n"),
+        };
+
+        self.char_count += text.chars().count();
+        self.since_last_emit += text.chars().count();
+        self.tail.push_str(&text);
+        if self.tail.chars().count() > TEXT_PROGRESS_TAIL_CHARS {
+            let skip = self.tail.chars().count() - TEXT_PROGRESS_TAIL_CHARS;
+            self.tail = self.tail.chars().skip(skip).collect();
+        }
+
+        if self.since_last_emit >= TEXT_PROGRESS_MIN_CHARS
+            || self.last_emit.elapsed() >= TEXT_PROGRESS_MIN_INTERVAL
+        {
+            self.emit("streaming");
+        }
+    }
+
+    /// Domknięcie strumienia. Zawsze emitowane, także gdy throttling zjadł
+    /// ostatnią porcję — inaczej podgląd zostawałby uciętym ogonem.
+    fn finish(&mut self) {
+        self.emit("final");
+    }
+
+    fn emit(&mut self, phase: &str) {
+        self.since_last_emit = 0;
+        self.last_emit = Instant::now();
+        let _ = self.app.emit(
+            TEXT_GENERATION_EVENT,
+            TextGenerationProgress {
+                project_id: self.project_id.clone(),
+                ai_run_id: self.ai_run_id.clone(),
+                action: self.action.clone(),
+                phase: phase.to_string(),
+                char_count: self.char_count,
+                partial_text: self.tail.clone(),
+            },
+        );
+    }
+}
+
+/// Delta tekstu z NDJSON-owego zdarzenia `claude --output-format stream-json
+/// --include-partial-messages`. Zwraca None dla każdego innego typu zdarzenia.
+fn text_delta_from_stream_event(value: &Value) -> Option<String> {
+    if value.get("type")?.as_str()? != "stream_event" {
+        return None;
+    }
+    let event = value.get("event")?;
+    if event.get("type")?.as_str()? != "content_block_delta" {
+        return None;
+    }
+    let delta = event.get("delta")?;
+    if delta.get("type")?.as_str()? != "text_delta" {
+        return None;
+    }
+    Some(delta.get("text")?.as_str()?.to_string())
+}
+
 async fn run_registered_codex_command(
+    app: &AppHandle,
     registry: &ActiveCodexRunRegistry,
     run: ActiveCodexRun,
     command: &mut Command,
@@ -8693,11 +8819,28 @@ async fn run_registered_codex_command(
             stdin.write_all(stdin_text.as_bytes()).await?;
         }
 
+        // Stdout czytamy linia po linii, żeby po drodze emitować podgląd
+        // generacji. Świadomie read_until + from_utf8_lossy, a nie
+        // BufReader::lines(): lines() przerywa błędem na niepoprawnym UTF-8, a
+        // wcześniejsze read_to_end + from_utf8_lossy takie śmieci tolerowało i
+        // ta tolerancja musi zostać.
+        let mut progress = TextProgressEmitter::new(app.clone(), &run);
         let stdout_task = tokio::spawn(async move {
             let mut buffer = Vec::new();
-            if let Some(mut reader) = stdout.take() {
-                reader.read_to_end(&mut buffer).await?;
+            if let Some(reader) = stdout.take() {
+                let mut reader = BufReader::new(reader);
+                let mut line = Vec::new();
+                loop {
+                    line.clear();
+                    let read = reader.read_until(b'\n', &mut line).await?;
+                    if read == 0 {
+                        break;
+                    }
+                    buffer.extend_from_slice(&line);
+                    progress.push_line(&String::from_utf8_lossy(&line));
+                }
             }
+            progress.finish();
             Ok::<Vec<u8>, std::io::Error>(buffer)
         });
         let stderr_task = tokio::spawn(async move {
@@ -8899,6 +9042,7 @@ async fn execute_codex_image_generation(
     );
 
     let (status, stdout, stderr) = run_registered_codex_command(
+        app,
         active_codex_runs,
         ActiveCodexRun {
             ai_run_id: ai_run_id.to_string(),
@@ -9050,6 +9194,7 @@ async fn execute_codex_character_image_generation(
         .kill_on_drop(true);
 
     let (status, stdout, stderr) = run_registered_codex_command(
+        app,
         active_codex_runs,
         ActiveCodexRun {
             ai_run_id: ai_run_id.to_string(),
@@ -9191,6 +9336,7 @@ async fn execute_codex_export_artwork_generation(
         .kill_on_drop(true);
 
     let (status, stdout, stderr) = run_registered_codex_command(
+        app,
         active_codex_runs,
         ActiveCodexRun {
             ai_run_id: ai_run_id.to_string(),
@@ -9621,6 +9767,7 @@ async fn execute_codex(
         .kill_on_drop(true);
 
     let (status, stdout, stderr) = run_registered_codex_command(
+        app,
         active_codex_runs,
         ActiveCodexRun {
             ai_run_id: ai_run_id.to_string(),
@@ -9950,6 +10097,90 @@ mod tests {
         let database_path =
             std::env::temp_dir().join(format!("storyforge2-test-{}.sqlite", Uuid::new_v4()));
         init_database_at(database_path).await.unwrap()
+    }
+
+    /// Strumień NDJSON w kształcie, jaki naprawdę wypisuje
+    /// `claude -p --output-format stream-json --include-partial-messages`.
+    fn claude_stream_fixture() -> String {
+        [
+            r#"{"type":"system","subtype":"init","session_id":"s1","tools":[]}"#,
+            r#"{"type":"system","subtype":"status","status":"requesting"}"#,
+            r#"{"type":"stream_event","event":{"type":"message_start","message":{}}}"#,
+            r#"{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"text","text":""}}}"#,
+            r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Pier"}}}"#,
+            r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}"#,
+            r#"{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"wsza część."}}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Pierwsza część."}]}}"#,
+            r#"{"type":"stream_event","event":{"type":"message_stop"}}"#,
+            r#"{"type":"result","subtype":"success","is_error":false,"result":"Pierwsza część.","usage":{"input_tokens":11,"output_tokens":7,"cache_read_input_tokens":3,"cache_creation_input_tokens":5}}"#,
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn claude_stream_yields_result_line_with_usage() {
+        let parsed = providers::claude_cli_result_line(&claude_stream_fixture())
+            .expect("strumień musi zawierać linię wyniku");
+
+        assert_eq!(parsed.get("is_error").and_then(Value::as_bool), Some(false));
+        assert_eq!(
+            parsed.get("result").and_then(Value::as_str),
+            Some("Pierwsza część.")
+        );
+        // Usage siedzi w tej samej strukturze co przy --output-format json, więc
+        // wycena tokenów nie wymagała żadnej zmiany.
+        assert_eq!(
+            parsed
+                .get("usage")
+                .and_then(|usage| usage.get("cache_read_input_tokens"))
+                .and_then(Value::as_u64),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn claude_stream_without_result_line_is_an_error() {
+        // Proces ubity w połowie: same delty, bez linii wyniku. Wywołujący ma
+        // dostać błąd, a nie ciszę albo pusty tekst.
+        let truncated = claude_stream_fixture()
+            .lines()
+            .filter(|line| !line.contains(r#""type":"result""#))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(providers::claude_cli_result_line(&truncated).is_none());
+    }
+
+    #[test]
+    fn claude_stream_result_line_survives_noise_and_ordering() {
+        // Linie nie-JSON (ostrzeżenia CLI) i wynik nie na końcu strumienia.
+        let noisy = format!(
+            "warning: coś od CLI\n{}\n{}",
+            r#"{"type":"result","subtype":"success","is_error":false,"result":"Właściwy wynik","usage":{}}"#,
+            r#"{"type":"stream_event","event":{"type":"message_stop"}}"#
+        );
+
+        let parsed = providers::claude_cli_result_line(&noisy).expect("wynik musi się znaleźć");
+        assert_eq!(
+            parsed.get("result").and_then(Value::as_str),
+            Some("Właściwy wynik")
+        );
+    }
+
+    #[test]
+    fn text_progress_reads_only_text_deltas() {
+        // Podgląd pokazuje treść odpowiedzi, nie metadane strumienia: linie
+        // system/result/assistant/rate_limit_event nie mogą do niego trafić.
+        let mut preview = String::new();
+        for line in claude_stream_fixture().lines() {
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                if let Some(delta) = text_delta_from_stream_event(&value) {
+                    preview.push_str(&delta);
+                }
+            }
+        }
+
+        assert_eq!(preview, "Pierwsza część.");
     }
 
     #[test]
