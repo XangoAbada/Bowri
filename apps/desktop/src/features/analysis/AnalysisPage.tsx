@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, CircleStop, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import {
   deleteConsistencyAudit,
   getBookPlan,
@@ -18,8 +18,10 @@ import {
   type AuditDimension
 } from "../ai/consistencyAuditPromptPackage";
 import {
+  discardConsistencyAuditProposals,
   retryConsistencyAuditPass,
-  startConsistencyAudit
+  startConsistencyAudit,
+  stopConsistencyAudit
 } from "../ai/consistencyAuditService";
 import {
   countFindingsBySeverity,
@@ -147,14 +149,24 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
     }
   }
 
+  async function handleStop(audit: ConsistencyAudit) {
+    await stopConsistencyAudit(audit.id);
+    await queryClient.invalidateQueries({ queryKey: ["ai-proposals", projectId] });
+  }
+
   async function handleDelete(audit: ConsistencyAudit) {
     removeAudit(audit.id);
     try {
+      // Najpierw kolejka, potem baza: przebiegi zostawione w skrzynce wracały
+      // po restarcie i blokowały każdą następną analizę, bo runner jest
+      // szeregowy, a kafelki audytu są odfiltrowane z kolejki.
+      await discardConsistencyAuditProposals(audit.id);
       await deleteConsistencyAudit(audit.id);
     } finally {
       await queryClient.invalidateQueries({
         queryKey: ["consistency-audits", audit.bookId]
       });
+      await queryClient.invalidateQueries({ queryKey: ["ai-proposals", projectId] });
     }
   }
 
@@ -260,6 +272,7 @@ export function AnalysisPage({ projectId }: AnalysisPageProps) {
                 onMarkOutdated={markOutdated}
                 onShowInPanel={() => setAcknowledged(audit.id, false)}
                 onDelete={() => void handleDelete(audit)}
+                onStop={() => void handleStop(audit)}
               />
             ))}
           </div>
@@ -274,13 +287,15 @@ function AuditCard({
   currentDossierHash,
   onMarkOutdated,
   onShowInPanel,
-  onDelete
+  onDelete,
+  onStop
 }: {
   audit: ConsistencyAudit;
   currentDossierHash: string;
   onMarkOutdated: (auditId: string, outdated: boolean) => void;
   onShowInPanel: () => void;
   onDelete: () => void;
+  onStop: () => void;
 }) {
   const { t } = useTranslation();
   const outdated = audit.dossierHash !== currentDossierHash;
@@ -390,6 +405,14 @@ function AuditCard({
       </ol>
 
       <div className="analysis-audit-actions">
+        {audit.status === "running" ? (
+          // Bez tego jedynym sposobem na przerwanie analizy było czekanie na
+          // timeout przebiegu — dla audytu to pół godziny.
+          <Button variant="secondary" size="sm" onClick={onStop}>
+            <CircleStop size={14} aria-hidden="true" />
+            {t("analysis.stopAudit")}
+          </Button>
+        ) : null}
         {audit.acknowledged ? (
           // Przyjęty raport zniknął z panelu AI — bez tego przycisku nie dałoby
           // się do niego wrócić bez restartu aplikacji.

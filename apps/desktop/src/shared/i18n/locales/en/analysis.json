@@ -41,6 +41,7 @@
       "skipped": "skipped"
     },
     "passSkippedHint": "This dimension was outside the analysis scope.",
+    "stopAudit": "Stop analysis",
     "passFindings": "{{count}} findings",
     "retryPass": "Retry pass",
     "appliedCount": "Applied: {{count}}",

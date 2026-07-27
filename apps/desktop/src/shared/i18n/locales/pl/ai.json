@@ -357,6 +357,7 @@
       "description": "Utworzono z akceptowanej propozycji AI."
     },
     "errors": {
+      "runInterrupted": "Generacja została przerwana — proces nie odpowiada. Uruchom ją ponownie.",
       "newProjectAcceptUnsupported": "Brak obsługi akceptacji propozycji nowego projektu.",
       "coverIncomplete": "Brak kompletnej propozycji okładki do akceptacji.",
       "characterImageIncomplete": "Brak kompletnej propozycji obrazu postaci do akceptacji.",

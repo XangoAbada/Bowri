@@ -34,6 +34,10 @@ const TEXT_PROGRESS_TAIL_CHARS: usize = 2000;
 /// Progi throttlingu emisji: albo tyle nowych znaków, albo tyle czasu.
 const TEXT_PROGRESS_MIN_CHARS: usize = 200;
 const TEXT_PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(150);
+/// Ile czekamy przy zamykaniu aplikacji na to, aż przerwane procesy CLI padną.
+/// Łącznie do 1,5 s — na tyle krótko, żeby zamknięcie nadal było natychmiastowe.
+const EXIT_CANCEL_POLL_ATTEMPTS: u8 = 15;
+const EXIT_CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const MIN_COVER_TIMEOUT_SECONDS: u64 = 600;
 /// Domyślny limit generacji tekstowej, gdy front nie przyśle własnego.
 const DEFAULT_TEXT_TIMEOUT_SECONDS: u64 = 180;
@@ -10085,8 +10089,47 @@ pub fn run() {
             start_codex_login,
             start_claude_login
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Bowri");
+        .build(tauri::generate_context!())
+        .expect("error while building Bowri")
+        .run(|app_handle, event| {
+            // Zamknięcie okna nie kończy procesów CLI. kill_on_drop działa tylko
+            // wtedy, gdy Rust zdąży wykonać drop, a przy wyjściu z aplikacji tak
+            // nie jest — na Windows proces potomny przeżywa rodzica. Osierocona
+            // generacja liczyłaby się dalej z limitu modelu, a jej rekord
+            // zostawałby w bazie jako "running".
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    tauri::async_runtime::block_on(cancel_all_active_codex_runs(
+                        &state.active_codex_runs,
+                    ));
+                }
+            }
+        });
+}
+
+/// Przerywa wszystkie aktywne generacje. Sygnał trafia do pętli
+/// `run_registered_codex_command`, która zabija proces potomny — dajemy jej na
+/// to chwilę, bo inaczej zamknęlibyśmy aplikację przed jej reakcją.
+async fn cancel_all_active_codex_runs(registry: &ActiveCodexRunRegistry) {
+    let pending = {
+        let runs = registry.lock().await;
+        for handle in runs.values() {
+            let _ = handle.cancel.send(true);
+        }
+        runs.len()
+    };
+    if pending == 0 {
+        return;
+    }
+
+    // Rejestr czyści się dopiero po zakończeniu każdej generacji, więc pustka
+    // oznacza, że wszystkie procesy faktycznie padły.
+    for _ in 0..EXIT_CANCEL_POLL_ATTEMPTS {
+        tokio::time::sleep(EXIT_CANCEL_POLL_INTERVAL).await;
+        if registry.lock().await.is_empty() {
+            return;
+        }
+    }
 }
 
 #[cfg(test)]

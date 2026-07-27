@@ -140,6 +140,7 @@ import {
 } from "./consistencyAuditPromptPackage";
 import {
   consistencyAuditPassRef,
+  discardOrphanedConsistencyAuditProposals,
   markConsistencyAuditPassRunning,
   recordConsistencyAuditFailure,
   recordConsistencyAuditPass
@@ -183,6 +184,14 @@ type AiProposalPanelProps = {
   projectId: string;
   onAcceptValue?: (value: string) => void | Promise<void>;
 };
+
+/**
+ * Ile czekamy, zanim uznamy propozycję „running" bez procesu w rejestrze za
+ * porzuconą. Rejestr aktywnych runów jest odpytywany co 1500 ms, a sam proces
+ * CLI startuje z opóźnieniem — bez tej karencji ubijalibyśmy własną generację
+ * sekundę po jej uruchomieniu.
+ */
+const ORPHAN_RUN_GRACE_MS = 20_000;
 
 function usageFromRun(run: AiRunResult): AiTokenUsage {
   return {
@@ -522,6 +531,7 @@ export function AiProposalPanel({
   const hydratePersistentProposals = useProposalStore((state) => state.hydratePersistentProposals);
   const clearProposal = useProposalStore((state) => state.clearProposal);
   const retryProposal = useProposalStore((state) => state.retryProposal);
+  const failProposal = useProposalStore((state) => state.failProposal);
   const cancelProposal = useProposalStore((state) => state.cancelProposal);
   const addAuditPrompt = useSceneDiscoveryStore((state) => state.addAuditPrompt);
   const addAssignment = useSceneDiscoveryStore((state) => state.addAssignment);
@@ -622,6 +632,44 @@ export function AiProposalPanel({
       hydratePersistentProposals(persistentProposalQuery.data);
     }
   }, [hydratePersistentProposals, persistentProposalQuery.data]);
+
+  // Przebiegi audytu, którego już nie ma, blokowałyby kolejkę bez końca: runner
+  // jest szeregowy, a kafelki audytu są z niej odfiltrowane, więc autor widzi
+  // tylko „Czekam na wolne miejsce". Czekamy na OBIE hydratacje — inaczej
+  // skasowalibyśmy przebiegi audytu, który jeszcze się nie wczytał.
+  useEffect(() => {
+    if (!consistencyAuditsQuery.data || !persistentProposalQuery.data) {
+      return;
+    }
+    void discardOrphanedConsistencyAuditProposals();
+  }, [consistencyAuditsQuery.data, persistentProposalQuery.data]);
+
+  // Propozycja "running", dla której backend nie zna żadnego aktywnego procesu,
+  // to duch po przerwanej generacji: jej obietnicy nikt już nie rozwiąże, a
+  // szeregowy runner nie ruszy przez nią ani jednego kolejnego zadania.
+  // Recovery przy starcie aplikacji tego nie łapie — proces backendu żyje.
+  useEffect(() => {
+    const runs = activeRunsQuery.data;
+    if (!runs) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const proposal of useProposalStore.getState().proposals) {
+      if (proposal.status !== "running" || proposal.projectId !== projectId) {
+        continue;
+      }
+      // Karencja: run trafia do rejestru dopiero po starcie procesu CLI, więc
+      // świeżo uruchomiona propozycja jeszcze nie ma tam swojego wpisu.
+      if (now - new Date(proposal.updatedAt).getTime() < ORPHAN_RUN_GRACE_MS) {
+        continue;
+      }
+      if (runs.some((run) => runMatchesProposal(run, proposal))) {
+        continue;
+      }
+      failProposal(proposal.id, i18n.t("ai.errors.runInterrupted"));
+    }
+  }, [activeRunsQuery.data, failProposal, projectId]);
 
   const acceptMutation = useMutation({
     mutationFn: async ({ proposalId, asNewPlanVersion = false }: { proposalId: string; asNewPlanVersion?: boolean }) => {

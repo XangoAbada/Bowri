@@ -357,6 +357,7 @@
       "description": "Created from an accepted AI proposal."
     },
     "errors": {
+      "runInterrupted": "The generation was interrupted — the process is not responding. Run it again.",
       "newProjectAcceptUnsupported": "Accepting a new project proposal is not supported.",
       "coverIncomplete": "The cover proposal is incomplete and cannot be accepted.",
       "characterImageIncomplete": "The character image proposal is incomplete and cannot be accepted.",

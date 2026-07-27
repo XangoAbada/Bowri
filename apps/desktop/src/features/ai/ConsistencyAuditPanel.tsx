@@ -1,3 +1,4 @@
+import { CircleStop } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -16,7 +17,8 @@ import {
   acceptConsistencyAuditReport,
   applyAuditPatch,
   consistencyAuditQueryKeys,
-  persistConsistencyAudit
+  persistConsistencyAudit,
+  stopConsistencyAudit
 } from "./consistencyAuditService";
 import {
   auditScope,
@@ -85,6 +87,7 @@ function ConsistencyAuditCard({
   const [applyingKey, setApplyingKey] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [stopping, setStopping] = useState(false);
 
   const running = audit.status === "running";
   const openFindings = audit.findings.filter(
@@ -244,6 +247,27 @@ function ConsistencyAuditCard({
         </div>
         {running ? <p className="muted-text">{runningPassLabel(audit, t)}</p> : null}
         {running ? <RunningPassProgress audit={audit} /> : null}
+        {running ? (
+          // Ten sam skrót co na stronie Analiza — panel bywa jedynym miejscem,
+          // w którym autor widzi trwającą analizę.
+          <Button
+            variant="secondary"
+            size="sm"
+            busy={stopping}
+            disabled={stopping}
+            onClick={() => {
+              setStopping(true);
+              void stopConsistencyAudit(audit.id)
+                .then(() =>
+                  queryClient.invalidateQueries({ queryKey: ["ai-proposals", projectId] })
+                )
+                .finally(() => setStopping(false));
+            }}
+          >
+            <CircleStop size={14} aria-hidden="true" />
+            {t("analysis.stopAudit")}
+          </Button>
+        ) : null}
       </div>
 
       {appliedFindings.length > 0 || dismissedFindings.length > 0 ? (

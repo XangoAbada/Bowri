@@ -41,6 +41,7 @@
       "skipped": "pominięty"
     },
     "passSkippedHint": "Ten wymiar był poza zakresem analizy.",
+    "stopAudit": "Zatrzymaj analizę",
     "passFindings": "{{count}} uwag",
     "retryPass": "Ponów przebieg",
     "appliedCount": "Zastosowane: {{count}}",

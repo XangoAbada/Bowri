@@ -1,4 +1,10 @@
-import { markAiProposalAccepted, saveConsistencyAudit } from "../../shared/api/commands";
+import {
+  cancelActiveCodexRun,
+  listActiveCodexRuns,
+  markAiProposalAccepted,
+  markAiProposalRejected,
+  saveConsistencyAudit
+} from "../../shared/api/commands";
 import type {
   Book,
   BookPlan,
@@ -516,6 +522,143 @@ export async function acceptConsistencyAuditReport(
   }
 
   return { accepted, failed };
+}
+
+// ---------------------------------------------------------------------------
+// Sprzątanie przebiegów
+// ---------------------------------------------------------------------------
+
+/**
+ * Zatrzymuje analizę na żądanie autora: ubija proces biegnącego przebiegu,
+ * zdejmuje z kolejki te, które jeszcze nie ruszyły, i zostawia raport z tym, co
+ * zdążyło się policzyć.
+ *
+ * Przebiegi zatrzymane dostają status "error" z jawnym komunikatem, a nie
+ * "skipped" — skipped oznacza wymiar spoza zakresu, którego autor nie zamawiał.
+ * Dzięki temu każdy z nich ma przycisk „Ponów przebieg".
+ */
+export async function stopConsistencyAudit(auditId: string): Promise<void> {
+  const store = useProposalStore.getState();
+  const auditStore = useConsistencyAuditStore.getState();
+  const audit = auditStore.audits.find((item) => item.id === auditId);
+  if (!audit) {
+    return;
+  }
+
+  const ids = new Set(auditProposalIds(auditId));
+  const running = store.proposals.find(
+    (proposal) => ids.has(proposal.id) && proposal.status === "running"
+  );
+  if (running) {
+    await cancelRunningProposal(running.projectId, running.aiRunId, running.action);
+  }
+
+  for (const id of ids) {
+    store.clearProposal(id);
+  }
+  await Promise.allSettled([...ids].map((id) => markAiProposalRejected(id)));
+
+  const stoppedMessage = "Analiza zatrzymana przez autora.";
+  for (const dimension of [...AUDIT_DIMENSIONS, "synthesis" as AuditDimension]) {
+    const status = audit.passes[dimension].status;
+    if (status === "queued" || status === "running") {
+      auditStore.setPassStatus(auditId, dimension, "error", {
+        errorMessage: stoppedMessage
+      });
+    }
+  }
+  await persistConsistencyAudit(auditId);
+}
+
+/**
+ * Usuwa przebiegi audytu z kolejki AI i z bazy.
+ *
+ * Bez tego usunięcie raportu zostawiało jego propozycje jako "queued": po
+ * restarcie wracały przy hydratacji i — ponieważ runner kolejki jest ściśle
+ * szeregowy — blokowały każdą następną analizę. Blokada była przy tym
+ * niewidoczna, bo kafelki przebiegów audytu są odfiltrowane z kolejki
+ * (AiProposalPanel), więc autor widział tylko „Czekam na wolne miejsce".
+ */
+export async function discardConsistencyAuditProposals(auditId: string): Promise<void> {
+  const ids = auditProposalIds(auditId);
+  if (!ids.length) {
+    return;
+  }
+
+  const store = useProposalStore.getState();
+  const running = store.proposals.find(
+    (proposal) => ids.includes(proposal.id) && proposal.status === "running"
+  );
+  // Samo usunięcie ze store'u nie zatrzymuje procesu CLI — ten trzymałby slot
+  // kolejki aż do timeoutu (dla audytu to pół godziny).
+  if (running) {
+    await cancelRunningProposal(running.projectId, running.aiRunId, running.action);
+  }
+
+  for (const id of ids) {
+    store.clearProposal(id);
+  }
+  // Odrzucone w bazie, nie usunięte: hydratacja pomija wszystko, co nie jest
+  // "pending", a wpis zostaje w logu AI.
+  await Promise.allSettled(ids.map((id) => markAiProposalRejected(id)));
+}
+
+/**
+ * Przebiegi wskazujące audyt, którego nie ma w store. Powstają, gdy raport
+ * zniknie (usunięty przed tą poprawką albo z nieodczytywalnym JSON-em) — dla
+ * kolejki są martwym balastem, który i tak nigdy nie zapisze wyniku, bo
+ * recordConsistencyAuditPass nie ma czego zaktualizować.
+ *
+ * Wołać dopiero po hydratacji audytów ORAZ propozycji, inaczej skasuje
+ * przebiegi audytu, który jeszcze się nie wczytał.
+ */
+export async function discardOrphanedConsistencyAuditProposals(): Promise<number> {
+  const knownAudits = new Set(
+    useConsistencyAuditStore.getState().audits.map((audit) => audit.id)
+  );
+  const orphans = useProposalStore.getState().proposals.filter((proposal) => {
+    const ref = consistencyAuditPassRef(proposal.promptPackageJson);
+    return Boolean(ref) && !knownAudits.has(ref!.auditId);
+  });
+  if (!orphans.length) {
+    return 0;
+  }
+
+  const running = orphans.find((proposal) => proposal.status === "running");
+  if (running) {
+    await cancelRunningProposal(running.projectId, running.aiRunId, running.action);
+  }
+
+  const clearProposal = useProposalStore.getState().clearProposal;
+  for (const proposal of orphans) {
+    clearProposal(proposal.id);
+  }
+  await Promise.allSettled(orphans.map((proposal) => markAiProposalRejected(proposal.id)));
+  return orphans.length;
+}
+
+/**
+ * Zatrzymuje proces CLI biegnący dla propozycji. Propozycja poznaje swój
+ * aiRunId dopiero po zakończeniu generacji, więc w trakcie trzeba go odszukać
+ * wśród aktywnych runów — po akcji, tak samo jak robi to panel AI.
+ */
+async function cancelRunningProposal(
+  projectId: string,
+  aiRunId: string | undefined,
+  action: string
+): Promise<void> {
+  try {
+    let runId = aiRunId;
+    if (!runId) {
+      const runs = await listActiveCodexRuns(projectId);
+      runId = runs.find((run) => run.action === action)?.aiRunId;
+    }
+    await cancelActiveCodexRun({ projectId, aiRunId: runId });
+  } catch (error) {
+    // Brak procesu do ubicia nie może wywrócić sprzątania — propozycja i tak
+    // znika z kolejki, a run sam padnie na timeoucie.
+    console.warn("Nie udało się anulować przebiegu audytu", error);
+  }
 }
 
 function collectPriorFindings(audit: ConsistencyAudit): ConsistencyFinding[] {
