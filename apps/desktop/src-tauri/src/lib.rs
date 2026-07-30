@@ -1,7 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::{FromRow, Sqlite, SqlitePool, Transaction};
 use std::collections::HashMap;
 use std::env;
@@ -1433,10 +1433,14 @@ pub async fn init_database(app_data_dir: PathBuf) -> Result<SqlitePool, AppError
 }
 
 async fn init_database_at(database_path: PathBuf) -> Result<SqlitePool, AppError> {
+    // WAL: bez niego czytelnik i pisarz na osobnych połączeniach blokują się nawzajem,
+    // a UI odpytuje bazę w tle podczas autosave'u i długich zapisów (import projektu).
     let options = SqliteConnectOptions::new()
         .filename(database_path)
         .create_if_missing(true)
-        .foreign_keys(true);
+        .foreign_keys(true)
+        .journal_mode(SqliteJournalMode::Wal)
+        .busy_timeout(Duration::from_secs(30));
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect_with(options)
@@ -6832,13 +6836,15 @@ fn remap_uuids_in_text(text: &str, id_map: &HashMap<String, String>) -> String {
     out
 }
 
+/// Bierze połączenie, nie pulę: wołane w środku transakcji importu, a sięgnięcie
+/// po drugie połączenie z puli zakleszcza się z własną blokadą zapisu.
 async fn sqlite_table_columns(
-    pool: &SqlitePool,
+    conn: &mut sqlx::SqliteConnection,
     table: &str,
 ) -> Result<std::collections::HashSet<String>, AppError> {
     use sqlx::Row;
     let rows = sqlx::query(&format!("PRAGMA table_info({table})"))
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
     Ok(rows
         .iter()
@@ -6997,7 +7003,7 @@ pub async fn import_project_in_pool(
             if rows.is_empty() {
                 continue;
             }
-            let known_columns = sqlite_table_columns(pool, table).await?;
+            let known_columns = sqlite_table_columns(&mut tx, table).await?;
             let mut skipped_columns: Vec<String> = Vec::new();
             for row in rows {
                 let columns: Vec<&String> = row
@@ -12177,6 +12183,44 @@ mod tests {
             .await
             .unwrap();
         assert!(hits.iter().any(|hit| hit.entity_type == "scene"));
+    }
+
+    /// Pula na jedno połączenie: import, który w trakcie własnej transakcji sięga
+    /// po drugie połączenie, nie ma go skąd wziąć i pada na `PoolTimedOut`.
+    #[tokio::test]
+    async fn import_project_uses_single_connection() {
+        let database_path =
+            std::env::temp_dir().join(format!("storyforge2-test-{}.sqlite", Uuid::new_v4()));
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(2))
+            .connect_with(
+                SqliteConnectOptions::new()
+                    .filename(database_path)
+                    .create_if_missing(true)
+                    .foreign_keys(true),
+            )
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+
+        let (project, _, _, _, _) = seed_transfer_project(&pool).await;
+        let export_dir = transfer_test_dir("export-single-conn");
+        let app_data_dir = transfer_test_dir("appdata-single-conn");
+        let exported = export_project_in_pool(
+            &pool,
+            ExportProjectInput {
+                project_id: project.id.clone(),
+                output_directory: Some(export_dir.to_string_lossy().to_string()),
+            },
+            &app_data_dir,
+        )
+        .await
+        .unwrap();
+
+        import_project_in_pool(&pool, &exported.file_path, &app_data_dir)
+            .await
+            .expect("import nie moze potrzebowac drugiego polaczenia z puli");
     }
 
     #[tokio::test]
